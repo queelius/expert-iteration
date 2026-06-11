@@ -183,6 +183,11 @@ if _TORCH_AVAILABLE:
             self.policy_head = PolicyHead(repr_dim=repr_dim, num_verbs=num_verbs)
             self.q_head = QHead(repr_dim=repr_dim, num_verbs=num_verbs)
             self.num_verbs = num_verbs
+            # Recorded so consumers (e.g. the trained-prior factory) can
+            # validate that incoming embeddings match the dimension this
+            # actor was trained on, instead of failing as an opaque shape
+            # error mid-search when the embedder changes.
+            self.embed_dim = embed_dim
 
         def forward(
             self, embedding: torch.Tensor

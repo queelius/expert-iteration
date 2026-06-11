@@ -295,7 +295,17 @@ def main(argv=None):
     p.add_argument("--base-url", default="http://192.168.0.204:11434/v1")
     p.add_argument("--embed-url", default="http://192.168.0.204:11434/api/embed")
     p.add_argument("--model", default="qwen2.5:3b")
-    p.add_argument("--embed-model", default=None, help="defaults to --model if not set")
+    p.add_argument(
+        "--embed-model",
+        default="nomic-embed-text",
+        help=(
+            "embedding model name. The server embeds only with dedicated "
+            "embedding models (generative models return 501); the pilot's "
+            "qwen2.5:3b embeddings (2048-d) are no longer producible, so "
+            "new collections live in this embedder's space and old "
+            "checkpoints (embed_dim=2048) cannot be used as priors with it."
+        ),
+    )
     p.add_argument("--num-simulations", type=int, default=10)
     p.add_argument("--c-puct", type=float, default=1.0)
     p.add_argument("--discount", type=float, default=0.99)
@@ -360,7 +370,7 @@ def main(argv=None):
     )
     args = p.parse_args(argv)
 
-    embed_model = args.embed_model or args.model
+    embed_model = args.embed_model
 
     # Resolve problem-set selection: group aliases expand to their members,
     # 'all' to every problem, individual keys pass through (deduplicated,

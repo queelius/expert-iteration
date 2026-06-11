@@ -207,7 +207,11 @@ def main(argv=None):
     p.add_argument("--base-url", default="http://192.168.0.204:11434/v1")
     p.add_argument("--embed-url", default="http://192.168.0.204:11434/api/embed")
     p.add_argument("--model", default="qwen2.5:3b")
-    p.add_argument("--embed-model", default=None)
+    p.add_argument(
+        "--embed-model",
+        default="nomic-embed-text",
+        help="must match the embedder the checkpoint was trained on (embed_dim)",
+    )
     p.add_argument("--checkpoint", required=True, help="trained heads .pt file")
     p.add_argument("--num-simulations", type=int, default=20)
     p.add_argument("--c-puct", type=float, default=1.0)
@@ -229,7 +233,7 @@ def main(argv=None):
     p.add_argument("--summary-json", default=None)
     args = p.parse_args(argv)
 
-    embed_model = args.embed_model or args.model
+    embed_model = args.embed_model
     problem_keys = resolve_problem_selection(args.problems)
 
     print(f"=== MCTS comparison: uniform vs trained prior ===", flush=True)

@@ -185,3 +185,25 @@ def test_trained_prior_uniform_fallback_is_consistent_across_calls():
         priors = prior_fn(state, actions)
         assert priors == [0.5, 0.5]
     assert cache.failure_count == 1  # negative-cached after the first attempt
+
+
+def test_trained_prior_raises_on_embedder_checkpoint_dim_mismatch():
+    """A checkpoint trained on one embedder must fail loudly (with the
+    cause named) when served embeddings of a different dimension, not as
+    an opaque matmul shape error mid-search."""
+    torch = pytest.importorskip("torch")
+    from verifier_anchored_rl.heads import TrainableActor
+    from verifier_anchored_rl.llm_context_mdp import MathAction, Verb
+    from verifier_anchored_rl.trained_prior import EmbeddingCache, make_trained_prior
+    from verifier_anchored_rl import LLMContextMDP
+    from verifier_anchored_rl.llm_client import MockLLMClient
+
+    cache = EmbeddingCache(MockEmbeddingClient(embedding_dim=768))
+    model = TrainableActor(embed_dim=2048, hidden_dim=16, repr_dim=8)
+    prior_fn = make_trained_prior(model, cache)
+
+    mdp = LLMContextMDP(problem_statement="P", llm_client=MockLLMClient())
+    state = mdp.initial_state()
+    actions = [MathAction(verb=Verb.DECOMPOSE), MathAction(verb=Verb.FORM_HYPOTHESIS)]
+    with pytest.raises(ValueError, match="does not match the .*embed_dim"):
+        prior_fn(state, actions)

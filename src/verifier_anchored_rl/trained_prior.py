@@ -209,6 +209,17 @@ def make_trained_prior(
             emb = embedding_cache.get(serialized)
             if emb is None:
                 return [1.0 / n] * n
+            expected = getattr(model, "embed_dim", None)
+            if expected is not None and len(emb) != expected:
+                # Embedder/checkpoint mismatch (e.g. a 2048-d checkpoint
+                # served by a 768-d embedding model). Fail with the cause,
+                # not an opaque matmul shape error mid-search.
+                raise ValueError(
+                    f"embedding dimension {len(emb)} does not match the "
+                    f"checkpoint's embed_dim {expected}; the trained prior "
+                    f"must use the same embedding model its heads were "
+                    f"trained on"
+                )
             with torch.no_grad():
                 x = torch.tensor(emb, dtype=torch.float32).unsqueeze(0)
                 mask = torch.zeros((1, NUM_VERBS), dtype=torch.bool)
