@@ -1,0 +1,340 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Limitations}
+\label{sec:disc-limits}
+
+The framework's reach is bounded by its reliance on a non-LLM verifier. The
+agent learns from reward, and reward in our setting must come from a checker
+that is external to the language model: a symbolic solver, a unit-test harness,
+a proof kernel. Domains in which no such checker exists fall outside the
+present scope. Open-ended deliberation tasks such as essay writing, persuasive
+dialogue, or therapeutic conversation cannot be cast into this framework
+without adding a learned signal back into the reward channel, and doing so
+would surrender the very Goodhart-resistance property
+(Section~\ref{sec:disc-verifier}) that motivates the design. We treat this as
+a deliberate restriction rather than an oversight: the contribution is sharper
+when the reward signal is unimpeachable, and the verifiable-math setting is
+where the methodology can be cleanly evaluated.
+
+A second restriction stems from the phase 1 decision to freeze the base
+language model. If the latent capability required for a problem class is
+absent from the frozen base, the deliberation loop cannot manufacture it. The
+heads can re-weight the latent skills the model already possesses, schedule
+verifier calls, and prune unprofitable branches; they cannot teach the
+underlying network to compute things it has never been trained to compute.
+Phase 2 admits unfreezing of the last one or two transformer layers via LoRA
+\citep{hu2022lora}, but that is a separate intervention whose contribution
+must be measured against the frozen baseline. Closely related is our use of a
+fixed seven-verb action space. Problems whose solutions require verbs we did
+not anticipate (literature search, tool invocation outside the verifier set,
+mid-stream consultation of an external oracle) are out of reach until
+migration to progressive widening with LLM-proposed actions
+(Section~\ref{sec:method-actions}).
+
+Two further limitations follow from the structural commitments of the
+framework. The Markov bet that all decision-relevant information lives in the
+structured state schema (Section~\ref{sec:method-state}) places a load-bearing
+demand on the parser that lifts LLM-generated text into \texttt{Fact},
+\texttt{Hypothesis}, and \texttt{VerifierCall} records. Lossy parsing surfaces
+downstream as apparent $Q$-head failures: when a $Q$-value disagrees with
+expectation, the parser is the first suspect, not the head. We accept the bet
+because the alternative (raw token sequences as states) forecloses any
+structural inductive bias and any tree reuse. Finally, the experimental plan
+calls for multiple training seeds, but compute may force a tradeoff between
+seed breadth and simulation budget at the largest configurations. A
+single-seed result is not, by itself, evidence that the framework works; we
+take this as a known threat to the eventual empirical story rather than a
+defect of the framework as specified.
+
+\subsection{Extensions}
+\label{sec:disc-extensions}
+
+The clearest near-term extension is progressive widening with LLM-proposed
+actions, sketched as option C in Section~\ref{sec:method-actions}. Replacing
+the categorical multi-head $Q$ with an $(s, a)$-embedding-based scorer allows
+the action space to grow with the visit count and admits domains where the
+useful verbs are themselves unknown at design time. The architectural change
+is bounded: the adapter, serialization, and verifier-anchored reward survive
+unchanged; what changes is the $Q$-head's interface from a fixed categorical
+output to a scoring function over candidate $(s, a)$ pairs sampled by the
+LLM. This is the pattern of AlphaProof \citep{deepmind2024alphaproof} and
+AlphaCode \citep{li2022alphacode}, and our framework is structured to accept
+it as a local change rather than a redesign.
+
+Several smaller extensions follow naturally. Canonicalization of states
+(topological ordering of facts by derivation depth, SymPy normal forms on
+statements, sorted subgoal identifiers) would let MCTS reuse subtrees across
+trajectories that arrive at semantically equivalent contexts in different
+orders. We deferred this in phase 1 to keep debugging straightforward;
+phase 2 should treat it as a multiplicative win for problems with rich
+equivalence classes among intermediate states. If the frozen-encoder
+approximate $Q$-learning underfits, LoRA on the last one or two transformer
+layers \citep{hu2022lora} is the natural next step, with the contribution of
+the unfrozen layers measured against the frozen baseline. Per-channel $Q$
+heads (reward decomposition into correctness, safety, and instruction-following
+components, each with its own verifier) generalize the single-channel
+correctness signal to domains where ``the right answer'' is no longer a
+single Boolean; the framework is structured so that adding channels later is
+a head-shape change rather than a redesign of the loop.
+
+Deployment-side extensions also fit cleanly. Persistent search trees that
+survive across queries support anytime deliberation: a caller who asks the
+system to ``think harder'' should get more simulations grafted onto the
+existing tree rather than a restart from scratch. Rerooting on a child after
+a committed action and reusing subtrees that survive the rerooting is the
+natural generalization to multi-turn deliberation. Finally, online learning
+from user-supplied verifier signals (a developer marking ``this proof has a
+gap'' on a deployed assistant) is feasible inside the framework as long as
+the verifier remains a structural check rather than a learned classifier.
+The risk that a single user's signals dominate updates is mitigated by
+adapter-tier separation: per-user adapters absorb idiosyncratic feedback,
+per-cohort adapters aggregate it carefully, and the global adapter accepts
+only changes that survive both tiers. The framework provides the place where
+these adapters plug in (the small adapter MLP of
+Section~\ref{sec:method-architecture}); building out the tier separation
+itself is engineering work the methodology does not need to specify.
+
+\subsection{Why Verifier-Anchored Signals Are Different}
+\label{sec:disc-verifier}
+
+The asymmetry between verifier-anchored reward and learned-aesthetic reward
+is the most consequential design choice in this paper, and we develop it in
+full here because the method section's reward subsection
+(Section~\ref{sec:method-reward}) deliberately forward-references this
+discussion. Reward shaping via learned classifiers is increasingly common in
+language-model training: deception detectors, motivated-reasoning critics,
+style scorers, and reasoning-quality classifiers all enter the reward channel
+of one system or another. Our claim is that admitting any such signal as a
+Bellman target imports a structural defect that no amount of classifier
+quality can fully cure, and that the discipline of keeping reward
+verifier-anchored is worth substantial complexity elsewhere.
+
+Consider a learned classifier $f: X \to [0, 1]$ optimized as a reward
+signal. After enough updates, the policy converges to behavior that satisfies
+$f$ at $f$'s decision boundary; the policy learns the classifier's failure
+modes (regions where $f$ disagrees with the underlying property it was
+trained on) and exploits them. The exploitation is not adversarial in
+intent; it is the natural fixed point of running an optimizer against an
+imperfect target. Any imperfection in $f$ becomes an attack surface, and
+since all learned classifiers are imperfect, the attack surface is always
+nonempty. The classical Goodhart pattern follows: the policy optimizes the
+proxy at the expense of the underlying objective, and the gap between proxy
+and objective is exactly where the optimizer concentrates its mass.
+
+A verifier $v: X \to \{0, 1\}$ that is not a learned proxy avoids the
+worst form of this pathology, but the picture is more nuanced than ``no
+Goodhart gap at all'' and deserves a careful distinction. We separate
+two cases. \emph{Intrinsic Goodhart} is the failure mode of a learned
+proxy: the reward signal is a model fitted to predict the objective,
+and under optimization the policy drifts from the objective by
+exploiting the proxy's idiosyncrasies. Verifier-anchored signals rule
+this case out by construction, because the signal is not a learned
+model at all; the SymPy equality call, the unit-test verdict, and the
+Lean type-check are deterministic programs, not classifiers, and they
+do not have a training distribution off which a policy can wander.
+\emph{Extrinsic Goodhart}, sometimes called specification gaming or
+the specification-vs-intent gap, is a separate failure mode: the
+formally specified signal does not capture the full intended objective,
+and optimization exploits the gap. A unit-test harness that only
+exercises a narrow slice of input space lets the agent learn solutions
+that pass the tests but do not generalize. A SymPy equality check on
+canonicalized expressions can be satisfied by an answer that is
+mathematically equivalent yet violates a presentation constraint the
+problem expects. A Lean kernel accepts any proof term whose types
+check, including ones that exploit an unintended axiom or definitional
+quirk. In each case the signal and the intended objective are not the
+same object, even though the signal is not a learned proxy; the
+extrinsic Goodhart channel remains open. Verifier-anchored signals
+therefore dominate learned-aesthetic signals on the intrinsic Goodhart
+dimension (they close it entirely) and both face the extrinsic Goodhart
+dimension. The framework's response to the extrinsic case is to
+strengthen the verifier rather than to switch to a learned classifier:
+add more test cases, use a formal proof checker rather than a
+unit-test harness, tighten canonicalization, audit verifier failures
+during training. The agent may still produce outputs the verifier
+accepts but a human evaluator would reject, and those cases are
+genuine specification failures of the verifier rather than optimization
+pathologies; treating verifier coverage as a threat to validity
+(Section~\ref{sec:disc-threats}) is the framework's principled way to
+keep the gap honest.
+
+The framework therefore reserves Bellman targets for verifier signals.
+Learned aesthetic classifiers, when they are useful, enter the system as
+MCTS priors (steering early exploration toward trajectories that look
+promising on aesthetic grounds) or as expansion-pruning heuristics (blocking
+moves that the classifier judges hopelessly off-track). In both roles, the
+classifier biases the distribution of trajectories MCTS samples but cannot
+rewrite the value function. Bellman backups continue to be computed against
+verifier-anchored returns, so the policy that maximizes long-run reward is a
+policy that maximizes verifier-anchored success, with aesthetic priors only
+shifting which trajectories the agent considered along the way. The asymmetry
+is structural: priors influence the search tree's shape; only rewards
+determine the converged policy.
+
+We acknowledge that this is a soft commitment rather than a theorem.
+Distinguishing verifier-anchored from learned signals in principle is
+straightforward; doing it in practice on benchmarks where the verifier
+covers only a subset of the desired behavior requires judgment. We invite
+empirical testing of whether the discipline pays off: a fair experiment
+would train two policies on the same task distribution, one with a learned
+critic added to the reward channel and one without, and compare their
+behavior on held-out problems where the critic's failure modes are known.
+Our prediction is that the verifier-only policy generalizes better off the
+critic's training distribution, but the prediction is just that; the
+framework here provides the apparatus to run the test, not the test result
+itself. The methodological commitment, in any case, is to make the
+discipline easy to maintain: by structuring the reward channel so that
+inserting a learned critic requires a deliberate choice rather than an
+accident, we shift the burden of justification onto whoever would add one.
+
+\subsection{What the Pilot Surfaced}
+\label{sec:disc-pilot}
+
+The toy-problem pilot of Section~\ref{sec:pilot} produced two findings
+whose implications for the framework reach beyond the pilot itself and
+that the pre-registered benchmark study has to monitor. Both are
+absent from the framework as initially specified and become design
+commitments only after the pilot exposes them.
+
+The first is that training-set expansion during multi-round expert
+iteration can silently break what an earlier round learned, and that
+the obvious diagnosis of such a break is not necessarily the right
+one. The pilot's second-round fit added word problem variants to the
+first-round training set in order to address the weakest
+generalization point (the word problem held-out family), and the
+addition produced the targeted gain at the cost of a $33$
+percentage-point regression on the algebra family. The natural first
+diagnosis was class dilution: algebra's training share fell from
+$25\%$ to $14\%$. The pilot tested that diagnosis directly with a
+controlled rebalanced re-fit (\texttt{v4b},
+Section~\ref{sec:pilot-v4b}) that restored algebra to $30\%$ of the
+training set while holding every other parameter fixed, and the
+rebalance did not restore algebra generalization; it fell further.
+Class dilution is therefore demoted from dominant mechanism to
+co-occurring confounder, and the regression is better explained by
+target instability and by the loss of a brittle pattern the
+first-round heads had exploited. The composition-tracking commitment
+survives the demotion, and is in fact sharpened by it: precisely
+because composition shifts co-occur with regressions without being
+their dominant cause, any multi-round result must report the
+per-round training composition and the per-class accuracy breakdown
+on the held-out set, so that a regression of this shape can be
+attributed to its actual mechanism rather than to the most visible
+covariate. The pre-registered study of
+Section~\ref{sec:experimental-plan} inherits the commitment as a
+reporting requirement, and the per-class breakdown is added to the
+plan as an analytic output rather than a post-hoc audit.
+
+The second is that the visit-count targets that drive distillation are
+noisier across collection runs than the framework's distillation
+prescription assumes, at least at the simulation budgets that fit the
+pilot. On the algebra family at $B = 20$, the mean $L_1$ distance
+between two independent realizations of $\pimcts$ on the same states
+with the same prior, the same problems, and the same MCTS seeds
+reaches $0.553$, and only $7$ of $15$ records agree on the argmax verb
+across realizations; the residual randomness comes from the unseeded
+LLM transition sampling, which the MCTS seed does not control. Distillation against such noisy
+targets is unreliable: which targets one happens to collect determines
+which patterns the trained heads pick up, and the choice between
+``commit at turn one'' and ``compute a subexpression at turn one'' on
+the same algebra state can flip with the seed. The \texttt{v4b}
+rebalancing test elevates this mechanism from contributing factor to
+leading explanation: with class balance restored and the regression
+persisting, the across-seed noise in the algebra targets is the
+remaining candidate with direct quantitative support. The pilot's
+response was descriptive; the pre-registered study's response is
+operational.
+We commit to reporting target stability, defined as the mean $L_1$
+between two MCTS visit-count distributions on the same state at the
+same prior but with different random seeds, on a stratified sample of
+training states for each benchmark, and to running additional MCTS
+seeds at the heavy-search budget on any state where target stability
+falls below a pre-committed threshold. The pre-registered $N_{\mathrm{large}}
+= 500$ is substantially above the pilot's $B = 20$ and we expect target
+stability to improve accordingly, but the expectation is now a
+falsifiable monitoring claim rather than an unstated assumption.
+
+The pilot also produced a positive finding that the discussion should
+not understate. The first round of expert iteration on the four
+toy problems closed the loop on every metric simultaneously: sharper
+$\pimcts$ targets, a lower training-loss floor on the distilled heads,
+higher training-set argmax agreement, and a $15$ percentage-point
+absolute improvement in zero-shot held-out argmax agreement against
+the $\pimcts$ targets on a structurally parallel held-out set. The
+positive finding is the framework's integration check: every component
+of Section~\ref{sec:method} (the LLM context MDP, the verifier-anchored
+reward, the shared-encoder architecture, the MCTS chance-node
+estimator, the distillation pipeline, the inference modes) can be
+implemented and exercised together, and the resulting loop behaves
+qualitatively as Section~\ref{sec:method-training} predicts on the
+families where the prediction is sharp. This does not establish
+benchmark performance, but it establishes that the framework's
+mechanics are not vacuous, which is a precondition for the
+pre-registered study being worth running.
+
+\subsection{Threats to the Empirical Story}
+\label{sec:disc-threats}
+
+The experimental plan's threats-to-validity subsection
+(Section~\ref{sec:exp-threats}) enumerates the operational concerns; the
+discussion here positions them as items to monitor during implementation
+and as caveats to any eventual claim. Compute leaks are the most likely
+source of an inadvertently inflated result: counting only the LLM forward
+passes that occur at root-level decisions, while omitting the forwards
+consumed by MCTS rollouts or by chain-of-thought-style verb-instantiator
+continuations, would make our method look cheaper than it is at a given
+accuracy. The headline frontier figure is meaningful only if every LLM
+forward executed during a query is charged against the inference budget
+on the $x$-axis. Verifier coverage is the second concern: a lenient or
+buggy verifier inflates scores symmetrically across all methods, but it
+also lets the agent learn to satisfy the lenient bar rather than the
+strict one, so improvements measured under a lenient verifier may not
+transfer when the verifier is later tightened.
+
+Benchmark contamination, best-of-$N$ selector choice, and seed variance
+round out the list. Contamination is a base-model concern: if the
+pretraining corpus of any baseline included the test problems, the
+comparison is no longer about deliberation. Selector choice in best-of-$N$
+matters because the result depends substantially on whether the selector
+is the $Q$-head, a separate learned verifier, or an oracle; we pre-register
+the selector choice as part of the baseline grid. Seed variance is the
+honest reporting concern: a single-seed headline figure is suggestive at
+best, and the plan calls for at least three training seeds with mean and
+standard deviation reported. We note these as items the implementation
+will need to control, not as defects of the framework.
+
+\subsection{Connection to LLM Deliberation Beyond Math}
+\label{sec:disc-llm-deliberation}
+
+The choice to evaluate on verifiable math is a choice of where reward is
+cleanest, not a statement that the framework is limited to math. The same
+structural commitments transfer to any domain where a non-LLM program can
+supply the terminal verdict. Code generation fits naturally: the verifier
+is a set of unit tests; the action space gains a verb like
+\textsc{RunTests} that plays the role of \textsc{InvokeVerifier}; the
+terminal reward is the binary outcome of the test suite. Formal proof fits
+even more cleanly: the verifier is the Lean (or Coq, or Isabelle) kernel;
+\textsc{InvokeVerifier} becomes a tactic submission; the terminal reward
+is whether the kernel accepts the proof. Boolean satisfiability and
+related decision procedures admit Z3 (or another SMT solver) as a verifier;
+the verbs adapt accordingly but the structural pattern is preserved.
+Restricted forms of fact verification (claims that can be checked against
+a retrieval corpus plus an entailment model whose entailment judgments
+themselves type-check structurally) also fit, though the entailment model's
+status as a verifier rather than a learned classifier deserves scrutiny
+on a case-by-case basis.
+
+What does not fit is open-ended dialogue, creative writing, or any
+deliberation task whose terminal reward must be supplied by a learned
+critic. The framework can accommodate such tasks only after a reward
+channel decomposition that admits a non-learned signal alongside the
+learned one (Section~\ref{sec:disc-extensions}). The non-learned signal
+need not cover every dimension of quality; it needs only to be present
+and to be the channel that participates in Bellman backups. A creative
+writing task with a non-learned signal for ``contains no factual
+contradictions checkable by external reference'' could in principle be
+in scope, with the learned aesthetic critic supplying MCTS priors but
+not reward. We do not pursue this in the present paper; we flag it as a
+direction in which the verifier-anchored reward discipline can travel
+without losing its structural advantage.

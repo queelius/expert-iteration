@@ -1,0 +1,53 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented a reinforcement-learning framework for training small
+language models to deliberate on verifiable problems, in which the central
+learnable object is a parametric action-value function $\Qpsi(s, a)$ over
+an LLM-induced context MDP, MCTS serves as a policy improvement operator
+that supplies stronger Bellman targets $\Qmcts(s, a)$ during training and
+as an optional test-time-compute knob at inference, and reward enters only
+through verifier-anchored signals so that the Goodhart attack surface
+associated with learned-aesthetic critics is closed by construction. The
+six contributions are an approximate-$Q$-learning framing for the
+verifiable context MDP, a shared-encoder architecture with a frozen base
+model and trainable multi-head $Q$ and policy heads, a reward principle
+that quarantines learned signals away from Bellman backups, an explicit
+role for MCTS as a sample-efficient policy improvement operator and a
+test-time-compute knob rather than as the central learning algorithm,
+a pre-registered experimental plan whose baseline grid and headline
+frontier figure are fixed before any training begins, and a toy-problem
+pilot whose round-over-round results test the framework's integration
+before the benchmark study begins.
+
+The pilot (Section~\ref{sec:pilot}) demonstrated that a single round of
+expert iteration on four toy problems closes the loop on every metric we
+measured: distillation targets become sharper across rounds, the trained
+heads converge to a lower training-loss floor, and zero-shot held-out
+argmax agreement against the MCTS targets improves by $15$ percentage
+points after one round at a single training seed (the pre-registered
+benchmark study runs at least three). A second round, with a naively-expanded training
+set, produced a structurally informative regression. A controlled
+rebalanced re-fit of the second round restored class balance without
+restoring the regressed family, ruling out class dilution as the
+dominant mechanism and leaving target instability at small MCTS budget
+and the failure of a brittle pattern the first-round heads had
+exploited as the leading explanations. These findings carry forward
+into the pre-registered study as monitoring requirements: per-round
+training-set composition and per-class held-out accuracy must be
+reported, and target stability across MCTS seeds must be measured on a
+stratified sample of training states.
+
+By pre-registering the baseline grid, the compute axis, and the
+falsification criteria (Section~\ref{sec:experimental-plan}), we
+constrain the eventual results section to test the framework rather than
+to fit to it: a frontier that fails to clear the best-of-$N$ baseline at
+matched compute is reported as such, not retrofitted into a different
+claim. The expected experimental headline is a compute-versus-accuracy
+frontier on verifiable math benchmarks showing that a small base model
+paired with the learned $\Qpsi$, $\ptheta$, and modest search compute
+matches a substantially larger reasoning model at matched inference
+compute; whether that frontier holds is the question the implementation
+will answer. The pilot has established that the framework's mechanics are
+not vacuous; whether they generalize to standardized benchmarks under the
+pre-registered protocol is the next empirical question.

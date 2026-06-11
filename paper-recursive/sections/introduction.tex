@@ -1,0 +1,187 @@
+\section{Introduction}
+\label{sec:introduction}
+
+% =========================================================================
+% RL-first introduction, ~1.5 to 2 pages.
+% =========================================================================
+
+Approximate $Q$-learning over structured context MDPs offers a principled
+way to teach small language models to deliberate
+\citep{sutton2018reinforcement, mnih2015human}. The state is a
+structured context, the action set is a small collection of cognitive
+verbs, the transition model is induced by a frozen LLM, and the reward
+is anchored to a verifier that emits a scalar signal on terminal states.
+A learned $\Qpsi$ then estimates the long-run expected verifier reward
+from a state under each available action, and any of the standard
+behavior policies (greedy, softmax, $\epsilon$-greedy) can drive
+exploration during sample collection. Compositional reasoning benefits
+from being able to decompose problems into independently checkable
+sub-problems, because each sub-problem can contribute terminal verifier
+signal without depending on the rest. Consider a triangle with vertices
+$A$, $B$, $C$ and side lengths $a$, $b$, $c$, and the claim that
+$a^2 + b^2 = c^2$. A monolithic verifier asked to confirm this claim
+must perform two qualitatively different checks at once: that the
+configuration is a right triangle with hypotenuse $c$, and that the
+arithmetic relationship between the squared side lengths holds. A
+decomposed approach instead splits the parent claim into two
+sub-claims, ``the triangle is right-angled at $C$ (by some geometric
+fact in the problem)'' and ``the squared side lengths satisfy
+$a^2 + b^2 = c^2$ (by arithmetic given the right-angle property),''
+each addressing a verifier-checkable sub-problem in isolation. The
+geometric premise might be discharged by a perpendicularity check on
+two vectors; the arithmetic conclusion might be discharged by a
+symbolic algebra system. Neither sub-verifier needs to understand the
+other's check, and the approximate $Q$-function (optionally aided by
+MCTS as a policy improvement operator) can credit-assign reward up
+from the two leaves to the parent claim
+\citep{kocsis2006bandit, coulom2006efficient, anthony2017thinking}.
+The hierarchical reinforcement learning tradition has long argued that
+such structural decomposition is what makes compositional reasoning
+tractable in sequential decision-making
+\citep{sutton1999between, dietterich2000hierarchical,
+vezhnevets2017feudal}.
+
+The risk is that not all recursion is productive. Within the same
+schema that permits the Pythagorean decomposition above, an agent may
+also produce a critique of a critique of a critique, or a hypothesis
+about a hypothesis about a hypothesis, with no verifier-checkable
+leaf-level claim at the bottom of the chain. Such trajectories are
+structurally legal: nothing in the type system prevents arbitrarily
+deep parent-pointer chains, and the verbs that introduce recursive
+structure are available whenever a parent entity exists. They are
+nonetheless rumination rather than reasoning, in the operational
+sense that terminal verifier reward never enters the trajectory at
+the leaves and the approximate $Q$-function has no way to assign
+positive value through them. Approximate $Q$-learning will eventually
+learn to avoid such trajectories, since their Bellman targets remain
+at the value-of-non-terminal baseline; but discovering this empirically
+costs sample budget, and the time spent ruminating in simulation is
+time not spent learning where productive decomposition pays off. The
+two modes share an action space, a state schema, and a serialization
+template; from syntax alone they are indistinguishable. The question
+this paper answers is: when and how should an approximate $Q$-learning
+system over an LLM substrate recur, and what structural prior selects
+the productive mode without foreclosing the unproductive one's
+structural possibility?
+
+\paragraph{Position.}
+This is a methodology and position paper, written as a companion to a
+framework paper at \texttt{paper/} that establishes the setting. The
+framework paper presents verifier-anchored approximate $Q$-learning
+over LLM-induced context MDPs for small language model deliberation,
+with structured states, a small fixed set of cognitive-verb actions,
+a frozen LLM as both encoder and stochastic transition model, MCTS
+as an optional sample-efficient policy improvement operator, and a
+verifier-anchored reward as the only Bellman target. Its state schema
+endows every hypothesis, subgoal, and verifier call with a stable
+identifier and with implicit parent references, precisely so that
+hypotheses can refine other hypotheses, subgoals can have nested
+sub-subgoals, and verifier calls can follow up on earlier ones. The
+framework paper notes the forward compatibility, defers exercise of
+those fields to a later phase, and gestures briefly at the
+productive-versus-unproductive distinction that governs whether
+activation will pay off. The present paper takes that gesture
+seriously. The design choice deserves its own treatment because its
+tradeoffs are non-obvious: the schema that admits productive
+decomposition also admits unproductive meta-criticism, and the
+architectural job is not to ban one mode and admit the other but
+to shape the learning dynamics so that the productive mode dominates
+within a finite sample budget. We do not yet report experiments. The
+contribution is the conceptual development of the design, together
+with a pre-registered ablation grid that makes the central claims
+falsifiable.
+
+\paragraph{Contributions.}
+We make five contributions:
+\begin{enumerate}[leftmargin=*]
+  \item A productive-versus-unproductive distinction for structural
+        recursion as a property of trajectories under a verifier in
+        the framework's approximate $Q$-learning system
+        (Section~\ref{sec:method-productive},
+        Section~\ref{sec:method-mcts}). Productive recursion is
+        structural decomposition with verifier signal at the leaves
+        of the implicit tree; unproductive recursion is meta-criticism
+        that receives no terminal reward beneath. The distinction is
+        operational rather than syntactic: the same action space and
+        state schema produce both, the verifier and depth budget
+        together determine which trajectories carry learning signal,
+        and $\Qpsi$ must learn to prefer the productive regime
+        within a finite sample budget.
+  \item The depth-limit mechanism as a structural prior on the
+        learning system that selects productive recursion without
+        foreclosing the unproductive case, framing bounded
+        per-hypothesis tree depth $\depthlim$ as a property of the
+        environment rather than as a soft reward term
+        (Section~\ref{sec:method-depthlimit}). The hard-mask choice
+        is justified on framework-paper consistency grounds: a soft
+        depth penalty violates the verifier-anchored-reward-only
+        principle and admits arbitrarily deep simulation descent
+        when MCTS is used as the policy improvement operator. The
+        depth limit interacts directly with verifier signal density,
+        since a trajectory of depth $d$ produces at most $d$
+        verifier-anchored events between root and leaf.
+  \item An argument that the framework's seven-verb action set
+        $\Aset = \{a_1, \ldots, a_7\}$ is sufficient for arbitrary
+        recursive structure via identifier-based targeting, with no
+        new categorical actions required
+        (Section~\ref{sec:method-targeting}). Targeting actions
+        through stable identifiers means
+        \textsc{Decompose}\texttt{(hyp\_id)} has the same semantics
+        regardless of where \texttt{hyp\_id} sits in the implicit
+        tree; the verb-instantiator's free-form identifier choice is
+        the only thing that varies. The branching factor at decision
+        nodes stays at seven (or fewer, after availability masking),
+        and the fixed action-set assumption underlying both $\Qpsi$
+        and PUCT-style policy improvement is preserved without
+        progressive widening machinery.
+  \item A serialization argument that flat tokens with depth markers
+        let a frozen LLM resolve recursive tree structure through
+        native causal self-attention, with no graph neural network,
+        no tree-LSTM, and no recursive cell
+        (Section~\ref{sec:method-serialization}). We contrast this
+        with the explicit tree-encoder tradition
+        \citep{socher2013recursive, tai2015improved,
+        velickovic2018gat} and argue that modern LLMs' in-context
+        attention is a sufficient substitute, with the
+        parent-pointer field and the depth integer providing
+        redundant signal for the implicit tree's topology. The
+        canonicalization implications of recursive state, and their
+        interaction with the policy improvement operator's tree
+        reuse, are flagged briefly (Section~\ref{sec:method-canon}).
+  \item A pre-registered ablation grid that varies the per-hypothesis
+        tree depth limit across
+        $\depthlim \in \{0, 3, \infty\}$, holding the framework
+        paper's benchmarks, base models, and learning architecture
+        fixed (Section~\ref{sec:experimental-plan}). The grid is
+        designed to falsify both extremes: $\depthlim = 0$ (no
+        recursion, expressivity bottleneck) and
+        $\depthlim = \infty$ (unbounded recursion, rumination
+        consumes the sample budget). The middle setting
+        $\depthlim = 3$ is the predicted productive regime,
+        motivated by the natural decomposition depth of
+        human-written solutions to competition mathematics
+        problems.
+\end{enumerate}
+
+\paragraph{Paper structure.}
+Section~\ref{sec:background} recaps Markov decision process
+foundations, the approximate $Q$-learning view of LLM-induced context
+MDPs inherited from the framework paper, and the hierarchical
+reinforcement learning and tree-structured-encoder literatures that
+the present paper joins and departs from. Section~\ref{sec:method}
+is the core: the productive-versus-unproductive distinction with its
+formal definition, the depth-limit mechanism with its amended
+availability table, action targeting at arbitrary depth, the
+serialization treatment, the interaction with MCTS as a policy
+improvement operator, and a brief note on the canonicalization
+implications. Section~\ref{sec:experimental-plan} specifies the
+pre-registered depth-limit ablation grid and the three hypotheses
+it commits to. Section~\ref{sec:related-work} positions the
+contribution against hierarchical reinforcement learning, recursive
+and tree-structured neural networks, and recent verifier-anchored
+LLM reasoning systems such as AlphaProof
+\citep{deepmind2024alphaproof} and Tree of Thoughts
+\citep{yao2023tree}. Section~\ref{sec:discussion} discusses
+limitations, threats to validity specific to the recursion claim,
+and extensions to adaptive depth limits and DAG-structured
+deliberation. Section~\ref{sec:conclusion} concludes.

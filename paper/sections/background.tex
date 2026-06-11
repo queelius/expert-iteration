@@ -1,0 +1,432 @@
+\section{Background}
+\label{sec:background}
+
+% =========================================================================
+% RL-first pedagogical ordering, per design.md section 1.6:
+%   MDP -> Bellman -> Q-learning -> approximate Q-learning -> exploration
+%   -> MCTS as sample-efficient policy improvement -> Expert Iteration
+%   -> LLM deliberation as a context MDP.
+% Style note (from design.md section 12): expanded sums before expectation
+% notation; define every symbol before it is abbreviated.
+% =========================================================================
+
+This section assembles the reinforcement-learning vocabulary used in the
+rest of the paper. We move from the Markov decision process and Bellman
+optimality through tabular and approximate $Q$-learning to MCTS, framed
+as a procedure that supplies stronger training targets to the same
+learning rule. Expert iteration and the LLM-as-environment framing then
+follow.
+
+\subsection{Markov Decision Processes}
+\label{sec:background-mdp}
+
+A finite discounted Markov decision process is a tuple
+$\Mset = (\Sset, \Aset, P, R, \gamma)$, where $\Sset$ is a state space,
+$\Aset(s) \subseteq \Aset$ is the set of actions available in state $s$,
+$P(s' \given s, a)$ is the probability of transitioning to state $s'$ after
+taking action $a$ in state $s$, $R(s, a, s') \in \R$ is the immediate reward
+for that transition, and $\gamma \in [0, 1)$ is the discount factor.
+
+The Markov assumption states that, conditional on $s$ and $a$, the next
+state $s'$ is independent of the prior history,
+\begin{equation}
+P(s_{t+1} \given s_0, a_0, \ldots, s_t, a_t) = P(s_{t+1} \given s_t, a_t).
+\label{eq:markov}
+\end{equation}
+When history matters, the state representation must incorporate the
+relevant history; the next section discusses one such case for LLM
+deliberation, where the practical ``state'' is a structured context that
+may only approximate a Markov state.
+
+We will care about two computational presentations of an MDP. A
+\emph{finite MDP} exposes the transition kernel $P$ and reward function
+$R$ explicitly as tables, allowing exact enumeration of $\sum_{s'}$ in the
+Bellman equation. A \emph{generative MDP} exposes only a sampler: given
+$(s, a)$, it returns a single draw $s' \sim P(\cdot \given s, a)$ and the
+corresponding reward $r = R(s, a, s')$. The generative interface is what
+remains when $P$ is too large to tabulate, when it is unknown, or when it
+is implicitly defined by a process such as an LLM forward pass.
+Section~\ref{sec:method-mcts} formalizes this distinction as the
+\texttt{FiniteMDP} and \texttt{GenerativeMDP} protocols and explains why
+MCTS can be built directly on the latter while value iteration requires
+the former.
+
+\subsection{Bellman Optimality and the Action-Value Function}
+\label{sec:background-bellman}
+
+The optimal state-value function $\Vstar$ and the optimal action-value
+function $\Qstar$ satisfy the Bellman optimality equations,
+\begin{equation}
+\Qstar(s, a)
+= \sum_{s'} P(s' \given s, a)
+  \left[ R(s, a, s') + \gamma \max_{a'} \Qstar(s', a') \right],
+\label{eq:bellman}
+\end{equation}
+\begin{equation}
+\Vstar(s) = \max_{a \in \Aset(s)} \Qstar(s, a).
+\label{eq:vstar}
+\end{equation}
+The right-hand side of \eqref{eq:bellman} decomposes into three steps:
+(i)~enumerate the possible next states $s'$ weighted by their transition
+probabilities $P(s' \given s, a)$, (ii)~for each transition collect the
+immediate reward $R(s, a, s')$, and (iii)~add the discounted optimal
+future value $\gamma \max_{a'} \Qstar(s', a')$. Both equations make
+explicit the sum that any sample-based method must eventually approximate.
+
+The greedy deterministic policy derived from $\Qstar$ is
+\begin{equation}
+\pi^{\ast}(s) = \arg\max_{a \in \Aset(s)} \Qstar(s, a),
+\label{eq:greedy-policy}
+\end{equation}
+and a smooth stochastic alternative is the softmax policy with temperature
+$\tau > 0$,
+\begin{equation}
+\pi_{\tau}(a \given s)
+= \frac{\exp(\Qstar(s, a) / \tau)}{\sum_{b \in \Aset(s)} \exp(\Qstar(s, b) / \tau)}.
+\label{eq:softmax-policy}
+\end{equation}
+As $\tau \to 0$, $\pi_{\tau}$ concentrates on $\pi^{\ast}$; as
+$\tau \to \infty$, it approaches the uniform distribution over $\Aset(s)$.
+Soft policies are convenient for exploration and for differentiable
+training, both of which appear later.
+
+\subsection{Q-Learning from Sampled Transitions}
+\label{sec:background-qlearning}
+
+When $P$ and $R$ are known and $\Sset$ is small enough to tabulate, the
+sum in \eqref{eq:bellman} can be evaluated exactly via value iteration. In
+the reinforcement-learning setting we usually cannot. Instead, the agent
+observes a single sampled transition
+\begin{equation}
+(s, a, r, s'), \qquad s' \sim P(\cdot \given s, a), \qquad r = R(s, a, s'),
+\label{eq:sample-transition}
+\end{equation}
+and updates its value estimate from that one sample. The tabular
+$Q$-learning update of \citet{sutton2018reinforcement} is
+\begin{equation}
+Q(s, a) \;\gets\; (1 - \alpha)\, Q(s, a)
+                + \alpha \left[ r + \gamma \max_{a'} Q(s', a') \right],
+\label{eq:qlearning}
+\end{equation}
+where $\alpha \in (0, 1]$ is a step size. Equivalently,
+\begin{equation}
+Q(s, a) \;\gets\; Q(s, a)
+              + \alpha \left( \left[ r + \gamma \max_{a'} Q(s', a') \right]
+                              - Q(s, a) \right),
+\label{eq:qlearning-error}
+\end{equation}
+which exposes the Bellman temporal-difference error in brackets.
+
+The quantity
+\begin{equation}
+y = r + \gamma \max_{a'} Q(s', a')
+\label{eq:bellman-target}
+\end{equation}
+is the \emph{Bellman target} computed from a single sampled transition. It
+should be contrasted with the full inner expression on the right-hand
+side of \eqref{eq:bellman}: the target $y$ uses one realization of $s'$
+in place of the explicit sum $\sum_{s'} P(s' \given s, a) [\cdots]$.
+Averaged over many samples drawn from $P(\cdot \given s, a)$, the
+expected target equals the right-hand side of \eqref{eq:bellman}, which
+is what makes the update a stochastic approximation of the Bellman
+operator.
+
+A key property of \eqref{eq:qlearning} is that it is \emph{off-policy}.
+The bootstrap term $\max_{a'} Q(s', a')$ refers to the greedy continuation,
+not to the action that any particular behavior policy would have taken at
+$s'$. As a consequence, $Q$-learning can be trained from experience
+generated by any behavior policy $\mu$ that gives sufficient coverage of
+state-action pairs, including a uniform random policy, an
+$\epsilon$-greedy policy, a softmax policy over the current $Q$, or a
+search procedure such as MCTS. This decoupling between the behavior
+policy that samples experience and the target policy that the updates
+converge toward is what makes MCTS-guided sample collection (developed
+later in this section) compatible with $Q$-learning at all.
+
+Under standard conditions (Robbins-Monro step sizes
+$\sum_t \alpha_t = \infty$, $\sum_t \alpha_t^2 < \infty$, and a behavior
+policy that visits every state-action pair infinitely often),
+\eqref{eq:qlearning} converges almost surely to $\Qstar$
+\citep{sutton2018reinforcement}. These conditions never hold exactly in
+practice; the conceptual picture of sample-based stochastic
+approximation of the Bellman operator remains the right one.
+
+\subsection{Approximate Q-Learning}
+\label{sec:background-approxq}
+
+Tabular $Q$-learning stores one scalar per state-action pair and is
+infeasible when $\Sset$ is large, continuous, or textual. In the
+LLM-deliberation setting of this paper the state is a structured context
+of tokens, so a table is out of the question. We replace the table with a
+parametric action-value function $\Qpsi(s, a)$ with parameters $\psi$.
+
+For a sampled transition $(s, a, r, s')$, the Bellman target is now
+\begin{equation}
+y = r + \gamma \max_{a'} Q_{\bar{\psi}}(s', a'),
+\label{eq:bellman-target-approx}
+\end{equation}
+where $Q_{\bar{\psi}}$ is a \emph{target network}: a slow-moving copy of
+$\Qpsi$ whose parameters $\bar{\psi}$ are periodically synchronized from
+$\psi$ \citep{mnih2015human}. The parameters $\psi$ are then updated by
+gradient descent on the squared Bellman error,
+\begin{equation}
+\mathcal{L}_Q(\psi) \;=\; \tfrac{1}{2}\,
+\E_{(s, a, r, s') \sim \mathcal{D}}
+\left[ \left( \Qpsi(s, a) - y \right)^2 \right],
+\label{eq:approx-q-loss}
+\end{equation}
+where the expectation is over transitions drawn from a dataset
+$\mathcal{D}$ of past experience. In practice $\mathcal{D}$ is a
+\emph{replay buffer}, a finite ring of recent transitions sampled
+uniformly or with priority; the buffer breaks the strong temporal
+correlation between consecutive transitions in a trajectory.
+
+Practical approximate $Q$-learning bundles together a small collection of
+stabilization techniques: the replay buffer just described, the target
+network in \eqref{eq:bellman-target-approx}, clipped or normalized
+rewards to keep the regression target bounded, exploration schedules that
+anneal a behavior temperature or $\epsilon$ over training, and various
+forms of regularization on $\psi$. None of these change the core idea,
+which is simply
+\begin{equation}
+\text{sample experience} \;\longrightarrow\;
+\text{compute Bellman target}~y \;\longrightarrow\;
+\text{minimize } (\Qpsi(s, a) - y)^2.
+\label{eq:approxq-loop}
+\end{equation}
+Section~\ref{sec:method-architecture} instantiates $\Qpsi$ as an LLM
+backbone with a small action-value head, trained via LoRA adapters
+\citep{hu2022lora} for parameter efficiency.
+
+\subsection{Exploration and Behavior Policies}
+\label{sec:background-exploration}
+
+Equations \eqref{eq:bellman-target} and \eqref{eq:bellman-target-approx}
+say nothing about how the transitions $(s, a, r, s')$ feeding the
+$Q$-update are generated. That choice is the responsibility of the
+\emph{behavior policy} $\mu(a \given s)$, and it interacts with learning
+through coverage: any state-action pair that $\mu$ never visits cannot be
+updated.
+
+Common behavior policies include the \emph{uniform random} policy
+$\mu(a \given s) = 1 / |\Aset(s)|$ (maximally exploratory, useful as a
+warm start); the \emph{greedy} policy that always picks
+$\arg\max_a \Qpsi(s, a)$ (exploits current knowledge but can collapse
+onto a suboptimal action under biased $\Qpsi$); the
+\emph{$\epsilon$-greedy} policy that flips between random and greedy
+with probability $\epsilon$ (typically annealed over training); the
+\emph{softmax / Boltzmann} policy
+$\mu(a \given s) \propto \exp(\Qpsi(s, a) / \tau)$ with temperature
+$\tau$; and the \emph{search-guided} policy
+$\mu(a \given s) = \pimcts(a \given s)$ produced by an online procedure
+such as MCTS that uses $\Qpsi$ and a policy prior $\ptheta$ to focus
+sampling on promising actions.
+
+The classical exploration-exploitation tradeoff
+\citep{sutton2018reinforcement} appears as a tension between a behavior
+policy that exploits too greedily, missing high-return regions, and one
+that explores too aggressively, wasting samples on actions already known
+to be poor. Search-guided behavior is attractive because it adapts the
+exploration distribution to local context using current value and policy
+estimates, rather than treating exploration as a state-independent
+schedule.
+
+\subsection{MCTS as Sample-Efficient Policy Improvement}
+\label{sec:background-mcts}
+
+Monte Carlo tree search, in the form introduced by
+\citet{kocsis2006bandit} and \citet{coulom2006efficient} and surveyed by
+\citet{browne2012survey}, is best understood here not as a standalone
+planner but as a procedure that, given a current parametric estimate
+$(\Qpsi, \ptheta)$, produces \emph{locally improved} value and policy
+estimates $(\Qmcts, \pimcts)$ at a query state $s_0$. Those improved
+estimates then serve as targets for further training of $(\Qpsi,
+\ptheta)$ via the same approximate $Q$-learning machinery from
+section~\ref{sec:background-approxq}.
+
+\paragraph{Sampling replaces summation.}
+Equation~\eqref{eq:bellman} contains the sum
+$\sum_{s'} P(s' \given s, a) [\cdots]$. When $\Sset$ is large or $P$ is
+implicit, this sum is intractable. MCTS replaces it with samples: at any
+$(s, a)$ pair encountered in the tree, the search calls the generative
+MDP for a draw $s' \sim P(\cdot \given s, a)$ and propagates the
+resulting reward and next-state value back along the path. The empirical
+chance-node mean
+\begin{equation}
+\Qmcts(s, a) \;=\; \frac{W(s, a)}{N(s, a)}
+\;=\; \frac{1}{N(s, a)} \sum_{i=1}^{N(s, a)} G_i,
+\label{eq:mcts-q-estimate}
+\end{equation}
+where $G_i$ is the discounted return observed on the $i$th simulation
+passing through $(s, a)$, $W(s, a)$ is the cumulative return, and
+$N(s, a)$ is the visit count, is by construction a sample estimator of
+the Bellman expectation in \eqref{eq:bellman}. As $N(s, a) \to \infty$
+with consistent rollout values, $\Qmcts(s, a) \to \Qstar(s, a)$.
+
+\paragraph{Chance-node bifurcation.}
+Because LLM-driven transitions are stochastic, the tree distinguishes
+\emph{decision nodes} (states $s$ where the controller chooses an
+action) from \emph{chance nodes} ($(s, a)$ pairs where the environment
+draws $s'$). The counts $N(s, a)$ and returns $W(s, a)$ are stored at
+chance nodes; each distinct sampled successor becomes a child decision
+node. This bifurcation makes \eqref{eq:mcts-q-estimate} an honest
+estimator of the Bellman expectation rather than a degenerate trace
+through a single imagined trajectory.
+
+\paragraph{Per-edge reward backup.}
+Returns are computed backward along the path of (chance node, sampled
+reward) pairs visited during a simulation. If a rollout traverses the
+sequence of $(s_t, a_t, r_t, s_{t+1})$ for $t = 0, 1, \ldots, T-1$ and
+terminates with a leaf value $\hat V(s_T)$, the return at depth $t$ is
+\begin{equation}
+G_t = r_t + \gamma\, G_{t+1}, \qquad G_T = \hat V(s_T),
+\label{eq:per-edge-backup}
+\end{equation}
+and $G_t$ is added to the running statistics $W(s_t, a_t)$ and
+$N(s_t, a_t)$ of every ancestor chance node. The crucial point, often
+missed in tutorial presentations that only credit terminal rewards, is
+that each intermediate reward $r_t$ enters the backup at its own
+discount level. Section~\ref{sec:method-mcts} works through this in
+implementation detail.
+
+\paragraph{PUCT selection.}
+At each decision node $s$ in the tree, the search selects an action by
+maximizing the PUCT score \citep{silver2017alphagozero},
+\begin{equation}
+\PUCT(s, a) \;=\; \widehat Q(s, a)
+\;+\; c_{\mathrm{puct}} \;\ptheta(a \given s)\;
+\frac{\sqrt{N(s)}}{1 + N(s, a)},
+\label{eq:puct-bg}
+\end{equation}
+where $\widehat Q(s, a)$ is the current empirical estimate at the
+chance node (or the parametric prior $\Qpsi(s, a)$ if the node is
+unvisited), $\ptheta(a \given s)$ is the learned policy prior,
+$N(s) = \sum_{a'} N(s, a')$, and $c_{\mathrm{puct}} > 0$ is an
+exploration constant. The first term encourages exploitation of actions
+that already look good; the second encourages exploration of actions
+with high prior probability that have not yet been sampled enough.
+
+\paragraph{Visit-count policy.}
+After a fixed simulation budget at root $s_0$, the search returns the
+visit-count distribution
+\begin{equation}
+\pimcts(a \given s_0)
+\;=\; \frac{N(s_0, a)^{1/\tau}}
+            {\sum_{a' \in \Aset(s_0)} N(s_0, a')^{1/\tau}},
+\label{eq:visit-policy}
+\end{equation}
+where $\tau > 0$ controls sharpness. Under reasonable conditions, this
+visit-count policy is a stronger policy than the input prior $\ptheta$:
+PUCT preferentially expands actions that have either high prior or high
+empirical $Q$, so $\pimcts$ concentrates on actions that look good both
+under the prior and under the additional information accumulated by
+search.
+
+\paragraph{Sample-efficient policy improvement.}
+MCTS thus plays two roles inside an RL loop. It is a sample-efficient
+\emph{behavior policy} whose root actions are typically much better than
+those of the prior or current $Q$ alone, and it produces
+\emph{stronger training targets}: the chance-node aggregates
+$\Qmcts(s, a)$ average over many simulated continuations and are
+lower-variance than any single rollout return. Approximate $Q$-learning
+consumes these targets exactly as it would any other Bellman targets,
+by minimizing the squared error in \eqref{eq:approx-q-loss}.
+
+\subsection{Expert Iteration as Joint Q and Policy Distillation}
+\label{sec:background-expit}
+
+Expert iteration \citep{anthony2017thinking} combines the components of
+the preceding subsections into a single training loop. AlphaGo Zero and
+AlphaZero \citep{silver2017alphagozero, silver2018alphazero} are the
+best-known realizations: in those systems, the parametric policy and
+value networks guide MCTS, MCTS improves on them locally, and the
+improvement is distilled back into the parameters. The structure we use
+in this paper is the same, expressed in the RL vocabulary of the
+preceding subsections.
+
+The loop iterates the following steps.
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Sample from a search-guided behavior policy.} At each
+    encountered state $s$, run MCTS with $\Qpsi$ as the value prior at
+    leaves and $\ptheta$ as the policy prior in
+    \eqref{eq:puct-bg}. Collect the chance-node statistics
+    $\Qmcts(s, a)$ from \eqref{eq:mcts-q-estimate} and the root
+    visit-count distribution $\pimcts(\cdot \given s)$ from
+    \eqref{eq:visit-policy}. Sample the next environment action from
+    $\pimcts$, generating a transition $(s, a, r, s')$.
+  \item \textbf{Distill the value into $\Qpsi$.} Minimize the squared
+    Bellman error of \eqref{eq:approx-q-loss}, using $\Qmcts(s, a)$ as
+    the target,
+    \begin{equation}
+    \mathcal{L}_Q(\psi)
+    \;=\; \tfrac{1}{2}\, \E \left[ (\Qpsi(s, a) - \Qmcts(s, a))^2 \right].
+    \label{eq:expit-q-loss}
+    \end{equation}
+    This is approximate $Q$-learning, with MCTS supplying both the
+    sampling distribution and the targets.
+  \item \textbf{Distill the policy into $\ptheta$.} Minimize the
+    cross-entropy of the visit-count policy under the policy prior,
+    \begin{equation}
+    \mathcal{L}_{\pi}(\theta)
+    \;=\; -\,\E_s \left[
+      \sum_{a \in \Aset(s)} \pimcts(a \given s) \log \ptheta(a \given s)
+    \right].
+    \label{eq:expit-pi-loss}
+    \end{equation}
+  \item \textbf{Iterate.} The improved $(\Qpsi, \ptheta)$ become the
+    priors for the next round of search.
+\end{enumerate}
+
+The two distillation losses share a common structure. Each one trains a
+parametric model toward a target produced by a stronger but more
+expensive procedure (search) that itself used the model as input. This
+is what \citet{anthony2017thinking} call ``thinking, fast and slow'':
+the parametric models are the fast system, MCTS is the slow system, and
+training shifts competence from the slow system into the fast one.
+
+\subsection{LLM Deliberation as a Context MDP}
+\label{sec:background-llm-mdp}
+
+The framing above is generic. To apply it to language-model
+deliberation we now specify how an LLM induces the MDP, following the
+design of section~\ref{sec:method-state}.
+
+\paragraph{The LLM as environment.}
+An LLM together with a fixed prompt template induces a conditional
+distribution over next contexts given a control action,
+\begin{equation}
+C_{t+1} \;\sim\; P_{\mathrm{LLM}}(\cdot \given C_t, a_t),
+\label{eq:llm-transition}
+\end{equation}
+where $C_t$ is a structured context (the running summary, candidate
+solutions, critiques, verifications, and depth produced so far) and
+$a_t$ is a control action such as ``propose a solution'', ``critique
+the current candidate'', or ``verify the current candidate''.
+Section~\ref{sec:method-actions} fixes the action vocabulary. The
+controller's experience is exactly the sequence of sampled transitions
+$(C_t, a_t, r_t, C_{t+1})$.
+
+\paragraph{Model-free from the controller's perspective.}
+Although \eqref{eq:llm-transition} is, in principle, a transition model,
+the controller does not enumerate it. It observes sampled transitions
+from the LLM and updates $\Qpsi(C, a)$ using
+\eqref{eq:bellman-target-approx} and \eqref{eq:approx-q-loss}. From the
+controller's perspective this is model-free RL: the LLM is the
+environment interface, not a separate simulator of an external world.
+MCTS, when used here, draws samples from the same LLM environment
+according to \eqref{eq:llm-transition}, organized as search.
+
+\paragraph{Partial observability and the Markov bet.}
+The context $C$ is a summary of dialogue and intermediate reasoning, not
+a sufficient statistic of the full history of LLM token-level
+realizations. Strictly speaking the process is a partially observed
+MDP, and treating $C$ as a state is a state-abstraction approximation.
+This is the standard situation in deep RL, where the input to the value
+function is an observation or learned representation rather than a true
+Markov state. The practical bet, encoded in our choice of context
+representation in section~\ref{sec:method-state}, is that the
+state-abstraction approximation is good enough for $\Qpsi(C, a)$ to be
+useful, and that the MCTS chance-node statistics in
+\eqref{eq:mcts-q-estimate} still concentrate on values that are useful
+for action selection even when the underlying process is not exactly
+Markov in $C$.

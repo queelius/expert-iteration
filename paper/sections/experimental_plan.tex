@@ -1,0 +1,466 @@
+\section{Experimental Plan}
+\label{sec:experimental-plan}
+
+% =========================================================================
+% Pre-registered evaluation plan. The function of this section is to make
+% the eventual results section harder to game and easier to evaluate: the
+% baseline grid, the compute axis, the headline figure, and the
+% falsification criterion are all fixed before any training begins.
+% =========================================================================
+
+This section pre-registers the empirical study that the framework of
+Sections~\ref{sec:method-state}--\ref{sec:method-inference} is intended
+to support. The plan is fixed before training; subsequent empirical work
+either runs against this plan or explicitly documents departures from
+it. The intent is to draw a clean line between the framework
+contribution (this paper) and the empirical contribution (a follow-up
+study), and to make the eventual headline number harder to confuse with
+post-hoc tuning. The structure of the plan mirrors the methodological
+commitments of Section~\ref{sec:method}: the agent is an approximate
+$Q$-learning system over a verifier-anchored context MDP, MCTS is a
+policy improvement operator used during training and a test-time-compute
+knob at inference, and the falsifiable claim concerns the
+compute-versus-accuracy frontier rather than any single accuracy number.
+
+\subsection{Benchmarks}
+\label{sec:exp-benchmarks}
+
+We evaluate on a progression of verifiable-math benchmarks ordered from
+easiest to hardest: GSM8K \citep{cobbe2021gsm8k}, the MATH dataset
+\citep{hendrycks2021math} split into levels 1 through 3 and then levels
+4 through 5, AIME 2024 and 2025, and Lean Mathlib as a deferred option
+for formal-proof evaluation. The progression matters operationally.
+Approximate $Q$-learning over the context MDP of
+Section~\ref{sec:method-state} needs at least some nonzero terminal
+reward to bootstrap: if the base model scores near zero on a benchmark,
+the verifier returns a constant signal across visited trajectories, the
+Bellman target collapses to a point estimate, and there is no gradient
+on which the heads or the MCTS-distilled policy can sharpen. Easier
+benchmarks supply the early signal that drives initial policy
+improvement; the harder benchmarks then test whether the trained
+$\Qpsi$ generalizes to problems the base model could not solve on its
+own. Starting at the hard end is operationally tempting (it is where
+the headline gap to frontier models is widest) but methodologically
+risky: a flat-zero learning signal does not falsify the framework, it
+simply provides no evidence either way.
+
+Each benchmark is paired with an explicit, non-LLM verifier whose
+implementation is part of the pre-registered plan. For GSM8K we regex
+the boxed numeric answer from the committed output, canonicalize it
+with SymPy, and compare to the ground truth via SymPy's equality. For
+MATH we use the same regex and SymPy stack, extended to handle
+symbolic expressions (fractions, radicals, algebraic forms); the
+verifier accepts any expression that SymPy reports as equal to the
+ground-truth answer under canonicalization. For AIME the answer is a
+nonnegative integer in $[0, 999]$, so the verifier is integer parsing
+plus equality. For Lean Mathlib the verifier is the kernel: a tactic
+proof is accepted iff Lean's type checker reports a closed proof of the
+stated goal. The Lean target is deferred because it requires a
+substantially larger engineering investment around tactic
+serialization, error-message ingestion, and dependency management; the
+framework is constructed to admit it without redesign, but the phase-1
+empirical study targets the SymPy-checkable benchmarks first. The
+verifier interface is the same callable referenced by the
+\textsc{InvokeVerifier} action of Section~\ref{sec:method-actions}: the
+agent can spend intermediate verifier calls during deliberation and
+also be scored by the same checker at terminal commit.
+
+\subsection{Base Models}
+\label{sec:exp-models}
+
+The base language model is the frozen substrate of the architecture in
+Section~\ref{sec:method-architecture}, and its identity has to support
+the central comparison framing: any measured improvement during
+training is attributable to the heads, the adapter, and the search
+procedure, not to capability gains from prior reasoning-specific
+post-training. We therefore restrict the substrate to small base models
+that have not been instruction-tuned, RLHF-tuned, or specialized for
+reasoning. The primary candidate is Qwen2.5-1.5B-Base
+\citep{yang2024qwen25}; secondary candidates are Llama-3.2-1B-Base
+\citep{dubey2024llama3} and SmolLM2-1.7B \citep{allal2024smollm2}. The
+heads and adapter are trained from scratch; the LLM stays frozen
+throughout phase 1, in line with the architectural choice of
+Section~\ref{sec:method-architecture}.
+
+We deliberately exclude Instruct, Chat, RLHF, o1-style, and R1-style
+variants \citep{openai2024o1, guo2025deepseekr1} from the substrate
+pool. Such variants already encode reasoning behavior obtained from
+methods we want to compare against, not build on. Using them would
+conflate two sources of improvement: gains from approximate
+$Q$-learning with MCTS-supplied targets (the framework's contribution)
+and gains from the prior post-training pipeline (someone else's
+contribution). A base-only substrate makes the attribution clean. The
+larger reasoning model that appears in the baseline grid as B5 (below)
+is not the substrate; it serves only as a capability-ceiling reference
+point for the compute-versus-accuracy frontier, and its identity is
+allowed to differ across benchmarks if a stronger published reasoning
+model exists for one but not another.
+
+\subsection{Pre-Registered Baseline Grid}
+\label{sec:exp-baselines}
+
+The baseline grid in Table~\ref{tab:baselines} is fixed before training
+begins and is not extended post-hoc. Pre-registration matters because
+the natural failure mode of test-time-compute experiments is exactly
+the kind of selective baseline reporting that the grid is designed to
+prevent: a method whose primary comparison is to a weak control wins
+trivially, while a method whose primary comparison is to a strong
+control loses trivially. Fixing the grid in advance, with explicit
+roles for each baseline, removes that degree of freedom.
+
+\begin{table}[t]
+\centering
+\caption{Pre-registered baseline grid.}
+\label{tab:baselines}
+\small
+\begin{tabular}{@{}llp{0.5\linewidth}@{}}
+\toprule
+ID & Method & Description \\
+\midrule
+B0 & Base greedy        & Base LLM with greedy decoding; no deliberation. \\
+B1 & Best-of-$N$        & Base LLM with $N$-sample best-of-$N$, FLOP-matched
+                          to B2--B4. \\
+B2 & Policy $B{=}0$     & Frozen LLM + learned policy/$Q$ heads; fast mode,
+                          no search. \\
+B3 & MCTS $B{=}N_{\mathrm{small}}$ & Same as B2 plus light MCTS at
+                          inference. \\
+B4 & MCTS $B{=}N_{\mathrm{large}}$ & Same as B2 plus heavy MCTS at
+                          inference. \\
+B5 & Larger model       & Larger reasoning model, greedy decode, as a
+                          capability ceiling. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The roles assigned to the six baselines are deliberately
+non-overlapping. B0 is the raw capability floor: greedy decoding from
+the base model with no deliberation scaffold of any kind. The B0 score
+is the number that the rest of the grid is trying to beat. B1 is the
+cheap-deliberation control: best-of-$N$ sampling from the base model
+with $N$ chosen so that the total inference FLOPs match the average
+inference compute spent by B2 through B4 on the same benchmark. The
+FLOP match is what makes the comparison honest. A method that beats
+best-of-$N$ at strictly more compute has not necessarily learned
+anything; a method that beats best-of-$N$ at matched compute has.
+
+B2 isolates the contribution of the trained heads independently of
+search. It evaluates fast mode (Section~\ref{sec:method-inference}):
+the $Q$-head argmax is acted on directly, with no MCTS at inference.
+The question B2 answers is whether the policy distilled from
+MCTS-improved Bellman targets does any better than greedy decoding
+from the same base model. If B2 fails to beat B0, the distillation has
+not transferred the search-time improvement into the parametric heads,
+and the rest of the grid loses interpretability. B3 and B4 isolate the
+contribution of test-time search on top of the trained heads, at two
+different simulation budgets. B3 is light search (a small number of
+MCTS simulations per decision); B4 is heavy search (the largest budget
+we are willing to spend per query, subject to per-problem latency
+constraints). The B3-versus-B4 spread is the test-time-compute knob in
+action: more search should produce monotonically better accuracy on
+average, with diminishing returns as $B$ grows. Finally, B5 is the
+capability ceiling. It runs a larger reasoning model (a public
+distillation of an o1-style or R1-style system, for instance) under
+greedy decoding, and exists to bound the achievable accuracy on the
+benchmark independent of our pipeline. B5 is a reference, not a target:
+beating B5 is not required for the framework's claim, but the distance
+between B4 and B5 calibrates how much of the headline gap our loop has
+closed.
+
+\subsection{Compute Accounting}
+\label{sec:exp-compute}
+
+The compute axis is the single most consequential design choice in the
+plan, and the one most prone to silent inflation of headline results.
+We pre-commit to three metrics, reported together for every method:
+\emph{(i)} total inference FLOPs per problem, summed across every LLM
+forward executed at decoding time including all forwards inside any
+MCTS rollout; \emph{(ii)} total LLM forward passes per problem, an
+implementation-independent token count; and \emph{(iii)} wall-clock
+seconds at fixed hardware (one H100), with batch size, KV-cache reuse
+configuration, and decoding library version logged alongside.
+Reporting all three together exposes any disagreement between them,
+which would itself be evidence of a measurement bug.
+
+We pre-commit to total inference FLOPs as the primary metric for the
+headline compute-versus-accuracy frontier. The justification is
+twofold. First, FLOPs are the metric used by the test-time-compute
+scaling literature \citep{snell2024scaling}, so the resulting frontier
+is directly comparable to prior work without unit conversion. Second,
+FLOPs are the metric most resistant to post-hoc cherry-picking once
+fixed: wall-clock measurements vary with batch shape and runtime
+implementation in ways that invite favorable hardware choices, and raw
+forward-pass counts hide the per-pass cost differences between a
+$1.5$B-parameter base model and a $7$B reasoning ceiling. Pre-committing
+to FLOPs and then reporting wall clock and forward-pass counts
+alongside makes the primary comparison stable while preserving enough
+auxiliary data to surface any measurement anomalies. Section~\ref{sec:exp-threats}
+discusses compute leaks: the failure mode in which a method's
+inference cost is undercounted, typically by neglecting chain-of-thought
+generation tokens or the LLM forwards executed inside MCTS simulations.
+Pre-registering the accounting convention is the first defense against
+that failure mode.
+
+\subsection{Headline Frontier}
+\label{sec:exp-frontier}
+
+The headline figure of the eventual empirical study is a
+compute-versus-accuracy frontier; we describe it in detail here because
+its axes, curves, and falsification criterion are pre-registered, but
+the figure itself appears in the follow-up empirical paper, not in this
+one. The $x$-axis is total inference FLOPs
+per problem (from Section~\ref{sec:exp-compute}), and the $y$-axis is
+accuracy as measured by the top-1 verifier pass rate. Each method in
+the baseline grid contributes one curve, parameterized by the natural
+compute knob for that method: best-of-$N$ varies $N$, the MCTS modes
+vary $B$, and the base-greedy and ceiling baselines contribute single
+points. The frontier as a whole describes how accuracy scales with
+inference compute across the grid.
+
+The pre-registered falsifiable hypothesis specifies operational
+parameters in advance so that the test cannot be re-interpreted after
+the empirical work is in hand. We fix the MCTS simulation budgets at
+$N_{\mathrm{small}} = 50$ for the light-search baseline B3 and
+$N_{\mathrm{large}} = 500$ for the heavy-search baseline B4. These
+values are committed before training. They are chosen so that
+$N_{\mathrm{small}}$ exceeds the seven-verb branching factor by enough
+to give every action multiple visits on average from the root, and so
+that $N_{\mathrm{large}} = 10 \cdot N_{\mathrm{small}}$ tests a
+one-order-of-magnitude compute scaling. Best-of-$N$ for B1 is sized
+problem-by-problem so that B1's total inference FLOPs match the
+average FLOPs spent by B4 on that same problem; the FLOP match is the
+control that makes B1 a fair cheap-deliberation baseline rather than a
+straw man.
+
+The pre-registered hypothesis is then: on GSM8K and on MATH levels $1$
+through $3$, the B4 mean accuracy strictly exceeds the B1 mean accuracy
+at each of $K = 5$ FLOP-matched evaluation points logarithmically
+spaced across the shared FLOP range of B1 through B4, under the
+statistical analysis plan of Section~\ref{sec:exp-stats}. Strict
+exceedance is operationalized as a paired bootstrap $95\%$ confidence
+interval on the per-problem accuracy difference excluding zero, after
+Holm-Bonferroni correction across the two benchmarks and across the
+$K = 5$ evaluation points (a total of $10$ tests). The hypothesis is
+the strong form ``strictly above at all evaluation points'' rather
+than the weak form ``above at some evaluation point'' because the weak
+form invites cherry-picking of the FLOP value that reports best.
+
+If the hypothesis fails, the approximate $Q$-learning loop with
+MCTS-supplied targets has not produced value beyond cheap sampling
+from the same base model, and the framework's headline claim does not
+hold; the appropriate response is to revise or retract the claim
+rather than to add baselines or restate the result on a different
+metric. The restriction to GSM8K and MATH levels $1$ through $3$
+acknowledges that on AIME and MATH levels $4$ through $5$, both B1
+and B4 may be near chance and the comparison is not informative; we
+still report the frontier on the harder benchmarks but the
+falsification criterion is attached only to the benchmarks where both
+methods produce a measurable nonzero signal.
+
+The figure also visualizes the two intermediate claims that motivate
+the loop. The first is that B2 sits above B0 at the (very small)
+compute of fast mode: this is the claim that distillation from
+MCTS-improved targets transfers nontrivial deliberation into the
+parametric $Q$-head and policy head. The second is that B3 and B4 sit
+above B2 at higher compute on the same axis: this is the claim that
+test-time search on top of the trained heads continues to add
+accuracy. Both intermediate claims are also pre-registered as
+falsifiable; failure of the first reflects a distillation failure and
+failure of the second reflects either an inference-time search
+implementation problem or an indication that the heads already capture
+most of the local search return.
+
+\subsection{Sanity-Check Ablations}
+\label{sec:exp-ablations}
+
+Three pre-registered ablations confirm that the trained heads, rather
+than the bare MCTS scaffold, are doing the work. Each ablation
+isolates one component of the trained system by replacing it with a
+neutral default and re-evaluating on GSM8K and MATH levels $1$ through
+$3$. Like the baseline grid, the ablation set is fixed before training
+begins.
+
+\textit{A1: untrained heads with heavy MCTS}. We replace $\Qpsi$ with a
+random initialization and $\ptheta$ with the uniform distribution over
+available actions, then run MCTS at $B = N_{\mathrm{large}}$ at
+inference. The expectation is that A1 lies visibly below B4, and indeed
+not much above B0, because PUCT with a random value head and a uniform
+prior is doing nothing more than uniform exploration biased by an
+uninformative leaf evaluator. If A1 matches or beats B4, then the bare
+MCTS-plus-base-LLM scaffold is the source of the improvement and the
+trained heads are not contributing; the framework's claim about
+approximate $Q$-learning over the context MDP would not hold. A2 and
+A3 are then redundant.
+
+\textit{A2: trained heads with uniform PUCT prior}. We keep the trained
+$\Qpsi$ as the leaf evaluator and the value term in PUCT, but replace
+$\ptheta$ with the uniform distribution over available actions in the
+PUCT exploration term. The MCTS simulation budget is matched to B4.
+This ablation tests whether the distilled policy head matters beyond
+what fast-mode $Q$-argmax already extracts: a policy head that
+contributes nothing further than its value-head counterpart would leave
+A2 indistinguishable from B4. A2 below B4 means the policy distillation
+of Section~\ref{sec:method-training} is doing real work in biasing
+search; A2 equal to B4 means the policy head is decorative and the
+$Q$-head alone carries the contribution.
+
+\textit{A3: trained heads, no search}. This is exactly the fast-mode
+baseline B2 in the grid, but reported again here as an ablation against
+B4 to make the test-time-compute claim explicit. The B4-minus-A3 gap is
+the marginal value of test-time MCTS over the distilled policy alone.
+If the gap is zero or negative, then test-time search adds nothing on
+top of fast mode, and the inference-mode story of
+Section~\ref{sec:method-inference} reduces to a single mode rather than
+a knob. We pre-register A3 separately from B2 because the comparison
+framing is different: B2 is a baseline in the headline frontier; A3 is
+specifically the ``MCTS contributes nothing'' null result against which
+the test-time-compute knob is tested.
+
+\subsection{Statistical Analysis Plan}
+\label{sec:exp-stats}
+
+The headline hypothesis of Section~\ref{sec:exp-frontier} is tested
+under a fixed statistical procedure that is committed before any
+training begins. The pre-registration of the procedure is as
+load-bearing as the pre-registration of the hypothesis itself: an
+unspecified procedure invites the same post-hoc tuning that the
+baseline grid is designed to prevent.
+
+\paragraph{Test statistic.}
+For each FLOP-matched evaluation point and each benchmark, we form the
+per-problem accuracy difference $\Delta_i = \mathrm{acc}_{B4, i} -
+\mathrm{acc}_{B1, i}$ across the $n$ problems in the benchmark.
+Accuracy on a single problem is binary (verifier passes or fails). The
+test statistic is the sample mean $\bar{\Delta} = \frac{1}{n}
+\sum_{i=1}^{n} \Delta_i$.
+
+\paragraph{Inference procedure.}
+We use a paired bootstrap on the per-problem $\Delta_i$ with $R =
+10{,}000$ resamples. The $95\%$ confidence interval is the
+$2.5$th and $97.5$th percentile of the resampled $\bar{\Delta}$
+distribution. The null hypothesis at each FLOP-matched evaluation
+point is $\bar{\Delta} = 0$ at that point; rejection means the CI
+excludes zero.
+
+\paragraph{Multiple comparisons.}
+The hypothesis is tested across two benchmarks (GSM8K, MATH levels
+$1$ through $3$) and $K = 5$ FLOP-matched evaluation points per
+benchmark, for a total of $10$ tests. We apply Holm-Bonferroni
+correction at family-wise error rate $\alpha = 0.05$. The hypothesis
+is supported only if all $10$ tests reject after correction.
+
+\paragraph{Seed variance.}
+All trained methods (B2, B3, B4 and the ablations) are trained from
+at least three independent random seeds. We report mean and standard
+deviation across seeds for every accuracy point. The per-problem
+accuracy used in the bootstrap is the mean across seeds; the
+confidence interval therefore reflects problem-level variance rather
+than seed variance, and seed variance is reported alongside as a
+secondary diagnostic.
+
+\paragraph{Effect size.}
+Beyond the binary reject/no-reject outcome of the bootstrap, we report
+the raw $\bar{\Delta}$ and its bootstrap CI at every FLOP-matched
+point. A null result (failure to reject) with $|\bar{\Delta}| < 0.02$
+across all FLOP points is considered evidence against the hypothesis:
+the framework has neither outperformed the cheap-deliberation baseline
+nor produced enough effect to suggest a power problem. A null result
+with $|\bar{\Delta}| > 0.02$ but a CI that includes zero is reported
+as inconclusive and prompts a power-analysis follow-up rather than a
+clean accept or reject.
+
+\paragraph{Reporting requirements.}
+We commit to releasing, alongside any results paper, the raw
+per-problem accuracy logs for every method and every seed, the FLOP
+accounting per problem and method, the random seed values, and the
+exact bootstrap implementation used. Reviewers will be able to
+reproduce the bootstrap from the released artifacts; the published
+test outcome will be verifiable rather than asserted.
+
+\subsection{Threats to Validity}
+\label{sec:exp-threats}
+
+The experimental design is sensitive to several measurement and
+attribution failures that have inflated headline results in prior
+test-time-compute work, and we list them here as part of the
+pre-registered plan rather than as discussion after the fact. Each
+threat is paired with the mitigation built into the plan.
+
+\textit{Compute leaks}. The most common failure in test-time-compute
+scaling claims is undercounting inference cost. Two specific leak
+modes apply to this work. The first is chain-of-thought leakage: a
+method that uses token-heavy generation per decision but is scored
+only on the small model's FLOPs across decoder calls undercounts the
+true cost by an order of magnitude. The compute accounting of
+Section~\ref{sec:exp-compute} addresses this by requiring total
+inference FLOPs summed over every LLM forward, including
+verb-instantiator continuations that produce action content. The
+second leak mode is MCTS-rollout leakage: a method that reports only
+root-level forwards but spends many forwards inside the search
+procedure misrepresents the per-problem cost. The same accounting
+convention catches this if applied consistently. We also report the
+three compute metrics together so that any pairwise inconsistency
+between FLOPs, forward counts, and wall clock surfaces as evidence of
+a measurement bug rather than as a silent inflation.
+
+\textit{Verifier coverage}. A buggy or lenient verifier inflates
+accuracy across all methods, but not uniformly: methods that produce
+outputs in formats the verifier handles well are advantaged over
+methods whose outputs require more aggressive canonicalization. On
+GSM8K and MATH this risk is concentrated in the SymPy normalization
+step: a malformed regex extraction can let a numerically wrong answer
+parse as correct, and a too-aggressive canonicalization can collapse
+distinct symbolic answers into a single equivalence class. We will
+audit a stratified sample of $200$ verifier verdicts per benchmark
+before the headline run, with the audit prompts and results released
+alongside the experimental code. The verifier interface is held
+constant across the baseline grid, so this risk does not preferentially
+inflate the proposed method, but a buggy verifier still pollutes the
+absolute numbers.
+
+\textit{Benchmark contamination}. Pretraining corpora for the
+base-model substrates may include test problems from GSM8K, MATH, and
+AIME, in which case the apparent accuracy of B0 partially reflects
+memorization rather than reasoning. We report a per-benchmark
+contamination check (substring matching the canonicalized problem
+statement against the base model's tokenizer and against publicly
+documented training sets) and flag any benchmark for which the
+contamination rate exceeds a pre-registered threshold of $5\%$. This
+does not invalidate the framework's contribution (the trained heads
+still have to learn to exploit memorized problems, and the
+contamination affects all baselines symmetrically), but it does affect
+the interpretation of absolute scores against frontier reasoning models.
+
+\textit{Best-of-$N$ selector choice}. B1 requires a selector to pick a
+single output from $N$ samples. The selector affects the baseline's
+strength: an oracle verifier as selector trivializes B1 by reducing
+best-of-$N$ to a coverage check, while a weak heuristic selector
+understates B1's true accuracy. We pre-register the selector as the
+same terminal verifier used to score all methods in the grid: if the
+verifier accepts at least one of the $N$ samples, B1 scores it as
+correct; otherwise, B1 scores it as incorrect. This is the strongest
+honest baseline for B1, and it is the standard against which the B4
+curve has to win.
+
+\textit{Seed variance}. Approximate $Q$-learning with MCTS-supplied
+targets is sensitive to training-seed variance, both because MCTS
+trajectory collection is stochastic and because the head initialization
+interacts with the early Bellman targets in ways that amplify across
+the iterations. We pre-register at least three training seeds per
+configuration and report mean accuracy with standard deviation across
+seeds on every figure and table. Single-seed numbers are not
+publishable as headline results under this plan. Inference-time
+randomness (MCTS rollout sampling, temperature on the verb-instantiator)
+is averaged within seed: for each test problem we run at least eight
+inference replicates per method, with seed-specific aggregation
+described in the accompanying release notes.
+
+\textit{Selection effects in the pre-registered hypothesis}. The
+falsification criterion in Section~\ref{sec:exp-frontier} restricts
+attention to GSM8K and MATH levels $1$ through $3$ because both B1 and
+B4 produce measurable signal there. This restriction is itself a
+pre-registered methodological choice rather than a degree of freedom
+discovered after seeing results: the restriction is fixed before any
+empirical work, and the harder-benchmark frontiers are reported
+without a falsification claim attached. The published study will state
+which benchmarks contribute to the falsification criterion and which
+contribute only descriptively, in advance of any number-reporting.

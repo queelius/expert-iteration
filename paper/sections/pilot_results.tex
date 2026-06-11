@@ -1,0 +1,665 @@
+\section{Toy-Problem Pilot}
+\label{sec:pilot}
+
+% =========================================================================
+% Pilot study run on the LLM context MDP scaffold described in Section~\ref{sec:method}.
+% Scope is deliberately small: the question is whether the expert-iteration loop
+% closes at all under the framework's design, not whether it produces frontier
+% accuracy on standardized benchmarks. The latter requires the pre-registered
+% study of Section~\ref{sec:experimental-plan}.
+% =========================================================================
+
+This section reports a toy-problem pilot conducted on the LLM context MDP
+scaffold of Section~\ref{sec:method}. The purpose is narrow and the scope
+admits no claim about benchmark performance: we test whether the expert
+iteration loop of Section~\ref{sec:method-training} produces measurable
+round-over-round improvement on a tiny problem set when implemented
+end-to-end, and whether the trained parametric heads transfer to held-out
+problems of the same structural shape. The pre-registered benchmark study
+of Section~\ref{sec:experimental-plan} is the empirical claim of the
+program; what follows is the integration check whose negative outcome
+would have falsified the framework's basic feasibility before any
+benchmark run.
+
+\subsection{Pilot Setup}
+\label{sec:pilot-setup}
+
+The pilot exercises four toy problems sampled to cover four families of
+verb-choice difficulty: an arithmetic single-step problem
+(\texttt{multiply\_small}: ``Compute $7 \cdot 6$''); a single-step word
+problem (\texttt{gsm8k\_toy\_1}: a $3 \cdot 12 - 7$ word problem); a
+two-step linear-algebra problem (\texttt{algebra\_toy\_1}: ``Solve
+$2x + 5 = 13$''); and a quadratic-factoring problem (\texttt{factor}:
+``Factor $x^2 - 9$''). A second set of four structurally parallel
+problems, fixed in advance and never used during training, serves as the
+held-out evaluation set: a different arithmetic operand pair
+(\texttt{multiply\_small\_ho}: ``Compute $9 \cdot 8$''), a different
+word problem (\texttt{gsm8k\_toy\_ho}: a $4 \cdot 15 - 9$ word problem),
+a different linear-algebra problem (\texttt{algebra\_toy\_ho}: ``Solve
+$3y - 7 = 8$''), and a different quadratic to factor
+(\texttt{factor\_ho}: ``Factor $x^2 + 5x + 6$''). The held-out set
+shares structural shape but never surface content with the training set,
+so a model that has memorized verb sequences on training problems will
+score poorly on held-out problems if those memorized sequences fail to
+generalize.
+
+The base language model throughout the pilot is Qwen2.5-3B running
+locally via Ollama; the same model serves both as the verb instantiator
+(filling in the textual content of each cognitive verb) and as the
+2048-dimensional state encoder. The agent's parametric heads are a
+shared encoder of one fully-connected layer of width 512 with
+LayerNorm and GELU plus a representation projection of width 256,
+feeding a 7-way policy head and a 7-way value head. The total trainable
+parameter count is $1.19\mathrm{M}$ on top of a frozen base model.
+
+MCTS is run with a simulation budget of $B = 20$ at every state visited
+by a scripted three-step trajectory (\textsc{FormHypothesis},
+\textsc{InvokeVerifier}, \textsc{CommitAnswer}). Five MCTS random seeds
+are run per problem, producing 15 records per problem and 60 records
+per dataset on the four-problem training and held-out sets. The MCTS
+discount is $\gamma = 0.99$ and the PUCT exploration constant is
+$c_{\PUCT} = 1$. The rollout depth limit is zero, so the leaf
+evaluator is the value head when present and a constant zero when
+absent. The verifier of Section~\ref{sec:method-reward} is the SymPy
+equality call on canonicalized normal forms; correct commits earn
+$+1$, incorrect commits earn $-1$, and intermediate verifier calls
+on hypotheses earn small shaped rewards as specified in
+Section~\ref{sec:method-reward}.
+
+The pilot fits four sets of heads. The \emph{baseline} heads
+(denoted \texttt{v2}) are distilled from targets collected under a
+uniform PUCT prior: no parametric prior has yet entered the loop, so
+these heads are the pre-expert-iteration starting point. The
+\emph{first-round} heads (\texttt{v3}) are distilled from targets
+collected on the same four problems but with the baseline heads
+installed as the PUCT prior; this is the first round of expert
+iteration. The \emph{second-round} heads (\texttt{v4}) are distilled
+from targets collected with the first-round heads as prior on an
+expanded problem set of seven problems (the original four plus three
+word-problem variants). The \emph{rebalanced second-round} heads
+(\texttt{v4b}) are an alternative second-round fit on a $10$-problem
+training set: the same seven problems used by \texttt{v4} plus two
+algebra variants and one factoring variant, with composition
+$10\%/40\%/30\%/20\%$ (arithmetic/word/algebra/factoring) instead of
+\texttt{v4}'s $14\%/57\%/14\%/14\%$. The held-out set is the same
+across all rounds, so any generalization shift can be attributed to
+the trained heads, not to a shift in evaluation distribution.
+
+\paragraph{Round-naming convention.} Throughout this section we use
+\texttt{v2}, \texttt{v3}, and \texttt{v4} as terse labels for the
+baseline, first-round, and second-round heads respectively; the
+identically-named distillation datasets are the inputs from which each
+head set is fitted. Comparisons phrased as ``after one round of expert
+iteration'' refer to the \texttt{v2}-to-\texttt{v3} transition;
+``after two rounds'' refers to \texttt{v2}-to-\texttt{v4}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/pilot_results.pdf}
+\caption{Headline pilot results. \emph{Panel A:} sharpness of the
+$\pimcts$ distillation targets across pilot rounds, reported as mean
+$\max_a \pimcts(a \given s)$ per dataset (bar) with the median and
+entropy annotated above the bar. The transition from \texttt{v2}
+(uniform PUCT prior) to \texttt{v3-train} (trained PUCT prior) is the
+intended round-over-round sharpening; \texttt{v3-holdout} confirms the
+sharpening generalizes to problems the prior had not seen during
+training. \texttt{v4-train}'s lower sharpness reflects the prior
+acting near-uniform on three problem variants it had never encountered;
+\texttt{v4b-train} sits between \texttt{v4-train} and \texttt{v3-train}
+because its larger problem set mixes seen and unseen variants in a
+different ratio. \emph{Panel B:} zero-shot held-out argmax agreement on
+the canonical \texttt{v3-holdout} evaluation set, defined as
+$\arg\max_a \ptheta(a \given s) = \arg\max_a \pimcts(a \given s)$,
+broken out by problem family. \texttt{v3} heads improve uniformly over
+\texttt{v2} heads; \texttt{v4} heads improve on the targeted word
+problem family ($+6.7$ pp) but regress sharply on algebra
+($-33.3$ pp). The rebalanced \texttt{v4b} heads hold the word-problem
+gain but do not recover algebra despite restoring its training share,
+the controlled test that Section~\ref{sec:pilot-v4b} uses to rule out
+class dilution as the dominant regression mechanism.}
+\label{fig:pilot-headline}
+\end{figure}
+
+\subsection{Baseline to First-Round Heads: Monotonic Improvement}
+\label{sec:pilot-v2-v3}
+
+The first round of expert iteration demonstrates the loop closing on
+every metric simultaneously, summarized graphically in
+Figure~\ref{fig:pilot-headline}. This subsection reports three families
+of measurement, and each tightens from the baseline to the first-round
+heads: the sharpness of the MCTS distillation targets, the
+training-loss floor of the distilled heads, and zero-shot held-out
+generalization. Table~\ref{tab:pilot-sharpness} reports
+the sharpness of the MCTS visit-count targets $\pimcts$ across rounds.
+The targets become measurably sharper from \texttt{v2} (uniform prior)
+to \texttt{v3-train} (trained prior): mean maximum probability rises
+from $0.452$ to $0.549$, median maximum from $0.40$ to $0.70$, and
+entropy drops by $0.215$ bits. The held-out collection \texttt{v3-holdout}
+is similarly sharp despite using problems never seen during training,
+which is consistent with the prior generalizing structurally rather
+than overfitting surface content.
+
+\begin{table}[t]
+\centering
+\caption{Sharpness of $\pimcts$ targets across pilot rounds.
+``mean max'' is the mean over records of $\max_a \pimcts(a \given s)$;
+``med max'' is the median; entropy is in bits; ``frac concentrated''
+counts records with maximum at least $0.5$.}
+\label{tab:pilot-sharpness}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Dataset & $N$ & mean max & med max & entropy & frac $\geq 0.5$ \\
+\midrule
+\texttt{v2}                  (uniform, 4 problems)    & 60  & 0.452 & 0.400 & 2.070 & 35\% \\
+\texttt{v3-train}            (v2 prior, 4 problems)   & 60  & 0.549 & 0.700 & 1.855 & 62\% \\
+\texttt{v3-holdout}          (v2 prior)               & 60  & 0.558 & 0.700 & 1.833 & 63\% \\
+\texttt{v4-train}            (v3 prior, 7 problems)   & 105 & 0.506 & 0.450 & 1.945 & 49\% \\
+\texttt{v4-holdout}          (v3 prior)               & 60  & 0.585 & 0.700 & 1.762 & 68\% \\
+\texttt{v4b-train}           (v3 prior, 10 problems)  & 150 & 0.516 & 0.550 & 1.927 & 53\% \\
+\texttt{v4b-holdout}         (v3 prior)               & 60  & 0.588 & 0.700 & 1.756 & 72\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The sharper targets translate into a lower training-loss floor for the
+distilled heads. Table~\ref{tab:pilot-training} reports the final
+policy cross-entropy and value mean-squared-error after $200$
+full-batch Adam epochs at learning rate $10^{-3}$ on each round's
+dataset. The \texttt{v3} heads converge to a final policy CE of $1.29$
+against \texttt{v2}'s $1.45$, a relative reduction of $10.9\%$; the
+$Q$-MSE drops by $39.1\%$. The lower CE floor is a direct consequence
+of lower target entropy: cross-entropy against a target distribution
+is bounded below by the entropy of the target, and sharper targets
+relax this lower bound. Training-set argmax agreement, defined as the
+fraction of records on which $\arg\max_a \ptheta(a \given s)$ matches
+$\arg\max_a \pimcts(a \given s)$, rises from $85.0\%$ to $91.7\%$.
+
+\begin{table}[t]
+\centering
+\caption{Training-time fit of the distilled heads across pilot rounds.
+``Training argmax'' is the fraction of records on which the trained
+policy's argmax agrees with the MCTS visit-count argmax on the same
+dataset.}
+\label{tab:pilot-training}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Round & Final policy CE & Final $Q$-MSE & Training argmax \\
+\midrule
+\texttt{v2}   & 1.4512 & 0.006829 & 85.0\% \\
+\texttt{v3}   & \textbf{1.2934} & \textbf{0.004156} & \textbf{91.7\%} \\
+\texttt{v4}   & 1.3574 & 0.005477 & 88.6\% \\
+\texttt{v4b}  & 1.3501 & 0.005348 & 88.7\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The held-out generalization figures, summarized in
+Table~\ref{tab:pilot-holdout}, are the headline pilot result. The
+\texttt{v3} heads evaluated zero-shot on \texttt{v3-holdout} achieve
+$71.7\%$ argmax agreement with the held-out MCTS targets, against the
+\texttt{v2} heads' $56.7\%$ on the same data. This is a $15.0$
+percentage-point absolute improvement after a single round of expert
+iteration (single training seed; cf.~Section~\ref{sec:pilot-caveats}),
+and the mean $L_1$ distance between $\ptheta$ and $\pimcts$ falls
+from $0.540$ to $0.314$, a $42\%$ relative reduction.
+The improvement is uniform across problem families: every problem in
+the held-out set improves or holds at $100\%$ from \texttt{v2} to
+\texttt{v3}.
+
+\begin{table}[t]
+\centering
+\caption{Held-out generalization on \texttt{v3-holdout} ($60$ records,
+$4$ problems, $5$ seeds each). Argmax agreement is $\ptheta$'s argmax
+versus $\pimcts$'s argmax; mean $L_1$ is the $L_1$ distance between
+$\ptheta$ and $\pimcts$ averaged over records. Single training seed
+per head; cf.~Section~\ref{sec:pilot-caveats}.}
+\label{tab:pilot-holdout}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Problem & \texttt{v2} agree & \texttt{v3} agree & \texttt{v4} agree & \texttt{v4b} agree \\
+\midrule
+\texttt{multiply\_small\_ho}  &  93.3\% & 100\%   & 100\%   & 100\%   \\
+\texttt{factor\_ho}           & 100\%   & 100\%   & 100\%   & 100\%   \\
+\texttt{gsm8k\_toy\_ho}       &  20.0\% &  26.7\% &  33.3\% &  33.3\% \\
+\texttt{algebra\_toy\_ho}     &  13.3\% &  60.0\% &  26.7\% &  13.3\% \\
+\midrule
+\textbf{Overall}              & 56.7\%  & \textbf{71.7\%} & 65.0\%  & 61.7\%  \\
+\textbf{Mean $L_1$}           & 0.540   & \textbf{0.314}  & 0.407   & 0.347   \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{First-Round to Second-Round Heads: A Targeted Intervention with Collateral Damage}
+\label{sec:pilot-v3-v4}
+
+The weakest generalization point after the first round is
+\texttt{gsm8k\_toy\_ho} at $26.7\%$ argmax agreement, a quantitative
+expression of the qualitative observation that the word problem
+family carries more verb-choice ambiguity than the arithmetic or
+factoring families. The intuitive intervention is to add word-problem
+variants to the training set so that the heads see more examples of
+the family they handle worst. The second-round fit (\texttt{v4})
+therefore expands the training problem set from four problems to seven
+by adding three new word-problem variants with different surface
+content and different numerical answers, and re-collects targets with
+the first-round heads as the MCTS prior.
+
+The intervention produced the targeted gain on word problems
+(\texttt{gsm8k\_toy\_ho} argmax agreement rises from $26.7\%$ to
+$33.3\%$, a $6.7$ percentage-point improvement) at the cost of a
+$33.3$ percentage-point regression on the algebra family
+(\texttt{algebra\_toy\_ho} falls from $60.0\%$ to $26.7\%$). The net
+effect on aggregate held-out argmax agreement is negative
+(Table~\ref{tab:pilot-holdout}), and the mean $L_1$ to the held-out
+targets rises by $0.093$. The framework's first round of expert
+iteration produced a measurable improvement; the second round, with a
+naively-expanded training set, produced a measurable regression on a
+problem family that was not the target of the intervention.
+
+The regression is structurally informative. Three independent
+mechanisms contribute, surfaced by a post-mortem comparison of the
+\texttt{v3}-train and \texttt{v4}-train algebra targets and a
+side-by-side comparison of \texttt{v3} and \texttt{v4} head predictions
+on the held-out algebra records.
+
+\paragraph{Class dilution.} The four-problem training set used for the
+baseline and first-round head fits was perfectly balanced ($25\%$ per
+family). The seven-problem training set used for the second-round head
+fit has composition $14.3\%$ arithmetic, $57.1\%$ word problems,
+$14.3\%$ algebra, $14.3\%$ factoring. Adding three problems of one
+family while leaving the others fixed reduced the relative weight of
+every other family by $43\%$ (from $25.0\%$ to $14.3\%$). Because the
+algebra family carries the highest verb-choice ambiguity in the toy
+set, it is the most sensitive to a reduction in its training share.
+
+\paragraph{Target instability.} Matched MCTS seeds across collection
+runs do not produce the same $\pimcts$ targets on the algebra family.
+The cleanest comparison holds the prior fixed: the \texttt{v4}-train
+and \texttt{v4b}-train collections (the latter from the rebalancing
+experiment of Section~\ref{sec:pilot-v4b}) both used the first-round
+heads as the PUCT prior on \texttt{algebra\_toy\_1} with the same five
+MCTS seeds, yet the mean $L_1$ distance between their targets at
+matched (seed, turn) pairs is $0.553$, with only $7$ of $15$ records
+agreeing on the argmax verb. (Across rounds with different priors,
+\texttt{v3}-train versus \texttt{v4}-train, the corresponding figures
+are $0.633$ and $7/15$; the prior change adds little on top of the
+sampling noise.) The randomness source is the environment itself: the
+MCTS seed controls action selection inside the search, but the LLM
+transitions are sampled at temperature $0.7$ without a fixed sampling
+seed, so each collection run draws different continuations. The
+non-reproducibility is also state-dependent in an informative way.
+On the held-out algebra problem, whose states at turn $\geq 1$ are
+dominated by a terminal commit with a deterministic verifier reward,
+the \texttt{v4}-holdout and \texttt{v4b}-holdout collections (same
+prior, same seeds) reproduce almost exactly: mean $L_1 = 0.087$ with
+$14/15$ argmax agreement. On the training algebra states, where
+several verbs are genuinely competitive and their sampled returns
+overlap, the targets do not reproduce. Instability concentrates
+exactly where verb choice is ambiguous, which is where the
+target-stability metric of Section~\ref{sec:pilot-lessons} needs to
+look. The first-round heads were trained on one particular
+realization of this target noise; the second-round heads were trained
+on a different realization. The candidate cure is a larger simulation
+budget, so that the visit-count estimator concentrates on the
+high-value verb before the trajectory is committed. We test that cure
+directly in Section~\ref{sec:pilot-bsweep}: it works, agreement between
+independent collections rises steadily with budget, and the pilot's
+$B = 20$ turns out to sit at the low-agreement floor of the measured
+curve.
+
+\paragraph{Brittle shortcut exploitation.} Step-by-step inspection of
+the first-round heads' predictions on held-out algebra records
+reveals a structural shortcut that the head-fitting has picked up.
+On the ten held-out algebra records at turn $\geq 1$, the
+first-round heads predict \textsc{CommitAnswer} on $9/10$ ($90\%$);
+the second-round heads predict \textsc{CommitAnswer} on $2/10$
+($20\%$) and predict \textsc{ComputeSubexpr} on $6/10$ ($60\%$). The
+first-round shortcut matches algebra's first-round MCTS targets
+(which also concentrate on \textsc{CommitAnswer} after one or two
+turns in five of five seeds) and produces strong per-turn agreement
+in exactly that turn band ($\arg\max$ agreement with the held-out
+MCTS targets at turn $1$ is $4/5 = 80\%$ for the first-round heads
+and $0/5$ for the second-round heads; at turn $2$ it is
+$5/5 = 100\%$ for the first round and $2/5 = 40\%$ for the second).
+The second-round training set added word-problem variants in which
+the correct verb at turn $1$ is \textsc{ComputeSubexpr} rather than
+\textsc{CommitAnswer}, so the second-round heads broke the
+``commit at turn $1$'' shortcut. The shortcut's collapse improves
+the model genuinely on word problems and harms the model on algebra,
+where the shortcut had been load-bearing. The trade-off is between a
+brittle pattern that happened to work on one family and a more
+general pattern that works on a different family.
+
+\subsection{Testing the Class-Balance Hypothesis: \texttt{v4b}}
+\label{sec:pilot-v4b}
+
+The post-mortem of Section~\ref{sec:pilot-v3-v4} offered three
+candidate mechanisms for the algebra regression. Two of them
+(target instability, brittle shortcut exploitation) are observational
+findings that the pilot's data already supports. The third (class
+dilution) is a falsifiable hypothesis that the pilot can test directly
+by re-running the second-round head fit on a deliberately rebalanced
+training set. We carried out that test as \texttt{v4b}.
+
+\paragraph{Setup.} The \texttt{v4b} training set adds three problems
+to the seven-problem \texttt{v4} set: two algebra variants
+(\texttt{algebra\_toy\_2}: ``Solve $4x - 3 = 9$''; \texttt{algebra\_toy\_3}:
+``Solve $7x + 2 = 16$'') and one factoring variant
+(\texttt{factor\_2}: ``Factor $x^2 - 16$''). The composition shifts
+from $14.3\%/57.1\%/14.3\%/14.3\%$ to
+$10\%/40\%/30\%/20\%$ (arithmetic/word/algebra/factoring). Crucially,
+algebra's share recovers from $14\%$ to $30\%$, slightly above
+\texttt{v4}'s and the baseline's $25\%$. Every other parameter is
+held fixed: same first-round (\texttt{v3}) heads as prior, same MCTS
+budget $B = 20$, same five MCTS seeds, same head architecture, same
+$200$-epoch Adam training. If class dilution were the dominant
+mechanism behind the \texttt{v3}-to-\texttt{v4} algebra regression,
+rebalancing should restore algebra performance closer to
+\texttt{v3}'s level.
+
+\paragraph{Result.} It does not. \texttt{v4b}'s algebra held-out
+argmax agreement falls to $13.3\%$
+(Table~\ref{tab:pilot-holdout}), \emph{below} both \texttt{v4}'s
+$26.7\%$ and \texttt{v3}'s $60.0\%$. Mean $L_1$ on algebra
+\emph{improves} ($0.823$ for \texttt{v2}, $0.356$ for \texttt{v3},
+$0.868$ for \texttt{v4}, $0.758$ for \texttt{v4b}), so
+\texttt{v4b}'s algebra predictions are closer to the held-out
+targets in distance even though the argmax does not match. The
+overall held-out argmax agreement of \texttt{v4b} is $61.7\%$
+($37/60$), between \texttt{v4} ($65.0\%$) and \texttt{v3} ($71.7\%$);
+overall mean $L_1$ is $0.347$, the second-best across rounds after
+\texttt{v3}'s $0.314$. The targeted gain on word problems holds
+(\texttt{gsm8k\_toy\_ho} stays at $33.3\%$). The training-set fit
+moves slightly toward \texttt{v3}'s floor (CE $1.350$ vs \texttt{v4}'s
+$1.357$ and \texttt{v3}'s $1.293$).
+
+\paragraph{Interpretation.} The class-dilution mechanism, taken
+alone, predicts that rebalancing recovers algebra. Rebalancing did
+not recover algebra, so class dilution is not the dominant mechanism
+behind the \texttt{v3}-to-\texttt{v4} algebra regression at the
+pilot's scale. The two remaining candidates from
+Section~\ref{sec:pilot-v3-v4} therefore become the leading
+explanation. Target instability predicts that algebra's MCTS
+visit-count distributions at $B = 20$ are too noisy across collection
+runs for distillation to lock onto the algebra-correct pattern; this
+is confirmed by the same-prior comparison reported in
+Section~\ref{sec:pilot-v3-v4}: the \texttt{v4}-train and
+\texttt{v4b}-train collections, identical in prior, problems, and MCTS
+seeds, produce \texttt{algebra\_toy\_1} targets with mean
+$L_1 = 0.553$ and only $7/15$ argmax agreement. Brittle-shortcut breakage predicts
+that any second-round head fit (whether or not the training set is
+rebalanced) loses the ``commit at turn $\geq 1$'' shortcut that
+\texttt{v3} happened to learn; on the held-out \texttt{algebra\_toy\_ho}
+records at turn $\geq 1$, the rebalanced \texttt{v4b} heads predict
+\textsc{CommitAnswer} on $2/10$ ($20\%$), identical to \texttt{v4}'s
+rate and well below \texttt{v3}'s $9/10$ ($90\%$), confirming the
+shortcut is broken regardless of the rebalance. Neither of these mechanisms is class-balance-sensitive,
+and the pilot's data is consistent with both being at work
+simultaneously.
+
+\paragraph{What the test refutes and what it does not.} \texttt{v4b}
+refutes the strong claim that the algebra regression is a class-balance
+problem fixable by class-balance correction. It does not refute the
+broader monitoring commitment that the discussion of
+Section~\ref{sec:pilot-lessons} draws from the \texttt{v3}-to-\texttt{v4}
+result. Reporting per-class composition and per-class held-out accuracy
+is still required to distinguish mechanism from anomaly in any
+multi-round expansion. The \texttt{v4b} result simply moves the leading
+hypothesis from class composition to target stability and
+shortcut-pattern dependence, both of which the pre-registered study's
+monitoring protocol (Section~\ref{sec:pilot-lessons}) can detect.
+
+\subsection{What Stabilizes the Distillation Target?}
+\label{sec:pilot-bsweep}
+
+The target-instability finding of Section~\ref{sec:pilot-v3-v4} admits
+two candidate cures: make the individual LLM transitions reproducible,
+or make the visit-count estimator that aggregates them less noisy. We
+tested both.
+
+\paragraph{Per-call seeding does not help.} The stochastic transitions
+in the pilot were drawn at temperature $0.7$ with no fixed sampling
+seed, so a natural first attempt is to forward a per-call seed (derived
+from the planner's random state) to the LLM server, which both Ollama
+and vLLM accept. We implemented this and verified that an
+\emph{individual} call reproduces exactly at a matched seed on our
+server. It does not, however, make a \emph{collection} reproducible. The
+reason is structural: an MCTS search's sequence of LLM calls is itself a
+function of the responses, because each response is the next state and
+the next state determines the next prompt. A single non-deterministic
+call early in the search (server-side batching and floating-point
+reduction order make exact determinism fragile under load) changes which
+node expands next, desynchronizes the seed-to-prompt correspondence, and
+every downstream call then lands on a different prompt. Measured on the
+same matched-seed setup, per-call seeding left the cross-run $L_1$
+statistically indistinguishable from the unseeded baseline. One can seed
+the calls but not the tree they induce; the seeding hook is retained
+because it makes single transitions reproducible for debugging, not
+because it stabilizes collection.
+
+\paragraph{The search budget does.} For a fixed initial state we ran
+$K = 20$ independent MCTS searches (different random seeds, hence
+independent stochastic LLM transitions) at every budget
+$B \in \{10, 20, 40, 80, 160\}$, on \texttt{multiply\_small} (a
+low-ambiguity control) and \texttt{algebra\_toy\_1} (the high-ambiguity
+family whose instability is the subject of
+Section~\ref{sec:pilot-v3-v4}); the grid deliberately includes
+$B = 20$, the pilot's own collection budget. Holding the start state
+fixed across all runs isolates the visit-count estimator's own variance
+from the trajectory cascade: any disagreement among the twenty
+$\pimcts$ distributions is the estimator's sampling noise at that
+budget, not a divergent trajectory. The stability statistic is
+\emph{pairwise argmax agreement}: the probability that two independent
+searches recommend the same verb, computed over all
+$\binom{20}{2} = 190$ pairs, with bootstrap percentile confidence
+intervals ($10{,}000$ resamples). Table~\ref{tab:pilot-bsweep} and
+Figure~\ref{fig:pilot-bsweep} report the result.
+
+\begin{table}[t]
+\centering
+\caption{Target stability versus search budget. For each problem and
+budget $B$, twenty independent MCTS searches from the same fixed
+initial state. ``mean max'' is the mean over runs of
+$\max_a \pimcts(a\given s)$ (sharpness); ``$H$'' is mean entropy in
+bits; ``pair.\ agree'' is the pairwise argmax agreement over all $190$
+run pairs with a bootstrap $95\%$ CI; ``mean $L_1$'' is the mean
+pairwise $L_1$ distance. $K=20$ per cell.}
+\label{tab:pilot-bsweep}
+\small
+\begin{tabular}{@{}lrrrlr@{}}
+\toprule
+Problem & $B$ & mean max & $H$ (bits) & pair.\ agree [CI95] & mean $L_1$ \\
+\midrule
+\texttt{multiply\_small} &  10 & 0.35 & 1.92 & 0.41 [0.33, 0.61] & 0.259 \\
+\texttt{multiply\_small} &  20 & 0.45 & 1.82 & 0.31 [0.30, 0.46] & 0.507 \\
+\texttt{multiply\_small} &  40 & 0.65 & 1.42 & 0.52 [0.36, 0.81] & 0.643 \\
+\texttt{multiply\_small} &  80 & 0.80 & 0.98 & 0.73 [0.56, 1.00] & 0.589 \\
+\texttt{multiply\_small} & 160 & 0.88 & 0.68 & \textbf{0.81} [0.61, 1.00] & 0.456 \\
+\texttt{algebra\_toy\_1} &  10 & 0.34 & 1.94 & 0.25 [0.22, 0.42] & 0.292 \\
+\texttt{algebra\_toy\_1} &  20 & 0.38 & 1.90 & 0.32 [0.25, 0.49] & 0.376 \\
+\texttt{algebra\_toy\_1} &  40 & 0.43 & 1.80 & 0.38 [0.29, 0.53] & 0.558 \\
+\texttt{algebra\_toy\_1} &  80 & 0.49 & 1.73 & 0.46 [0.36, 0.66] & 0.580 \\
+\texttt{algebra\_toy\_1} & 160 & 0.69 & 1.28 & \textbf{0.73} [0.56, 1.00] & 0.634 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/b_sweep.pdf}
+\caption{Budget--stability curves at $K = 20$ searches per cell.
+\emph{Panel A:} pairwise argmax agreement versus simulation budget $B$
+(log scale), with bootstrap $95\%$ CIs. Agreement rises with budget on
+both problem families; the pilot's collection budget $B = 20$ sits at
+the low-agreement floor of the grid. \emph{Panel B:} mean entropy of
+$\pimcts$ versus $B$; sharpness improves monotonically. The two panels
+together show why distributional distance is a misleading stability
+metric: distributions sharpen steadily (B) while run-to-run agreement
+is lowest precisely where distributions are flat-to-moderately-sharp
+(A).}
+\label{fig:pilot-bsweep}
+\end{figure}
+
+Four things follow. First, \emph{sharpness rises monotonically with the
+budget on both families}: mean max-probability climbs from
+$0.34$--$0.35$ at $B = 10$ to $0.88$ (\texttt{multiply\_small}) and
+$0.69$ (\texttt{algebra\_toy\_1}) at $B = 160$, and entropy falls in
+lockstep. The estimator concentrates visits on the high-value verb as
+the budget grows, exactly as a sampled-Bellman argument predicts.
+
+Second, \emph{agreement rises with budget, and the pilot's $B = 20$
+sits at the low-agreement floor}. Pairwise agreement reaches $0.81$
+(\texttt{multiply\_small}) and $0.73$ (\texttt{algebra\_toy\_1}) at
+$B = 160$, while the $B = 20$ cells ($0.31$ and $0.32$) are the two
+lowest values in the grid outside algebra's $B = 10$. At the budget
+the pilot actually collected with, two independent collections agree on
+the training argmax less than a third of the time. The pilot's observed
+target instability is therefore an expected property of its budget, not
+an indictment of the framework. Convergence speed is family-dependent:
+the easy family reaches $0.73$ by $B = 80$, the hard family needs
+$B = 160$, so the budget that buys a stable target must be set by the
+slowest-converging family.
+
+Third, a methodological note we report because it would otherwise be
+invisible: an earlier $K = 6$ pass over a coarser grid showed an
+apparent agreement \emph{dip} at $B = 40$ on both families, suggesting a
+``committed but disagreeing'' transition zone. At $K = 20$ that dip
+dissolves on the hard family (the curve is strictly monotone) and
+survives only weakly on the easy one (a $B = 20$ trough whose CI
+overlaps its neighbors). Small-$K$ stability diagnostics can
+manufacture qualitative structure; conclusions about the shape of the
+budget--stability curve need $K$ well above what a quick probe
+suggests.
+
+Fourth, \emph{the mean-$L_1$ metric is confounded by sharpness and can
+anti-correlate with true stability}. On \texttt{algebra\_toy\_1},
+$L_1$ \emph{rises monotonically} ($0.29 \to 0.63$) while agreement also
+rises: a single sharp minority run on a different verb costs roughly
+$1.3$ in pairwise $L_1$, whereas two near-uniform distributions are
+trivially close, so the metric punishes exactly the sharpening that
+stability requires. The instability $L_1$ figures reported earlier in
+this section (the $0.553$ on matched-condition algebra at $B = 20$, for
+example) are therefore a mixture of genuine disagreement and this
+artifact, and recommended-verb agreement is the correct stability
+signal. Relatedly, the \emph{target itself is budget-indexed} on the
+hard family: algebra's modal verb flips from \textsc{ComputeSubexpr} at
+$B = 80$ to \textsc{Backtrack} at $B = 160$ even as within-budget
+agreement rises, because deeper trees back up different values.
+``Stable target'' means stable \emph{at a fixed budget}; any
+round-over-round comparison must hold $B$ constant.
+
+The cost is real: each $B = 160$ search took roughly four minutes on our
+hardware, so the pre-registered $B = 500$ implies a search on the order
+of fifteen minutes. The convergence trend is the justification for
+paying it. Two practical commitments follow for the larger study, beyond
+those in Section~\ref{sec:pilot-lessons}: report the pairwise-agreement
+diagnostic \emph{stratified by problem family} rather than pooled, and
+set the heavy-search budget by the slowest-converging family rather than
+the average.
+
+\subsection{Lessons for the Pre-Registered Study}
+\label{sec:pilot-lessons}
+
+Three of the pilot's findings carry directly into the larger study.
+
+First, the improvement from baseline to first-round heads is evidence
+that the expert-iteration loop closes under the framework's
+implementation: distilling sharper MCTS targets into the parametric
+heads produces measurable generalization gains on held-out problems
+of the same structural shape, exactly as
+Section~\ref{sec:method-training} predicts. This validates the
+integration of the framework's components (the LLM context MDP, the
+verifier-anchored reward, the shared-encoder architecture, MCTS as a
+policy improvement operator) end-to-end, independently of whether the
+pre-registered benchmark study eventually finds a positive
+compute-versus-accuracy frontier.
+
+Second, the regression from first-round to second-round heads, and
+the \texttt{v4b} test that rules out class dilution as the dominant
+mechanism, together suggest that the operative limit at the pilot's
+scale is target stability and shortcut-pattern dependence rather than
+training-set composition alone. The per-round training-set composition
+is still a design parameter inside our pipeline and worth tracking,
+but the pilot now identifies more upstream concerns: the across-seed
+$L_1$ of $\pimcts$ on high-ambiguity states at $B = 20$, and the
+implicit patterns that head fits exploit when the training set is
+small. We pre-commit to reporting both per-class composition and a
+target-stability diagnostic alongside any multi-round results in the
+benchmark study, so that a future regression of the same shape is
+attributable to mechanism rather than misread as a framework failure.
+
+Third, the budget sweep of Section~\ref{sec:pilot-bsweep} turns the
+target-instability finding from a hypothesis into a measured trend: the
+pilot's $B = 20$ sits at the low-agreement floor of the
+budget--stability curve (pairwise argmax agreement $0.31$--$0.32$
+across independent collections), and agreement rises with budget to
+$0.81$ on the easy family and $0.73$ on the hard family at $B = 160$
+($K = 20$ searches per cell, bootstrap CIs in
+Table~\ref{tab:pilot-bsweep}). This both supports the pre-registered
+heavy-search budget $B = 500$ and changes how we will measure
+stability. Because mean $L_1$ between visit-count distributions is
+confounded by sharpness (on the hard family it rises monotonically
+with budget while true stability also rises, anti-correlating with the
+quantity it is meant to track), the pre-registered target-stability
+diagnostic is the \emph{pairwise recommended-verb agreement} across
+independent searches from a fixed state, reported on a stratified
+sample of training states per benchmark and \emph{stratified by
+problem family} rather than pooled. Agreement below a pre-committed
+threshold at the chosen budget is a precondition for trusting any
+round-over-round improvement claim, and the budget is set by the
+slowest-converging family rather than the average.
+
+\subsection{Caveats}
+\label{sec:pilot-caveats}
+
+The pilot is not a benchmark study. The training sets (four to ten
+problems across rounds) are small enough that overfitting is the
+dominant failure mode rather than underfitting, and the held-out set,
+while constructed to share structural shape, contains only four
+problems. The simulation
+budget $B = 20$ is well below the pre-registered $B = 50$ and $B = 500$.
+The base model (Qwen2.5-3B) is larger than the $1.5$B substrate of the
+pre-registered plan, and is run via Ollama rather than the production
+inference stack of the benchmark study. The pilot makes no
+claim about absolute accuracy on GSM8K, MATH, or any other benchmark,
+nor about whether the framework's compute-versus-accuracy frontier
+clears the pre-registered falsification bar. What the pilot establishes
+is feasibility: every component of Section~\ref{sec:method} can be
+implemented and the loop, when implemented, behaves the way
+Section~\ref{sec:method-training} predicts on the families where the
+prediction is sharp.
+
+\subsection{Reproducibility}
+\label{sec:pilot-reproducibility}
+
+The pilot's artifacts are released alongside this paper for independent
+verification. The release contains the collection script
+(\texttt{experiments/collect\_distillation.py}), the head architecture
+(\texttt{src/verifier\_anchored\_rl/heads.py}), the head-training script
+(\texttt{experiments/train\_heads.py}), the round-comparison
+analyzer (\texttt{experiments/analyze\_distillation\_rounds.py}), and
+the budget-sweep probe of Section~\ref{sec:pilot-bsweep}
+(\texttt{experiments/b\_sweep\_stability.py}), all
+under an open-source licence in the companion repository. Each
+distillation dataset (\texttt{v2}, \texttt{v3-train}, \texttt{v3-holdout},
+\texttt{v4-train}, \texttt{v4-holdout}, \texttt{v4b-train},
+\texttt{v4b-holdout}) is a JSONL file with one record
+per (problem, seed, turn) triple, containing the serialized state, the
+available verb set, the MCTS visit counts, the chance-node $Q$
+estimates, the recommended verb, and the 2048-dimensional embedding
+fetched at collection time. The trained head checkpoints
+(\texttt{heads\_v2.pt}, \texttt{heads\_v3.pt}, \texttt{heads\_v4.pt},
+\texttt{heads\_v4b.pt})
+are PyTorch state dictionaries that the released loader script
+(\texttt{src/verifier\_anchored\_rl/trained\_prior.py}) instantiates
+into the architecture above. Every random seed used (MCTS seeds $0$
+through $4$ per problem; training seed $0$ for the heads) is logged in
+the per-record artifacts and in the training-history JSON dumps. The
+hyperparameters are summarized in Section~\ref{sec:pilot-setup}; the
+companion repository's \texttt{experiments/results/} directory contains
+the full metric dumps. The pilot is reproducible end-to-end on a single
+machine with the Qwen2.5-3B model available through any
+OpenAI-compatible inference endpoint (the release defaults to Ollama).

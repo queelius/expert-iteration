@@ -1,0 +1,315 @@
+{
+  "cells": [
+    {
+      "problem_key": "multiply_small",
+      "B": 10,
+      "num_runs": 6,
+      "mean_pairwise_l1": 0.1333,
+      "mean_per_verb_std": 0.0331,
+      "modal_argmax": "COMPUTE_SUBEXPR",
+      "modal_argmax_agreement": 0.6667,
+      "mean_entropy_bits": 1.9628,
+      "pi_mcts_per_run": [
+        {
+          "BACKTRACK": 0.2,
+          "COMPUTE_SUBEXPR": 0.3,
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.3,
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.3,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.2,
+          "FORM_HYPOTHESIS": 0.4
+        },
+        {
+          "FORM_HYPOTHESIS": 0.3,
+          "BACKTRACK": 0.2,
+          "COMPUTE_SUBEXPR": 0.3,
+          "DECOMPOSE": 0.2
+        },
+        {
+          "FORM_HYPOTHESIS": 0.2,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.3,
+          "BACKTRACK": 0.3
+        }
+      ]
+    },
+    {
+      "problem_key": "multiply_small",
+      "B": 40,
+      "num_runs": 6,
+      "mean_pairwise_l1": 0.8267,
+      "mean_per_verb_std": 0.1649,
+      "modal_argmax": "COMPUTE_SUBEXPR",
+      "modal_argmax_agreement": 0.5,
+      "mean_entropy_bits": 1.566,
+      "pi_mcts_per_run": [
+        {
+          "BACKTRACK": 0.175,
+          "COMPUTE_SUBEXPR": 0.5,
+          "DECOMPOSE": 0.15,
+          "FORM_HYPOTHESIS": 0.175
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.175,
+          "BACKTRACK": 0.375,
+          "DECOMPOSE": 0.15,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "BACKTRACK": 0.1,
+          "DECOMPOSE": 0.075,
+          "COMPUTE_SUBEXPR": 0.725,
+          "FORM_HYPOTHESIS": 0.1
+        },
+        {
+          "BACKTRACK": 0.1,
+          "DECOMPOSE": 0.1,
+          "COMPUTE_SUBEXPR": 0.2,
+          "FORM_HYPOTHESIS": 0.6
+        },
+        {
+          "FORM_HYPOTHESIS": 0.125,
+          "BACKTRACK": 0.675,
+          "COMPUTE_SUBEXPR": 0.1,
+          "DECOMPOSE": 0.1
+        },
+        {
+          "FORM_HYPOTHESIS": 0.2,
+          "DECOMPOSE": 0.075,
+          "COMPUTE_SUBEXPR": 0.65,
+          "BACKTRACK": 0.075
+        }
+      ]
+    },
+    {
+      "problem_key": "multiply_small",
+      "B": 160,
+      "num_runs": 6,
+      "mean_pairwise_l1": 0.1758,
+      "mean_per_verb_std": 0.034,
+      "modal_argmax": "COMPUTE_SUBEXPR",
+      "modal_argmax_agreement": 1.0,
+      "mean_entropy_bits": 0.8399,
+      "pi_mcts_per_run": [
+        {
+          "BACKTRACK": 0.0625,
+          "COMPUTE_SUBEXPR": 0.86875,
+          "DECOMPOSE": 0.03125,
+          "FORM_HYPOTHESIS": 0.0375
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.74375,
+          "BACKTRACK": 0.04375,
+          "DECOMPOSE": 0.04375,
+          "FORM_HYPOTHESIS": 0.16875
+        },
+        {
+          "BACKTRACK": 0.0625,
+          "DECOMPOSE": 0.03125,
+          "COMPUTE_SUBEXPR": 0.86875,
+          "FORM_HYPOTHESIS": 0.0375
+        },
+        {
+          "BACKTRACK": 0.03125,
+          "DECOMPOSE": 0.03125,
+          "COMPUTE_SUBEXPR": 0.78125,
+          "FORM_HYPOTHESIS": 0.15625
+        },
+        {
+          "FORM_HYPOTHESIS": 0.03125,
+          "BACKTRACK": 0.03125,
+          "COMPUTE_SUBEXPR": 0.9125,
+          "DECOMPOSE": 0.025
+        },
+        {
+          "FORM_HYPOTHESIS": 0.1,
+          "DECOMPOSE": 0.025,
+          "COMPUTE_SUBEXPR": 0.85,
+          "BACKTRACK": 0.025
+        }
+      ]
+    },
+    {
+      "problem_key": "algebra_toy_1",
+      "B": 10,
+      "num_runs": 6,
+      "mean_pairwise_l1": 0.2133,
+      "mean_per_verb_std": 0.0471,
+      "modal_argmax": "DECOMPOSE",
+      "modal_argmax_agreement": 0.6667,
+      "mean_entropy_bits": 1.971,
+      "pi_mcts_per_run": [
+        {
+          "BACKTRACK": 0.2,
+          "COMPUTE_SUBEXPR": 0.2,
+          "DECOMPOSE": 0.3,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.3,
+          "BACKTRACK": 0.3,
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.2
+        },
+        {
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.3,
+          "COMPUTE_SUBEXPR": 0.2,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.3,
+          "COMPUTE_SUBEXPR": 0.2,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "FORM_HYPOTHESIS": 0.3,
+          "BACKTRACK": 0.2,
+          "COMPUTE_SUBEXPR": 0.3,
+          "DECOMPOSE": 0.2
+        },
+        {
+          "FORM_HYPOTHESIS": 0.2,
+          "DECOMPOSE": 0.3,
+          "COMPUTE_SUBEXPR": 0.2,
+          "BACKTRACK": 0.3
+        }
+      ]
+    },
+    {
+      "problem_key": "algebra_toy_1",
+      "B": 40,
+      "num_runs": 6,
+      "mean_pairwise_l1": 0.6533,
+      "mean_per_verb_std": 0.1247,
+      "modal_argmax": "BACKTRACK",
+      "modal_argmax_agreement": 0.5,
+      "mean_entropy_bits": 1.7337,
+      "pi_mcts_per_run": [
+        {
+          "BACKTRACK": 0.3,
+          "COMPUTE_SUBEXPR": 0.125,
+          "DECOMPOSE": 0.275,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.1,
+          "BACKTRACK": 0.425,
+          "DECOMPOSE": 0.375,
+          "FORM_HYPOTHESIS": 0.1
+        },
+        {
+          "BACKTRACK": 0.3,
+          "DECOMPOSE": 0.175,
+          "COMPUTE_SUBEXPR": 0.45,
+          "FORM_HYPOTHESIS": 0.075
+        },
+        {
+          "BACKTRACK": 0.475,
+          "DECOMPOSE": 0.1,
+          "COMPUTE_SUBEXPR": 0.325,
+          "FORM_HYPOTHESIS": 0.1
+        },
+        {
+          "FORM_HYPOTHESIS": 0.175,
+          "BACKTRACK": 0.125,
+          "COMPUTE_SUBEXPR": 0.525,
+          "DECOMPOSE": 0.175
+        },
+        {
+          "FORM_HYPOTHESIS": 0.125,
+          "DECOMPOSE": 0.125,
+          "COMPUTE_SUBEXPR": 0.625,
+          "BACKTRACK": 0.125
+        }
+      ]
+    },
+    {
+      "problem_key": "algebra_toy_1",
+      "B": 160,
+      "num_runs": 6,
+      "mean_pairwise_l1": 0.6783,
+      "mean_per_verb_std": 0.1524,
+      "modal_argmax": "BACKTRACK",
+      "modal_argmax_agreement": 0.8333,
+      "mean_entropy_bits": 1.1694,
+      "pi_mcts_per_run": [
+        {
+          "BACKTRACK": 0.70625,
+          "COMPUTE_SUBEXPR": 0.15,
+          "DECOMPOSE": 0.1,
+          "FORM_HYPOTHESIS": 0.04375
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.73125,
+          "BACKTRACK": 0.1375,
+          "DECOMPOSE": 0.08125,
+          "FORM_HYPOTHESIS": 0.05
+        },
+        {
+          "BACKTRACK": 0.51875,
+          "DECOMPOSE": 0.26875,
+          "COMPUTE_SUBEXPR": 0.05625,
+          "FORM_HYPOTHESIS": 0.15625
+        },
+        {
+          "BACKTRACK": 0.8375,
+          "DECOMPOSE": 0.04375,
+          "COMPUTE_SUBEXPR": 0.09375,
+          "FORM_HYPOTHESIS": 0.025
+        },
+        {
+          "FORM_HYPOTHESIS": 0.06875,
+          "BACKTRACK": 0.79375,
+          "COMPUTE_SUBEXPR": 0.06875,
+          "DECOMPOSE": 0.06875
+        },
+        {
+          "FORM_HYPOTHESIS": 0.03125,
+          "DECOMPOSE": 0.06875,
+          "COMPUTE_SUBEXPR": 0.06875,
+          "BACKTRACK": 0.83125
+        }
+      ]
+    }
+  ],
+  "args": {
+    "base_url": "http://192.168.0.204:11434/v1",
+    "model": "qwen2.5:3b",
+    "problems": [
+      "multiply_small",
+      "algebra_toy_1"
+    ],
+    "b_values": [
+      10,
+      40,
+      160
+    ],
+    "num_runs": 6,
+    "base_seed": 0,
+    "temperature": 0.7,
+    "max_tokens": 192,
+    "depth_limit": 3,
+    "max_turns": 8,
+    "discount": 0.99,
+    "c_puct": 1.0,
+    "timeout": 120.0,
+    "output_json": "/tmp/b_sweep.json"
+  }
+}

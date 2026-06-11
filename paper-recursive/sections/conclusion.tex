@@ -1,0 +1,31 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+This companion paper develops the recursive structural decomposition
+design choice that the framework paper at \texttt{paper/} introduces
+through schema-level parent-pointer fields and then defers. We argued
+five points: that structural recursion has two operationally distinct
+modes (productive decomposition that delivers leaf-level verifier signal,
+and unproductive meta-criticism that does not); that a bounded depth
+limit $\depthlim$ acts as a structural prior on the MDP transition
+function and selects the productive mode without foreclosing the
+unproductive one; that the framework paper's seven-verb action set
+$\Aset$ extends to arbitrary recursive depth via identifier-based
+targeting, with no new categorical actions and no inflation of the PUCT
+branching factor; that flat serialization with depth markers lets a
+frozen LLM resolve recursive tree structure through native causal
+self-attention, with no graph neural network and no tree-LSTM; and that
+the central depth-limit claim is falsifiable via a pre-registered
+ablation grid that varies $\depthlim$ across $\{0, 3, \infty\}$ on the
+framework paper's benchmarks.
+
+The contribution is methodological. The recursive paper specifies when
+and how the framework paper's schema-level recursion hooks should be
+exercised, and the pre-registered ablation makes the central claim a
+falsifiable empirical question. The expected ablation outcome is that
+$\depthlim = 3$ outperforms both endpoints: $\depthlim = 0$ loses the
+expressivity that productive decomposition needs, and $\depthlim =
+\infty$ wastes sample budget on unproductive trajectories whose Bellman
+targets contain no informative verifier signal. Whether this prediction
+holds empirically is the question the experiment will answer, and the
+framework paper's implementation is where the answer will be reported.

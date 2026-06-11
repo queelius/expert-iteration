@@ -1,0 +1,205 @@
+\section{Related Work}
+\label{sec:related-work}
+
+% =========================================================================
+% Five subsections, each one to two paragraphs of drafted prose.
+% Framework is positioned as approximate Q-learning over a verifier-
+% anchored context MDP, with MCTS as a policy improvement operator and
+% a test-time-compute knob, not as MCTS-first.
+% =========================================================================
+
+\subsection{Search and Learning in Games}
+\label{sec:rw-games}
+
+The conceptual ancestor of the present framework is the joint use of tree
+search and learned function approximation in self-play games. UCT
+\citep{kocsis2006bandit} and the original Monte Carlo tree search of
+\citet{coulom2006efficient} supplied the algorithmic backbone; the broader
+landscape of variants and applications is surveyed by
+\citet{browne2012survey}. The AlphaGo family
+\citep{silver2016alphago, silver2017alphagozero, silver2018alphazero}
+combined deep neural priors and value estimates with PUCT-guided search,
+distilling the search policy back into the priors in a closed loop. MuZero
+\citep{schrittwieser2020muzero} extended the same recipe to settings whose
+dynamics must be learned. The expert-iteration formulation of
+\citet{anthony2017thinking} states the underlying pattern abstractly: a
+fast \textit{apprentice} policy is improved by an expensive \textit{expert}
+operator (search), and the apprentice is then trained to imitate the
+expert's behavior.
+
+We inherit this joint search-and-learning structure but invert the
+narrative emphasis. In the AlphaZero tradition, tree search is the central
+object and the learned heads are its scaffolding; in our setting the
+central object is an agent and its approximate action-value function
+$\Qpsi(s, a)$, trained against verifier-anchored Bellman targets, and
+search enters as one of several mechanisms that supply stronger training
+targets and an optional test-time-compute knob
+(Sections~\ref{sec:method-training} and~\ref{sec:method-inference}). The
+shift is what is appropriate when (a) the environment is stochastic and
+LLM-induced rather than a deterministic two-player game, so a chance-node
+estimator becomes essential and a collapsed single-node tree becomes
+biased (Section~\ref{sec:method-mcts}); and (b) the value channel is
+anchored by a non-LLM verifier rather than by game outcomes alone, which
+makes a wider set of non-search exploration policies viable as baselines
+and makes the choice between $\epsilon$-greedy, softmax, and search-driven
+data collection an empirical rather than an architectural question.
+
+\subsection{Verifier-Anchored LLM Reasoning}
+\label{sec:rw-verifiers}
+
+Several recent systems share the principle that learning signal for
+reasoning models should come from non-LLM verifiers rather than from
+human-rated aesthetic critics. \citet{lightman2024verify} demonstrated
+that process reward models trained on per-step labels for MATH solutions
+outperform outcome-only supervision on the same benchmark, and
+\citet{cobbe2021gsm8k} introduced GSM8K together with the original
+verifier-style training pipeline for grade-school arithmetic. AlphaCode
+\citep{li2022alphacode} used unit-test execution as the verifier for
+competitive programming, and AlphaProof \citep{deepmind2024alphaproof}
+extended the same architectural pattern to formal mathematics with Lean
+as the verifier. \citet{guo2025deepseekr1} report large-scale
+reinforcement learning against rule-based verifiers for math and code
+without a learned reward model, deliberately avoiding the Goodhart
+attack surface that attends preference-trained critics.
+
+Our work shares the verifier-anchored reward principle but contributes
+along two axes. The first is framework-level: Section~\ref{sec:method-reward}
+makes the verifier-versus-aesthetic asymmetry a load-bearing design
+commitment rather than an implementation detail. Verifier outcomes are the
+only signals allowed to enter the Bellman target; learned aesthetic
+signals such as reasoning-quality classifiers or deception detectors may
+enter only as MCTS priors, where they bias exploration but cannot rewrite
+the value function. The second is architecture-level:
+$\textsc{InvokeVerifier}$ is a callable verb in the agent's action space
+(Section~\ref{sec:method-actions}) rather than a post-hoc parser pass
+applied only at the terminal answer. The agent decides when to spend a
+verifier call, intermediate verifier outputs land in the structured state
+and become available to the heads, and a hypothesis can be promoted to a
+verified fact mid-trajectory. The choice converts verifier interaction
+from a wrapper around the model into a first-class part of the
+deliberation, which is what makes verifier-anchored intermediate rewards
+(Equation~\ref{eq:rewardterminal} and the fallback discussion that
+follows it) consistent with the no-Goodhart principle.
+
+\subsection{Test-Time Compute Scaling}
+\label{sec:rw-ttcs}
+
+\citet{snell2024scaling} established empirical scaling laws relating
+test-time compute to accuracy on verifiable benchmarks, showing that
+optimal inference-time allocation can match or exceed the returns of
+proportional pretraining-scale increases. OpenAI's o1 line
+\citep{openai2024o1} is the public anchor for test-time-compute-as-product
+in deployed reasoning systems. A common pattern in this literature is the
+inference-time technique (chain-of-thought \citep{wei2022cot},
+self-consistency, best-of-$N$, beam search over rationales) studied as a
+post-hoc augmentation of an already-trained generator.
+
+Our contribution is methodological rather than algorithmic in this
+register. Section~\ref{sec:exp-baselines} pre-registers a baseline grid
+that separates fast-mode policy improvement ($B = 0$, where the trained
+$Q$-head is acted on greedily) from search-mode improvement ($B > 0$,
+where MCTS refines the head estimate at the query), with matched
+inference compute across all conditions. The separation matters because
+the literature has often conflated two distinct claims: ``the model is
+better at compute $X$'' (which can be true purely because the trained
+heads are stronger) and ``the model uses additional compute $X$
+usefully'' (which is the genuine test-time-compute question). By writing
+the compute axis, the baseline grid, and the headline frontier figure
+before any training begins, we make the conflation difficult to commit
+in either direction. The same evaluation protocol turns the search budget
+$B$ from a tuned hyperparameter into a continuous dial the user
+controls at inference, which is the practically relevant form of a
+test-time-compute knob.
+
+\subsection{MCTS for Language Model Reasoning}
+\label{sec:rw-mcts-llm}
+
+A growing body of recent work applies tree search to language model
+reasoning. \citet{feng2023alphazerollm} adapt the AlphaZero recipe
+directly, using a learned value model and PUCT to guide token-level or
+step-level decoding. \citet{xie2024monte} use MCTS to generate preference
+data for iterative DPO-style training, treating search as a trajectory
+generator whose output is consumed downstream. The closest prior
+published system to our framework is rStar-Math
+\citep{guan2025rstarmath}, which combines small base language models
+with MCTS-based self-training and a process reward model trained from
+MCTS rollouts; the broad approach (small LMs, search-guided rollouts,
+distillation from search statistics) is the same family our framework
+inhabits, and rStar-Math's empirical results establish that the family
+works on competition-grade math. The general shape of these systems is
+recognizable from the AlphaZero ancestor: tree search produces better
+trajectories than the base policy, and the base policy is updated toward
+what search would have done.
+
+Our work differs along four structural axes that together distinguish a
+framework paper from a fitted system. First, the search tree explicitly
+bifurcates decision and chance nodes (Section~\ref{sec:method-mcts}); this
+is what makes the chance-node mean $W(s, a) / N(s, a)$ a legitimate
+estimator of the inner Bellman expectation when the environment is
+stochastic, as it is whenever the transition is induced by LLM sampling
+rather than by deterministic game rules. Collapsing the two node types,
+the pattern most often seen in deterministic-game tutorials, biases every
+ancestor's $Q$-estimate. Second, the agent acts over a small fixed set of
+coarse verbs $\Aset$ (Section~\ref{sec:method-actions}) and the
+$Q$-function is a multi-head categorical output rather than a scorer over
+$(s, a)$ embeddings of free-form text. This trades expressivity for a
+stable categorical distribution that PUCT can branch on and that the
+policy head can match by cross-entropy. Third, $\textsc{InvokeVerifier}$
+is one of the verbs the agent may take rather than a step performed only
+on the committed answer (Section~\ref{sec:method-actions}); the verifier
+is a learnable resource the policy budgets. Fourth, the architecture,
+action space, evaluation protocol, and falsifiable hypotheses are
+pre-registered (Section~\ref{sec:experimental-plan}) before any training
+begins, which is what we take to distinguish a methodology paper from a
+post-hoc justification of an empirically tuned system.
+
+Two of these axes deserve specific contrast with
+\citet{guan2025rstarmath}. On the state and action axis, rStar-Math
+operates over token-level or step-level decoding, with search nodes
+keyed to partial generations of natural-language reasoning; our context
+MDP is a structured-state object with a fixed seven-verb action space
+and id-based targeting (Sections~\ref{sec:method-state}
+and~\ref{sec:method-actions}), so the categorical action set is small
+and stable across problems and chance nodes can be addressed by
+identifier rather than by string match. On the methodology axis,
+rStar-Math is a fitted system whose architectural choices, reward
+shaping, and evaluation protocol are reported alongside its empirical
+results; our framework pre-registers the baseline grid, statistical
+analysis plan, and falsifiable hypotheses (Section~\ref{sec:experimental-plan})
+before training begins. The two efforts are complementary: rStar-Math
+demonstrates empirically that small base LMs with MCTS-driven
+self-training reach competitive math accuracy, and our framework aims
+to make the design space and the falsification criteria of that broad
+approach explicit.
+
+\subsection{Self-Improvement and Synthetic Trajectory Generation}
+\label{sec:rw-selfimprove}
+
+A complementary line of work asks whether a language model can improve
+itself by generating its own training data. STaR \citep{zelikman2022star}
+samples rationales from the base model, retains those whose final answer
+matches a known label, and fine-tunes on the retained set; the procedure
+is iterated. V-STaR \citep{hosseini2024vstar} trains a verifier on the
+rationales STaR discards and uses it at inference to rerank candidates.
+Both approaches operate at the granularity of complete trajectories: the
+unit of credit is the whole solution path, and the supervision signal is
+whether the path's final answer is correct.
+
+Our framework sits in the same family of search-then-distill systems but
+distills at a finer granularity. MCTS produces locally improved
+trajectories, and the heads are trained on per-step chance-node estimates
+$\Qmcts(s, a)$ rather than only on terminal correctness
+(Section~\ref{sec:method-training}). What makes per-step distillation
+feasible is the structured intermediate state of
+Section~\ref{sec:method-state}: a math state with explicit
+\texttt{Fact}, \texttt{Subgoal}, \texttt{Hypothesis}, and verifier-call
+records is a Markov state with a well-defined value, whereas a raw
+token-prefix has neither. The per-step credit assignment is closer to
+classical $Q$-learning than to trajectory-level rejection sampling: the
+chance-node $Q$-estimate at $(s, a)$ averages over the discounted return
+of every continuation that branches from that action, so a correct
+intermediate hypothesis that leads to an incorrect final commit still
+receives a positive partial-credit signal at the chance node where it was
+introduced. The structural-state choice is therefore what allows the
+search-then-distill pattern of STaR's lineage to be carried over into a
+Bellman-style update rather than a trajectory-level supervised target.

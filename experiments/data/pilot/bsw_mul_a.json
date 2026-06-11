@@ -1,0 +1,314 @@
+{
+  "cells": [
+    {
+      "problem_key": "multiply_small",
+      "B": 10,
+      "num_runs": 14,
+      "mean_pairwise_l1": 0.3099,
+      "mean_per_verb_std": 0.0749,
+      "modal_argmax": "FORM_HYPOTHESIS",
+      "modal_argmax_agreement": 0.6429,
+      "mean_entropy_bits": 1.9054,
+      "pi_mcts_per_run": [
+        {
+          "COMPUTE_SUBEXPR": 0.1,
+          "FORM_HYPOTHESIS": 0.5,
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.2
+        },
+        {
+          "BACKTRACK": 0.2,
+          "FORM_HYPOTHESIS": 0.3,
+          "COMPUTE_SUBEXPR": 0.3,
+          "DECOMPOSE": 0.2
+        },
+        {
+          "FORM_HYPOTHESIS": 0.3,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.2,
+          "BACKTRACK": 0.3
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.2,
+          "BACKTRACK": 0.3,
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.3
+        },
+        {
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.3,
+          "COMPUTE_SUBEXPR": 0.3
+        },
+        {
+          "DECOMPOSE": 0.2,
+          "BACKTRACK": 0.3,
+          "FORM_HYPOTHESIS": 0.3,
+          "COMPUTE_SUBEXPR": 0.2
+        },
+        {
+          "FORM_HYPOTHESIS": 0.3,
+          "BACKTRACK": 0.3,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.2
+        },
+        {
+          "BACKTRACK": 0.2,
+          "FORM_HYPOTHESIS": 0.2,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.4
+        },
+        {
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.3,
+          "COMPUTE_SUBEXPR": 0.2,
+          "BACKTRACK": 0.3
+        },
+        {
+          "BACKTRACK": 0.2,
+          "FORM_HYPOTHESIS": 0.2,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.4
+        },
+        {
+          "FORM_HYPOTHESIS": 0.6,
+          "BACKTRACK": 0.2,
+          "COMPUTE_SUBEXPR": 0.1,
+          "DECOMPOSE": 0.1
+        },
+        {
+          "FORM_HYPOTHESIS": 0.3,
+          "DECOMPOSE": 0.2,
+          "COMPUTE_SUBEXPR": 0.3,
+          "BACKTRACK": 0.2
+        },
+        {
+          "BACKTRACK": 0.2,
+          "DECOMPOSE": 0.2,
+          "FORM_HYPOTHESIS": 0.3,
+          "COMPUTE_SUBEXPR": 0.3
+        },
+        {
+          "FORM_HYPOTHESIS": 0.2,
+          "COMPUTE_SUBEXPR": 0.5,
+          "DECOMPOSE": 0.1,
+          "BACKTRACK": 0.2
+        }
+      ]
+    },
+    {
+      "problem_key": "multiply_small",
+      "B": 40,
+      "num_runs": 14,
+      "mean_pairwise_l1": 0.55,
+      "mean_per_verb_std": 0.1395,
+      "modal_argmax": "COMPUTE_SUBEXPR",
+      "modal_argmax_agreement": 0.7857,
+      "mean_entropy_bits": 1.3616,
+      "pi_mcts_per_run": [
+        {
+          "COMPUTE_SUBEXPR": 0.65,
+          "FORM_HYPOTHESIS": 0.2,
+          "BACKTRACK": 0.075,
+          "DECOMPOSE": 0.075
+        },
+        {
+          "BACKTRACK": 0.1,
+          "FORM_HYPOTHESIS": 0.1,
+          "COMPUTE_SUBEXPR": 0.7,
+          "DECOMPOSE": 0.1
+        },
+        {
+          "FORM_HYPOTHESIS": 0.4,
+          "DECOMPOSE": 0.15,
+          "COMPUTE_SUBEXPR": 0.3,
+          "BACKTRACK": 0.15
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.575,
+          "BACKTRACK": 0.225,
+          "DECOMPOSE": 0.1,
+          "FORM_HYPOTHESIS": 0.1
+        },
+        {
+          "BACKTRACK": 0.075,
+          "DECOMPOSE": 0.075,
+          "FORM_HYPOTHESIS": 0.075,
+          "COMPUTE_SUBEXPR": 0.775
+        },
+        {
+          "DECOMPOSE": 0.075,
+          "BACKTRACK": 0.075,
+          "FORM_HYPOTHESIS": 0.075,
+          "COMPUTE_SUBEXPR": 0.775
+        },
+        {
+          "FORM_HYPOTHESIS": 0.2,
+          "BACKTRACK": 0.1,
+          "DECOMPOSE": 0.075,
+          "COMPUTE_SUBEXPR": 0.625
+        },
+        {
+          "BACKTRACK": 0.65,
+          "FORM_HYPOTHESIS": 0.125,
+          "DECOMPOSE": 0.1,
+          "COMPUTE_SUBEXPR": 0.125
+        },
+        {
+          "DECOMPOSE": 0.075,
+          "FORM_HYPOTHESIS": 0.075,
+          "COMPUTE_SUBEXPR": 0.075,
+          "BACKTRACK": 0.775
+        },
+        {
+          "BACKTRACK": 0.1,
+          "FORM_HYPOTHESIS": 0.1,
+          "DECOMPOSE": 0.1,
+          "COMPUTE_SUBEXPR": 0.7
+        },
+        {
+          "FORM_HYPOTHESIS": 0.225,
+          "BACKTRACK": 0.075,
+          "COMPUTE_SUBEXPR": 0.625,
+          "DECOMPOSE": 0.075
+        },
+        {
+          "FORM_HYPOTHESIS": 0.075,
+          "DECOMPOSE": 0.075,
+          "COMPUTE_SUBEXPR": 0.775,
+          "BACKTRACK": 0.075
+        },
+        {
+          "BACKTRACK": 0.075,
+          "DECOMPOSE": 0.075,
+          "FORM_HYPOTHESIS": 0.075,
+          "COMPUTE_SUBEXPR": 0.775
+        },
+        {
+          "FORM_HYPOTHESIS": 0.1,
+          "COMPUTE_SUBEXPR": 0.7,
+          "DECOMPOSE": 0.1,
+          "BACKTRACK": 0.1
+        }
+      ]
+    },
+    {
+      "problem_key": "multiply_small",
+      "B": 160,
+      "num_runs": 14,
+      "mean_pairwise_l1": 0.5598,
+      "mean_per_verb_std": 0.1658,
+      "modal_argmax": "COMPUTE_SUBEXPR",
+      "modal_argmax_agreement": 0.8571,
+      "mean_entropy_bits": 0.6116,
+      "pi_mcts_per_run": [
+        {
+          "COMPUTE_SUBEXPR": 0.80625,
+          "FORM_HYPOTHESIS": 0.10625,
+          "BACKTRACK": 0.04375,
+          "DECOMPOSE": 0.04375
+        },
+        {
+          "BACKTRACK": 0.025,
+          "FORM_HYPOTHESIS": 0.025,
+          "COMPUTE_SUBEXPR": 0.925,
+          "DECOMPOSE": 0.025
+        },
+        {
+          "FORM_HYPOTHESIS": 0.1,
+          "DECOMPOSE": 0.0375,
+          "COMPUTE_SUBEXPR": 0.825,
+          "BACKTRACK": 0.0375
+        },
+        {
+          "COMPUTE_SUBEXPR": 0.8125,
+          "BACKTRACK": 0.0375,
+          "DECOMPOSE": 0.03125,
+          "FORM_HYPOTHESIS": 0.11875
+        },
+        {
+          "BACKTRACK": 0.01875,
+          "DECOMPOSE": 0.01875,
+          "FORM_HYPOTHESIS": 0.01875,
+          "COMPUTE_SUBEXPR": 0.94375
+        },
+        {
+          "DECOMPOSE": 0.01875,
+          "BACKTRACK": 0.01875,
+          "FORM_HYPOTHESIS": 0.01875,
+          "COMPUTE_SUBEXPR": 0.94375
+        },
+        {
+          "FORM_HYPOTHESIS": 0.05,
+          "BACKTRACK": 0.025,
+          "DECOMPOSE": 0.01875,
+          "COMPUTE_SUBEXPR": 0.90625
+        },
+        {
+          "BACKTRACK": 0.9125,
+          "FORM_HYPOTHESIS": 0.03125,
+          "DECOMPOSE": 0.025,
+          "COMPUTE_SUBEXPR": 0.03125
+        },
+        {
+          "DECOMPOSE": 0.01875,
+          "FORM_HYPOTHESIS": 0.01875,
+          "COMPUTE_SUBEXPR": 0.01875,
+          "BACKTRACK": 0.94375
+        },
+        {
+          "BACKTRACK": 0.025,
+          "FORM_HYPOTHESIS": 0.025,
+          "DECOMPOSE": 0.025,
+          "COMPUTE_SUBEXPR": 0.925
+        },
+        {
+          "FORM_HYPOTHESIS": 0.05625,
+          "BACKTRACK": 0.01875,
+          "COMPUTE_SUBEXPR": 0.90625,
+          "DECOMPOSE": 0.01875
+        },
+        {
+          "FORM_HYPOTHESIS": 0.05625,
+          "DECOMPOSE": 0.025,
+          "COMPUTE_SUBEXPR": 0.89375,
+          "BACKTRACK": 0.025
+        },
+        {
+          "BACKTRACK": 0.0375,
+          "DECOMPOSE": 0.03125,
+          "FORM_HYPOTHESIS": 0.03125,
+          "COMPUTE_SUBEXPR": 0.9
+        },
+        {
+          "FORM_HYPOTHESIS": 0.025,
+          "COMPUTE_SUBEXPR": 0.925,
+          "DECOMPOSE": 0.025,
+          "BACKTRACK": 0.025
+        }
+      ]
+    }
+  ],
+  "args": {
+    "base_url": "http://192.168.0.204:11434/v1",
+    "model": "qwen2.5:3b",
+    "problems": [
+      "multiply_small"
+    ],
+    "b_values": [
+      10,
+      40,
+      160
+    ],
+    "num_runs": 14,
+    "base_seed": 6,
+    "temperature": 0.7,
+    "max_tokens": 192,
+    "depth_limit": 3,
+    "max_turns": 8,
+    "discount": 0.99,
+    "c_puct": 1.0,
+    "timeout": 120.0,
+    "output_json": "/tmp/bsw_mul_a.json"
+  }
+}

@@ -1,0 +1,234 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Limitations}
+\label{sec:disc-limits}
+
+The pre-registered ablation in Section~\ref{sec:experimental-plan} isolates
+a single dimension of the recursive design space: the depth-limit value
+$\depthlim$ on a fixed serialization, fixed action-targeting scheme, and
+fixed (frozen) LLM encoder. Other dimensions of the recursive design,
+such as branching factor at each node, adaptive depth conditioned on
+problem difficulty, and per-verb depth budgets, are not exercised in this
+paper's plan. We also do not test alternative tree encoders against the
+serialization-plus-frozen-LLM approach argued for in
+Section~\ref{sec:method-serialization}. A natural follow-up would freeze
+the framework paper's heads and swap only the state encoder between (a)
+flat serialization with depth markers and (b) a Tree-LSTM
+\citep{tai2015improved} or graph attention network
+\citep{velickovic2018gat} operating on the parent-pointer graph, leaving
+$\Qpsi$ and $\ptheta$ otherwise unchanged. We flag this as a natural
+extension and do not pursue it here.
+
+The productive-versus-unproductive distinction is operational rather than
+syntactic: it is defined in terms of whether terminal verifier reward
+reaches the leaves of the induced tree within the depth budget
+(Definition~\ref{def:productive}). This operational definition has the
+methodological virtue of avoiding ad hoc syntactic classifications, but
+it also creates marginal cases. A hypothesis that is provably equivalent
+to its parent (a tautological refinement) produces a structurally legal
+recursive descent that may, depending on the verifier's behavior on the
+duplicated claim, classify either way. Likewise, in domains with a
+learnable verifier such as a process reward model \citep{lightman2024verify},
+the productive-versus-unproductive distinction would inherit any noise
+the learned verifier introduces; the framework paper avoids this by
+restricting Bellman targets to non-learned verifier signals only, and our
+analysis here preserves that restriction. The cleanest interpretation of
+the depth-limit mechanism is in domains where the verifier is exact
+(SymPy normalization, formal proof kernels, unit-test execution) and the
+productive-versus-unproductive boundary is sharp.
+
+The depth limit itself is a hard mask on the available action set (the
+removal of \textsc{Decompose}, \textsc{CheckCase}, and depth-incrementing
+\textsc{FormHypothesis} from $\Aset(s)$ at the limit), not a learned
+attention. An alternative would be to learn the recursion structure
+end-to-end, treating the decision to recur as a policy parameter rather
+than as an MDP-level constraint. We did not pursue this path because it
+would couple the recursion question with capacity questions and complicate
+the ablation: a learned-recursion variant that underperforms could be
+failing either because end-to-end recursion is wrong or because the
+specific learning machinery does not yet have enough capacity. The
+hard-mask design isolates the structural-prior claim cleanly, at the cost
+of giving up adaptive flexibility within a single trajectory. Finally,
+this is a methodological companion to the framework paper; empirical
+results from the ablation grid are deferred to that paper's
+implementation. The methodological contribution stands independent of
+empirical confirmation, but the productive-versus-unproductive claim is
+falsifiable and we make it so via the pre-registered hypotheses in
+Section~\ref{sec:exp-ablation}.
+
+\subsection{Extensions}
+\label{sec:disc-extensions}
+
+The fixed $\depthlim \in \{3, 4\}$ default and the global-mask ablation
+both admit natural relaxations. The simplest is a \emph{learned per-problem
+depth limit}: a small head reads the problem statement and predicts the
+useful tree depth, which the MDP then enforces via the same hard-mask
+mechanism. Slightly more sophisticated versions condition on running
+search statistics, annealing the limit as confidence in a subtree's
+hypothesis grows. Both extensions are compatible with the verifier-only
+reward principle and with the hard-mask treatment, since the prediction
+is part of the environment specification rather than of the reward
+signal. A second extension is \emph{per-verb recursion budgets}: some
+verbs (e.g., \textsc{Decompose}) may merit deeper recursion than others
+(e.g., \textsc{CheckCase}), and the availability table in
+Section~\ref{sec:method-depthlimit} can be amended per-verb without
+changing the policy or value architecture. Both extensions can be
+plugged into the ablation grid once the headline result is in.
+
+A third extension worth surfacing is \emph{soft penalties on recursion}
+as an alternative to the hard mask. We argued in
+Section~\ref{sec:method-depthlimit} that soft penalties violate the
+framework paper's verifier-only-reward principle and admit unbounded
+simulation descent. Both critiques stand on first principles. Empirically,
+however, a small soft penalty may still be a useful comparator: if the
+hard mask and a comparable soft penalty produce similar empirical
+behavior, the architectural cost of the hard mask is harder to justify;
+if they differ, the difference is informative about which mechanism the
+$Q$-learning system relies on. We flag this as worth empirical check in
+follow-up work without endorsing it as the recommended default.
+
+A fourth extension is \emph{cross-domain recursion patterns}. The
+productive-versus-unproductive distinction was developed for
+verifier-anchored math, where the verifier accepts intermediate calls and
+the natural decomposition depth is small. How does the distinction
+transfer to code generation, where the verifier is a unit-test suite that
+typically fires only at the global solution? To formal proof, where the
+verifier (Lean kernel) accepts only fully discharged sub-claims? To
+open-ended deliberation, where there is no verifier at all? We expect
+the productive regime to shrink and the depth-limit's importance to grow
+as the verifier becomes more global and as the natural decomposition
+depth becomes more variable. The cross-domain question is the obvious
+next paper after the present one's intra-domain ablation lands.
+
+Finally, a DAG generalization (multi-parent hypotheses) and a cross-trajectory
+caching mechanism (verified sub-claims re-used as facts in later problems)
+are both compatible with the implicit-hierarchy stance and both worth
+exploring. The schema's parent-pointer field would need to become a list
+rather than a single identifier; the depth-distance metric used by
+$\depthlim$ would need a poset analogue. Neither change is fundamental,
+but the canonicalization questions deferred in
+Section~\ref{sec:method-canon} would need answering before either
+extension is empirically tractable.
+
+\subsection{When Recursion Pays Off}
+\label{sec:disc-when}
+
+We have argued throughout that the productive-versus-unproductive
+distinction is operational, not syntactic. The same architectural
+question can be asked at the level of problem classes: which classes
+benefit measurably from recursive structural decomposition, and which do
+not? The pattern we predict, based on the verifier-reach analysis of
+Section~\ref{sec:method-productive}, has two features. First, the
+problem class must admit \emph{natural verifier-checkable sub-goals}:
+the kind of decomposition where a tentative parent claim can be split
+into sub-claims whose conjunction implies the original, and each
+sub-claim is itself a verifier-checkable object. Competition mathematics
+\citep{hendrycks2021math}, multi-claim formal proof \citep{deepmind2024alphaproof,
+yang2023leandojo}, and code generation with unit-test decomposition
+\citep{li2022alphacode} all have this property by construction. Second,
+the verifier must accept intermediate calls: a verifier that scores
+sub-claims independently of the parent gives the productive regime its
+reward signal at the leaves of the implicit tree, where the $Q$-function
+needs Bellman targets most.
+
+Problems missing either feature gain little from recursion. A
+one-shot answer problem with a global verifier (the verifier only fires
+on the terminal commit) yields no leaf-level signal beneath; the depth
+budget that recursion costs is not offset by intermediate verifier hits,
+and $\Qpsi$ has no informative Bellman target for the interior nodes.
+Open-ended deliberation, where there is no verifier at all, falls in the
+same category: recursive decomposition is structurally available, but
+nothing makes the productive mode preferable to the unproductive one
+from the agent's perspective. Within the math-and-proof setting that
+motivates the framework paper, we expect the productive regime to exist
+in a measurable range; outside that setting, the depth-limit mechanism
+may still be useful as a defense against rumination but the
+expressivity benefit will be smaller.
+
+\subsection{Threats Specific to the Recursion Claim}
+\label{sec:disc-threats}
+
+The experimental plan's threats subsection (Section~\ref{sec:exp-threats})
+covers the broad threats inherited from the framework paper: compute
+leaks, verifier coverage, benchmark contamination, seed variance. We
+note here the threats specific to the depth-limit claim. The ablation
+may show no difference between R0, R3, and R$\infty$, in which case the
+productive-versus-unproductive distinction is real but the depth-limit
+mechanism is the wrong way to operationalize it; an alternative such as
+per-verb budgets or learned recursion may then become the next experiment.
+The ablation may show R3 dominating both endpoints but only by a small
+margin that does not justify tracking parent-pointer state at all; in
+that case the framework paper's deferral of recursion to a phase-2
+forward-compatibility hook is the correct long-term answer rather than
+a temporary one. The ablation's three settings ($\depthlim \in \{0, 3,
+\infty\}$) may also fail to span the truly interesting regime. We
+mitigate this by running a finer-grained sweep on a held-out subset
+after the headline three-setting result is in
+(Section~\ref{sec:exp-threats}).
+
+Two further threats deserve specific mention. Verifier coverage at
+intermediate depths can inflate or deflate the productive-recursion rate
+artificially: a verifier that accepts a wider class of intermediate
+claims will register more leaves as productive even if the underlying
+deliberation is unchanged, and the empirical depth distribution we
+report in Section~\ref{sec:exp-secondary} must be read with the
+verifier's coverage profile in mind. Cross-seed variance, finally, is
+likely to be high in the $\depthlim = \infty$ condition specifically:
+unbounded recursion makes the trajectory length distribution
+heavy-tailed, and long trajectories carry more accumulated variance into
+the $Q$-learning targets. We pre-commit to reporting mean and standard
+deviation across at least three training seeds and to flagging any
+condition whose seed variance exceeds the across-condition effect.
+
+\subsection{Implicit versus Explicit Hierarchy: A Methodological Note}
+\label{sec:disc-implicit}
+
+The hierarchical reinforcement learning literature has spent two decades
+architecting explicit hierarchy. The options framework
+\citep{sutton1999between} introduces sub-policies with their own
+termination conditions; MAXQ value decomposition
+\citep{dietterich2000hierarchical} introduces sub-task value functions
+with cross-coupling terms; feudal networks \citep{vezhnevets2017feudal}
+introduce manager modules operating at coarser timescales than worker
+modules. Each of these designs makes hierarchy a property of the policy
+or value architecture: separate networks, separate parameter sets,
+separate optimization signals at each level. The framework paper adopts
+the opposite methodological stance, and the present companion paper
+develops it in depth. Hierarchy here is a property of the \emph{state},
+not of the policy: $\Qpsi$ is a flat categorical head over the
+seven-verb action set, $\ptheta$ is a flat policy over the same set, the
+frozen LLM is a single shared encoder, and recursion enters entirely
+through the parent-pointer field in the state schema and the depth
+integer attached to each entity.
+
+The trade-off worth surfacing is this. Explicit hierarchy gives the
+agent a structural inductive bias that constrains learning: the manager
+cannot choose worker-level primitives directly, the option must run to
+its termination condition, the sub-task value function decomposes as a
+sum over levels. The bias accelerates learning when the designer's
+chosen decomposition matches the task's natural decomposition; it
+distorts learning when it does not. Implicit hierarchy lets the agent
+discover (or fail to discover) the appropriate hierarchical decomposition
+from the data, at the cost of denying it the inductive bias that
+explicit machinery would have supplied. For pre-trained language models
+already carrying world knowledge about how mathematical claims and
+sub-claims relate, we expect the implicit approach to extract more
+transfer than an explicit hierarchy whose decomposition rules are baked
+in by the system designer. The LLM's pretraining already supports
+structured text reasoning; adding explicit hierarchical machinery on top
+of it would duplicate that capacity, with the redundancy paid for in
+architectural complexity and in fine-tuning signal that has to choose
+between the implicit and explicit hierarchy whenever they disagree.
+
+The commitment is, then, methodological: keep the architecture as simple
+as possible (flat categorical $\Qpsi$, flat policy $\ptheta$, frozen
+LLM as both encoder and stochastic transition model), and let hierarchy
+emerge from the state representation rather than from the policy
+architecture. The recursive paper's design is the test of whether this
+commitment carries through when the state itself becomes
+tree-structured. The depth-limit mechanism, the identifier-based action
+targeting, and the flat serialization with depth markers are all
+consequences of the same underlying choice: hierarchy lives in the
+state, the architecture stays flat, and the verifier signals do all the
+load-bearing work of teaching the system which trajectories matter.

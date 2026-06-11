@@ -1,0 +1,28 @@
+[project]
+name = "verifier-anchored-rl"
+version = "0.1.0"
+description = "Approximate Q-learning over verifiable context MDPs, with MCTS as policy improvement operator."
+readme = "README.md"
+authors = [{name = "Alexander Towell", email = "atowell@siue.edu"}]
+requires-python = ">=3.11"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+# LLM-extension dependencies. Only required to run the Phase-3
+# LLMContextMDP transition against a real model (Tier 2 smoke test
+# and Tier 3 ablation). The classical-MDP scaffold (Phase 1/2) has
+# no such requirement.
+llm = ["httpx>=0.27", "sympy>=1.12"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src", "."]

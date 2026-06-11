@@ -1,0 +1,291 @@
+% references.bib for the MCTS expert iteration paper
+%
+% NOTE: All entries verified for submission with urldate fields where
+% applicable. arXiv-tracked entries should be re-checked against
+% subsequent venue publications (NeurIPS/ICLR/etc.) at submission time.
+
+% ============================================================
+% Search and reinforcement learning foundations
+% ============================================================
+
+@book{sutton2018reinforcement,
+  title={Reinforcement Learning: An Introduction},
+  author={Sutton, Richard S. and Barto, Andrew G.},
+  edition={2},
+  publisher={MIT Press},
+  year={2018},
+  address={Cambridge, MA}
+}
+
+@inproceedings{kocsis2006bandit,
+  title={Bandit Based {M}onte-{C}arlo Planning},
+  author={Kocsis, Levente and Szepesv{\'a}ri, Csaba},
+  booktitle={European Conference on Machine Learning (ECML)},
+  pages={282--293},
+  year={2006}
+}
+
+@inproceedings{coulom2006efficient,
+  title={Efficient Selectivity and Backup Operators in {M}onte-{C}arlo Tree Search},
+  author={Coulom, R{\'e}mi},
+  booktitle={International Conference on Computers and Games},
+  pages={72--83},
+  year={2006}
+}
+
+@article{browne2012survey,
+  title={A Survey of {M}onte {C}arlo Tree Search Methods},
+  author={Browne, Cameron B. and Powley, Edward and Whitehouse, Daniel and Lucas, Simon M. and Cowling, Peter I. and Rohlfshagen, Philipp and Tavener, Stephen and Perez, Diego and Samothrakis, Spyridon and Colton, Simon},
+  journal={IEEE Transactions on Computational Intelligence and AI in Games},
+  volume={4},
+  number={1},
+  pages={1--43},
+  year={2012}
+}
+
+% ============================================================
+% AlphaGo lineage
+% ============================================================
+
+@article{silver2016alphago,
+  title={Mastering the Game of {G}o with Deep Neural Networks and Tree Search},
+  author={Silver, David and Huang, Aja and Maddison, Chris J. and Guez, Arthur and Sifre, Laurent and van den Driessche, George and Schrittwieser, Julian and Antonoglou, Ioannis and Panneershelvam, Veda and Lanctot, Marc and others},
+  journal={Nature},
+  volume={529},
+  number={7587},
+  pages={484--489},
+  year={2016}
+}
+
+@article{silver2017alphagozero,
+  title={Mastering the Game of {G}o without Human Knowledge},
+  author={Silver, David and Schrittwieser, Julian and Simonyan, Karen and Antonoglou, Ioannis and Huang, Aja and Guez, Arthur and Hubert, Thomas and Baker, Lucas and Lai, Matthew and Bolton, Adrian and others},
+  journal={Nature},
+  volume={550},
+  number={7676},
+  pages={354--359},
+  year={2017}
+}
+
+@article{silver2018alphazero,
+  title={A General Reinforcement Learning Algorithm that Masters Chess, Shogi, and {G}o through Self-Play},
+  author={Silver, David and Hubert, Thomas and Schrittwieser, Julian and Antonoglou, Ioannis and Lai, Matthew and Guez, Arthur and Lanctot, Marc and Sifre, Laurent and Kumaran, Dharshan and Graepel, Thore and Lillicrap, Timothy and Simonyan, Karen and Hassabis, Demis},
+  journal={Science},
+  volume={362},
+  number={6419},
+  pages={1140--1144},
+  year={2018}
+}
+
+@article{schrittwieser2020muzero,
+  title={Mastering {A}tari, {G}o, Chess and Shogi by Planning with a Learned Model},
+  author={Schrittwieser, Julian and Antonoglou, Ioannis and Hubert, Thomas and Simonyan, Karen and Sifre, Laurent and Schmitt, Simon and Guez, Arthur and Lockhart, Edward and Hassabis, Demis and Graepel, Thore and Lillicrap, Timothy and Silver, David},
+  journal={Nature},
+  volume={588},
+  number={7839},
+  pages={604--609},
+  year={2020}
+}
+
+% ============================================================
+% Expert iteration
+% ============================================================
+
+@inproceedings{anthony2017thinking,
+  title={Thinking Fast and Slow with Deep Learning and Tree Search},
+  author={Anthony, Thomas and Tian, Zheng and Barber, David},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2017}
+}
+
+% ============================================================
+% Verifier-anchored LLM reasoning
+% ============================================================
+
+@inproceedings{lightman2024verify,
+  title={Let's Verify Step by Step},
+  author={Lightman, Hunter and Kosaraju, Vineet and Burda, Yura and Edwards, Harri and Baker, Bowen and Lee, Teddy and Leike, Jan and Schulman, John and Sutskever, Ilya and Cobbe, Karl},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2024}
+}
+
+@article{cobbe2021gsm8k,
+  title={Training Verifiers to Solve Math Word Problems},
+  author={Cobbe, Karl and Kosaraju, Vineet and Bavarian, Mohammad and Chen, Mark and Jun, Heewoo and Kaiser, Lukasz and Plappert, Matthias and Tworek, Jerry and Hilton, Jacob and Nakano, Reiichiro and Hesse, Christopher and Schulman, John},
+  journal={arXiv preprint arXiv:2110.14168},
+  year={2021}
+}
+
+@article{hendrycks2021math,
+  title={Measuring Mathematical Problem Solving with the {MATH} Dataset},
+  author={Hendrycks, Dan and Burns, Collin and Kadavath, Saurav and Arora, Akul and Basart, Steven and Tang, Eric and Song, Dawn and Steinhardt, Jacob},
+  journal={arXiv preprint arXiv:2103.03874},
+  year={2021}
+}
+
+@article{li2022alphacode,
+  title={Competition-Level Code Generation with {AlphaCode}},
+  author={Li, Yujia and Choi, David and Chung, Junyoung and Kushman, Nate and Schrittwieser, Julian and Leblond, R{\'e}mi and Eccles, Tom and Keeling, James and Gimeno, Felix and Dal Lago, Agustin and others},
+  journal={Science},
+  volume={378},
+  number={6624},
+  pages={1092--1097},
+  year={2022}
+}
+
+@misc{deepmind2024alphaproof,
+  title={{AI} Achieves Silver-Medal Standard Solving {I}nternational {M}athematical {O}lympiad Problems},
+  author={{Google DeepMind}},
+  year={2024},
+  note={DeepMind blog post},
+  url={https://deepmind.google/discover/blog/ai-solves-imo-problems-at-silver-medal-level/},
+  urldate={2026-06-09}
+}
+
+% ============================================================
+% Recent LLM reasoning systems
+% ============================================================
+
+@article{guo2025deepseekr1,
+  title={{DeepSeek-R1}: Incentivizing Reasoning Capability in {LLMs} via Reinforcement Learning},
+  author={Guo, Daya and Yang, Dejian and Zhang, Haowei and Song, Junxiao and Zhang, Ruoyu and Xu, Runxin and Zhu, Qihao and Ma, Shirong and Wang, Peiyi and Bi, Xiao and others},
+  journal={arXiv preprint arXiv:2501.12948},
+  year={2025}
+}
+
+@misc{openai2024o1,
+  title={{OpenAI} o1 System Card},
+  author={{OpenAI}},
+  year={2024},
+  note={Technical report, September 2024},
+  url={https://openai.com/index/openai-o1-system-card/},
+  urldate={2026-06-09}
+}
+
+@inproceedings{zelikman2022star,
+  title={{STaR}: Bootstrapping Reasoning with Reasoning},
+  author={Zelikman, Eric and Wu, Yuhuai and Mu, Jesse and Goodman, Noah D.},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2022}
+}
+
+@article{hosseini2024vstar,
+  title={{V-STaR}: Training Verifiers for Self-Taught Reasoners},
+  author={Hosseini, Arian and Yuan, Xingdi and Malkin, Nikolay and Courville, Aaron and Sordoni, Alessandro and Agarwal, Rishabh},
+  journal={arXiv preprint arXiv:2402.06457},
+  year={2024}
+}
+
+% ============================================================
+% Test-time compute scaling
+% ============================================================
+
+@article{snell2024scaling,
+  title={Scaling {LLM} Test-Time Compute Optimally Can Be More Effective than Scaling Model Parameters},
+  author={Snell, Charlie and Lee, Jaehoon and Xu, Kelvin and Kumar, Aviral},
+  journal={arXiv preprint arXiv:2408.03314},
+  year={2024}
+}
+
+@article{wei2022cot,
+  title={Chain-of-Thought Prompting Elicits Reasoning in Large Language Models},
+  author={Wei, Jason and Wang, Xuezhi and Schuurmans, Dale and Bosma, Maarten and Ichter, Brian and Xia, Fei and Chi, Ed and Le, Quoc and Zhou, Denny},
+  journal={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2022}
+}
+
+% ============================================================
+% Base language models used as the substrate
+% ============================================================
+
+@article{yang2024qwen25,
+  title={{Qwen2.5} Technical Report},
+  author={Yang, An and Yang, Baosong and Zhang, Beichen and others},
+  journal={arXiv preprint arXiv:2412.15115},
+  year={2024},
+  url={https://arxiv.org/abs/2412.15115},
+  urldate={2026-06-09}
+}
+
+@article{dubey2024llama3,
+  title={The {L}lama 3 Herd of Models},
+  author={Dubey, Abhimanyu and Jauhri, Abhinav and Pandey, Abhinav and others},
+  journal={arXiv preprint arXiv:2407.21783},
+  year={2024},
+  url={https://arxiv.org/abs/2407.21783},
+  urldate={2026-06-09}
+}
+
+@article{allal2024smollm2,
+  title={{SmolLM2}: When Smol Goes Big -- A Data-Centric Training of a Small Language Model},
+  author={Allal, Loubna Ben and Lozhkov, Anton and Bakouch, Elie and Ben Blandin, Gabriel Mart{\'i}n and Cooper, Nathan and Dey, Manan and Penedo, Guilherme and others},
+  journal={arXiv preprint arXiv:2502.02737},
+  year={2025},
+  url={https://arxiv.org/abs/2502.02737},
+  urldate={2026-06-09}
+}
+
+% ============================================================
+% MCTS for LLM reasoning (recent work)
+% ============================================================
+
+@article{feng2023alphazerollm,
+  title={Alphazero-like Tree-Search can Guide Large Language Model Decoding and Training},
+  author={Feng, Xidong and Wan, Ziyu and Wen, Muning and McAleer, Stephen Marcus and Wen, Ying and Zhang, Weinan and Wang, Jun},
+  journal={arXiv preprint arXiv:2309.17179},
+  year={2023}
+}
+
+@article{xie2024monte,
+  title={{M}onte {C}arlo Tree Search Boosts Reasoning via Iterative Preference Learning},
+  author={Xie, Yuxi and Goyal, Anirudh and Zheng, Wenyue and Kan, Min-Yen and Lillicrap, Timothy P. and Kawaguchi, Kenji and Shieh, Michael},
+  journal={arXiv preprint arXiv:2405.00451},
+  year={2024}
+}
+
+@article{guan2025rstarmath,
+  title={{rStar-Math}: Small {LLM}s Can Master Math Reasoning with Self-Evolved Deep Thinking},
+  author={Guan, Xinyu and Zhang, Li Lyna and Liu, Yifei and Shang, Ning and Sun, Youran and Zhu, Yi and Yang, Fan and Yang, Mao},
+  journal={arXiv preprint arXiv:2501.04519},
+  year={2025}
+}
+
+% ============================================================
+% Constrained decoding (for COMMIT_ANSWER strict format)
+% ============================================================
+
+@article{willard2023outlines,
+  title={Efficient Guided Generation for Large Language Models},
+  author={Willard, Brandon T. and Louf, R{\'e}mi},
+  journal={arXiv preprint arXiv:2307.09702},
+  year={2023}
+}
+
+% ============================================================
+% Deep RL stabilization machinery (target networks, parameter-efficient fine-tuning)
+% ============================================================
+
+@article{mnih2015human,
+  title={Human-Level Control through Deep Reinforcement Learning},
+  author={Mnih, Volodymyr and Kavukcuoglu, Koray and Silver, David and Rusu, Andrei A. and Veness, Joel and Bellemare, Marc G. and Graves, Alex and Riedmiller, Martin and Fidjeland, Andreas K. and Ostrovski, Georg and Petersen, Stig and Beattie, Charles and Sadik, Amir and Antonoglou, Ioannis and King, Helen and Kumaran, Dharshan and Wierstra, Daan and Legg, Shane and Hassabis, Demis},
+  journal={Nature},
+  volume={518},
+  number={7540},
+  pages={529--533},
+  year={2015}
+}
+
+@inproceedings{hu2022lora,
+  title={{LoRA}: Low-Rank Adaptation of Large Language Models},
+  author={Hu, Edward J. and Shen, Yelong and Wallis, Phillip and Allen-Zhu, Zeyuan and Li, Yuanzhi and Wang, Shean and Wang, Lu and Chen, Weizhu},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2022}
+}
+
+@unpublished{towell2026recursion,
+  title={Bounded Structural Recursion in Verifier-Anchored Reinforcement
+         Learning: When and How Deliberation Should Decompose Itself},
+  author={Towell, Alexander},
+  year={2026},
+  note={Companion paper, in preparation}
+}
