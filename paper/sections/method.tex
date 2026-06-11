@@ -151,9 +151,10 @@ critique of a critique, with no terminal verifier signal beneath). Phase 1
 leaves the recursive fields at their defaults and so cannot produce
 either; phase 2 activates them and relies on the verifier-anchored reward,
 plus a per-hypothesis \texttt{tree\_depth\_limit} (default $3$ to $4$), to
-suppress the unproductive case. A companion paper
-\citep{towell2026recursion} develops this distinction at length and
-pre-registers an ablation on the depth-limit parameter.
+suppress the unproductive case. Developing this distinction at depth,
+and replacing the global depth limit with per-node decomposition
+decisions, is deferred to a successor project on structured action
+spaces.
 
 \paragraph{Markov bet.}
 The state is intended to satisfy the Markov property: all information
