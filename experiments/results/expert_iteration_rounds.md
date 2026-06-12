@@ -609,3 +609,36 @@ data: /tmp/b_sweep_merged.json; figure: paper/figures/b_sweep.pdf.
 sections 5.3/5.5/5.6; figure paper/figures/b_sweep.pdf added; the K=6
 -> K=20 dip dissolution kept as an explicit small-sample cautionary
 note (a diagnostic run at K=6 can manufacture a transition zone).
+
+
+## Infra post-mortem: why the pilot's embedder died (resolved 2026-06-12)
+
+The box's Ollama was updated to 0.30.7 around 2026-06-10. Root cause of
+the /api/embed 501 for qwen2.5:3b, established from the trackers:
+
+* The error text ("This server does not support embeddings. Start it
+  with `--embeddings`") is llama.cpp's llama-server message, surfacing
+  through Ollama's new llama.cpp integration (the 0.30 line layered
+  llama.cpp in as a runner "for improved compatibility and performance").
+* Ollama has been migrating architectures from the legacy llama.cpp
+  runner to its own engine since 2025, and embedding support repeatedly
+  regressed along the way (ollama#12368: Qwen3-Embedding broke at v0.12.0
+  when "qwen models are now using the ollama backend"; ollama#10824:
+  Qwen2-based embedding models still unsupported on the new engine;
+  llama.cpp#15406: /v1/embeddings 501s after build 5630 even with
+  embeddings enabled).
+* Net effect on 0.30.7: dedicated embedding models load with the
+  embedding path enabled and work (verified: nomic-embed-text 768-d
+  deterministic, qwen3-embedding:0.6b 1024-d deterministic once warm);
+  generative models load completion-only, so embed requests reach a
+  runner started without the embeddings flag -> 501. The pilot's
+  embed-with-the-generation-model usage was a permissive default of the
+  old version, not a documented capability, and it went away with the
+  engine migration rather than by an announced deprecation.
+
+Consequence (already absorbed in commit 1112a4f): pilot artifacts are a
+sealed 2048-d archive; new rounds default to nomic-embed-text (768-d);
+embedder/checkpoint dim mismatches fail loudly. If old-space continuity
+is ever required: pin an older Ollama on a second port, or serve the
+qwen2.5:3b GGUF via a bare llama-server with embeddings enabled (pin a
+known-good build; upstream had a 501-even-with-flag regression).
