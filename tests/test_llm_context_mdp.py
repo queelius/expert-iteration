@@ -671,3 +671,22 @@ def test_echo_client_smoke_walks_through_each_verb():
                 state, _ = mdp.sample_transition(state, MathAction(verb=verb))
             except Exception as e:
                 pytest.fail(f"verb {verb} raised: {e}")
+
+
+def test_reward_constants_are_public():
+    """Downstream packages (rewrite-rl) import these instead of copying
+    magic numbers; the private names remain as aliases."""
+    from verifier_anchored_rl import (
+        INTERMEDIATE_VERIFIER_REWARD,
+        MASKED_ACTION_REWARD,
+        TERMINAL_FAILURE_REWARD,
+        TERMINAL_SUCCESS_REWARD,
+    )
+    from verifier_anchored_rl import llm_context_mdp as m
+
+    assert TERMINAL_SUCCESS_REWARD == 1.0
+    assert TERMINAL_FAILURE_REWARD == -1.0
+    assert INTERMEDIATE_VERIFIER_REWARD == 0.05
+    assert MASKED_ACTION_REWARD == -0.01
+    assert m._TERMINAL_SUCCESS_REWARD is TERMINAL_SUCCESS_REWARD
+    assert m._INTERMEDIATE_VERIFIER_REWARD is INTERMEDIATE_VERIFIER_REWARD

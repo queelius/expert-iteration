@@ -877,9 +877,15 @@ def _verb_fields_description(verb: Verb, state: MathState) -> str:
 # * A turn-budget cap can convert a non-terminal episode into a
 #   terminal "no commit" outcome with negative reward.
 
-_INTERMEDIATE_VERIFIER_REWARD = 0.05
-_TERMINAL_SUCCESS_REWARD = 1.0
-_TERMINAL_FAILURE_REWARD = -1.0
+INTERMEDIATE_VERIFIER_REWARD = 0.05
+TERMINAL_SUCCESS_REWARD = 1.0
+TERMINAL_FAILURE_REWARD = -1.0
+MASKED_ACTION_REWARD = -0.01
+
+# Backward-compatible private aliases (existing call sites).
+_INTERMEDIATE_VERIFIER_REWARD = INTERMEDIATE_VERIFIER_REWARD
+_TERMINAL_SUCCESS_REWARD = TERMINAL_SUCCESS_REWARD
+_TERMINAL_FAILURE_REWARD = TERMINAL_FAILURE_REWARD
 
 
 # -----------------------------------------------------------------------------
@@ -1043,7 +1049,7 @@ class LLMContextMDP:
     def _masked_action(self, state: MathState) -> tuple[MathState, float]:
         """Bump the turn counter and return a small negative reward."""
         next_state = _with(state, turn=state.turn + 1)
-        return next_state, -0.01
+        return next_state, MASKED_ACTION_REWARD
 
     # -- per-verb handlers -------------------------------------------------
     #
@@ -1394,4 +1400,8 @@ __all__ = [
     "serialize_state",
     "parse_state",
     "LLMContextMDP",
+    "INTERMEDIATE_VERIFIER_REWARD",
+    "TERMINAL_SUCCESS_REWARD",
+    "TERMINAL_FAILURE_REWARD",
+    "MASKED_ACTION_REWARD",
 ]
