@@ -14,6 +14,10 @@ dev = ["pytest"]
 # and Tier 3 ablation). The classical-MDP scaffold (Phase 1/2) has
 # no such requirement.
 llm = ["httpx>=0.27", "sympy>=1.12"]
+# In-process HuggingFace backend (TransformersLLMClient /
+# TransformersEmbeddingClient): direct hidden-state access, seeded
+# sampling, countable forwards. Runs on the GPU box, not locally.
+hf = ["torch>=2.2", "transformers>=4.45"]
 
 [build-system]
 requires = ["setuptools>=61"]

@@ -69,6 +69,10 @@ from .mcts import (
     visit_count_policy,
 )
 from .policies import TabularPolicy, policy_as_prior
+from .transformers_client import (
+    TransformersEmbeddingClient,
+    TransformersLLMClient,
+)
 
 __version__ = "0.1.0"
 
@@ -96,6 +100,8 @@ __all__ = [
     "PolicyTarget",
     "Subgoal",
     "TabularPolicy",
+    "TransformersEmbeddingClient",
+    "TransformersLLMClient",
     "Verb",
     "VerifierCall",
     "available_actions",
