@@ -9,6 +9,7 @@ Definition 2), serializer round-trip, action-availability predicate
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from verifier_anchored_rl.llm_context_mdp import (
@@ -276,7 +277,7 @@ def test_sample_transition_requires_llm_client():
     mdp = LLMContextMDP(problem_statement="P")
     state = mdp.initial_state()
     action = MathAction(verb=Verb.COMMIT_ANSWER)
-    with pytest.raises(RuntimeError, match="no llm_client configured"):
+    with pytest.raises(RuntimeError, match="no generation backend"):
         mdp.sample_transition(state, action, rng=None)
 
 
@@ -690,3 +691,39 @@ def test_reward_constants_are_public():
     assert MASKED_ACTION_REWARD == -0.01
     assert m._TERMINAL_SUCCESS_REWARD is TERMINAL_SUCCESS_REWARD
     assert m._INTERMEDIATE_VERIFIER_REWARD is INTERMEDIATE_VERIFIER_REWARD
+
+
+def test_sample_transition_uses_encoder_when_provided():
+    """With an encoder set, generation goes through encoder.instantiate_json
+    and the llm_client is not consulted."""
+    pytest.importorskip("torch")
+    from tests.fakes import FakeEncoder
+    from verifier_anchored_rl.llm_client import MockLLMClient
+    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP, MathAction, Verb
+    from verifier_anchored_rl.planner_actor import PrefillCache
+
+    enc = FakeEncoder(embed_dim=8)
+    spy = MockLLMClient(script={})  # any call would raise (empty script)
+    mdp = LLMContextMDP(problem_statement="2+2", expected_answer="4",
+                        llm_client=spy, encoder=enc, prefill_cache=PrefillCache(),
+                        depth_limit=3, max_turns=4)
+    state = mdp.initial_state()
+    next_state, reward = mdp.sample_transition(
+        state, MathAction(verb=Verb.COMMIT_ANSWER), np.random.default_rng(0))
+
+    assert enc.gen_calls == 1          # encoder generated
+    assert spy.calls == []             # llm_client untouched
+    assert next_state.turn == state.turn + 1
+
+
+def test_sample_transition_uses_llm_client_when_no_encoder():
+    """Without an encoder, the existing llm_client path is unchanged."""
+    from verifier_anchored_rl.llm_client import EchoLLMClient
+    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP, MathAction, Verb
+
+    mdp = LLMContextMDP(problem_statement="2+2", expected_answer="4",
+                        llm_client=EchoLLMClient(), depth_limit=3, max_turns=4)
+    state = mdp.initial_state()
+    next_state, _ = mdp.sample_transition(
+        state, MathAction(verb=Verb.COMMIT_ANSWER), np.random.default_rng(0))
+    assert next_state.turn == state.turn + 1

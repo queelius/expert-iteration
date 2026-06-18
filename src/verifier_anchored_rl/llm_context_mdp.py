@@ -978,6 +978,13 @@ class LLMContextMDP:
     # collection (production deployment, or to measure the unseeded
     # baseline against the seeded one on the same server).
     seed_llm: bool = True
+    # Optional in-process encoder path (method.tex 3.4 "one forward, not
+    # two"). When set, sample_transition generates verb content by reusing
+    # the state prefill rather than calling llm_client.complete_json. The
+    # shared prefill_cache lets the heads and generation reuse one prefill
+    # per node. When None, the llm_client path is used unchanged.
+    encoder: Any = field(default=None, repr=False)
+    prefill_cache: Any = field(default=None, repr=False)
 
     def initial_state(self, given_facts: Sequence[Fact] = ()) -> MathState:
         """Return the initial state for ``self.problem_statement``.
@@ -1029,11 +1036,11 @@ class LLMContextMDP:
         """
         from .llm_client import LLMResponseError
 
-        if self.llm_client is None:
+        if self.encoder is None and self.llm_client is None:
             raise RuntimeError(
-                "LLMContextMDP.sample_transition: no llm_client configured. "
-                "Pass a MockLLMClient, EchoLLMClient, or "
-                "OpenAICompatibleLLMClient at construction."
+                "LLMContextMDP.sample_transition: no generation backend. "
+                "Pass an encoder, or a MockLLMClient/EchoLLMClient/"
+                "OpenAICompatibleLLMClient, at construction."
             )
 
         verb = action.verb
@@ -1060,14 +1067,30 @@ class LLMContextMDP:
         )
 
         try:
-            response = self.llm_client.complete_json(
-                system=_SYSTEM_PROMPT,
-                user=user,
-                schema=schema,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                seed=sampling_seed,
-            )
+            if self.encoder is not None:
+                prefix = _state_prefix(state)
+                prefill = (
+                    self.prefill_cache.get_or_encode(prefix, self.encoder)
+                    if self.prefill_cache is not None
+                    else self.encoder.encode(prefix)
+                )
+                response, _ = self.encoder.instantiate_json(
+                    prefill,
+                    _verb_suffix(verb, state),
+                    schema,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    seed=sampling_seed,
+                )
+            else:
+                response = self.llm_client.complete_json(
+                    system=_SYSTEM_PROMPT,
+                    user=user,
+                    schema=schema,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    seed=sampling_seed,
+                )
         except LLMResponseError:
             return self._masked_action(state)
 
