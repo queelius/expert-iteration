@@ -59,4 +59,53 @@ class PrefillCache:
         return prefill
 
 
-__all__ = ["Encoder", "PrefillCache"]
+class StateActor:
+    """Heads-over-MathState bridge: embed(s), prior(s), leaf_value(s).
+
+    ``prior`` reads the ONLINE policy head (the PUCT prior); ``leaf_value``
+    reads the TARGET-Q head (the bootstrap leaf), matching method.tex 3.7.
+    Both run under no_grad: they drive search, not training.
+    """
+
+    def __init__(self, encoder: Encoder, actor: Any, cache: PrefillCache | None = None,
+                 *, depth_limit: int = 3):
+        self.encoder = encoder
+        self.actor = actor
+        self.cache = cache if cache is not None else PrefillCache()
+        self.depth_limit = depth_limit
+
+    def embed(self, state: Any) -> Any:
+        from .llm_context_mdp import _state_prefix
+
+        return self.cache.get_or_encode(_state_prefix(state), self.encoder).hidden
+
+    def prior(self, state: Any, actions: list[Any]) -> list[float]:
+        import torch
+
+        from .heads import NUM_VERBS, VERB_NAME_TO_INDEX
+
+        idxs = [VERB_NAME_TO_INDEX[a.verb.value] for a in actions]
+        h = self.embed(state).unsqueeze(0)
+        mask = torch.zeros(1, NUM_VERBS, dtype=torch.bool)
+        for j in idxs:
+            mask[0, j] = True
+        with torch.no_grad():
+            pi = self.actor.pi(h, mask)  # masked softmax, 0 off the mask
+        return [float(pi[0, j]) for j in idxs]
+
+    def leaf_value(self, state: Any) -> float:
+        import torch
+
+        from .heads import VERB_NAME_TO_INDEX
+        from .llm_context_mdp import available_actions
+
+        avail = list(available_actions(state, depth_limit=self.depth_limit))
+        if not avail:
+            return 0.0  # defensive: MCTS only calls value_fn at non-terminal leaves
+        h = self.embed(state).unsqueeze(0)
+        with torch.no_grad():
+            qt = self.actor.target_q(h)[0]
+        return max(float(qt[VERB_NAME_TO_INDEX[v.value]]) for v in avail)
+
+
+__all__ = ["Encoder", "PrefillCache", "StateActor"]
