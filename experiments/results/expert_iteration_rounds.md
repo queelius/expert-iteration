@@ -728,3 +728,47 @@ Two findings worth carrying forward:
    completion or chat-template framing for the verb-instantiator is an
    open question to settle empirically; the encoder supports either via
    the prefix/suffix text it is handed.
+
+
+## Section 3.7 training loop: replay + combined objective (2026-06-18)
+
+Module 3 of the benchmark architecture, and the headline algorithm:
+approximate Q-learning with MCTS-supplied targets, alternated with policy
+distillation. Three pieces the pilot lacked, now built and CPU-verified:
+
+* `train.py`: the combined objective L_total = L_Q + lambda*L_pi
+  (Eqs. lossq/losspi/losstotal). L_Q is masked MSE of Q_psi against the
+  stored MCTS chance-node estimate Q_MCTS (the paper's stated novelty:
+  the target is Q_MCTS, not a single-sample bootstrapped Bellman target);
+  L_pi is masked cross-entropy of pi_theta against pi_MCTS. Losses use the
+  actor's explicit q()/policy_logits() accessors, not the forward tuple.
+* `replay.py`: ReplayBuffer (prioritized by mean TD error, FIFO eviction
+  under a capacity cap, stores Q_MCTS+pi_MCTS per sample so stale entries
+  stay correct). `sample_from_record` reuses heads.encode_batch so the
+  buffer ingests the exact collect_distillation JSONL schema.
+* `train.Trainer`: runs minibatch steps, updates priorities from TD
+  errors, syncs the target-Q network every N steps (Alg.1 line 14).
+
+The actor gained a `policy_logits(h)` accessor so the losses are
+unambiguous about which head is which.
+
+End-to-end validation (`experiments/run_train_demo.py`, CPU, the pilot's
+v2 records, stored 2048-d embeddings, 400 steps):
+
+* q_loss 0.111 -> 0.012 (~10x), pi_loss 1.756 -> 1.46;
+* the pi_loss floor (~1.46) MATCHES the pilot's v2 final policy
+  cross-entropy of 1.4512 on the same data -- the new architecture +
+  training loop reproduce the pilot's training behavior (the cross-entropy
+  floor is the target entropy), while adding the replay buffer and
+  target-Q sync the pilot did manually-across-sessions or not at all.
+
+CPU-tested: 12 train tests (buffer FIFO/priority/sampling, losses finite,
+the combined objective drives BOTH heads down >50%/>10% on a fixed
+buffer, target sync on interval, priority update). 177 tests green.
+
+Remaining for the full study: the OUTER collection-and-train loop that
+wires this core to the shared-forward encoder + the planner (MCTS
+collection with the current heads as priors and the target-Q as leaf
+value -> replay add -> M train steps -> repeat), and the FLOP-accounting
+of per-decision forwards for the compute axis. Both are GPU/orchestration
+layers on top of the three CPU-verified modules now in place.

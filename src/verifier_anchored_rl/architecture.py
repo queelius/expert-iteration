@@ -131,6 +131,12 @@ if _TORCH_AVAILABLE:
             """``Q_psi(s, *)`` over all verbs; caller masks if needed."""
             return self.q_head(self.adapter(h))
 
+        def policy_logits(self, h: torch.Tensor) -> torch.Tensor:
+            """Raw (unmasked) policy-head logits ``ell_theta(s, *)``. The
+            training cross-entropy masks these to available verbs; ``pi``
+            applies the mask and softmax for inference."""
+            return self.policy_head(self.adapter(h))
+
         def pi(self, h: torch.Tensor, available_mask: torch.Tensor) -> torch.Tensor:
             """``pi_theta(. | s)`` masked-softmax over available verbs
             (method.tex Eq. policy). Unavailable positions are exactly 0.
