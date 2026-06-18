@@ -58,6 +58,12 @@ class PrefillCache:
             self._store.popitem(last=False)  # FIFO/LRU eviction of the oldest
         return prefill
 
+    def clear(self) -> None:
+        """Empty the cache in place. Callers sharing this instance (e.g. an
+        LLMContextMDP and a StateActor holding the same cache) keep their
+        reference and see the cleared cache."""
+        self._store.clear()
+
 
 class StateActor:
     """Heads-over-MathState bridge: embed(s), prior(s), leaf_value(s).

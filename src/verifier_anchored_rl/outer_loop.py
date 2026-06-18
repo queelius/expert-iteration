@@ -153,8 +153,7 @@ def run_outer_loop(
         # calls from scratch. The cache is an intra-iteration optimization
         # (one forward per decision); cross-iteration reuse would make the
         # FLOP counter deltas meaningless.
-        if hasattr(state_actor, "cache"):
-            state_actor.cache._store.clear()
+        state_actor.cache.clear()
         counts = collect_iteration(
             problems, mdp_factory, state_actor, config, buffer, rng,
             tau=tau, max_turns=max_turns, record_sink=record_sink,
