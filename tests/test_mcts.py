@@ -289,6 +289,9 @@ def test_mcts_with_uniform_prior_matches_no_prior() -> None:
 # ---------------------------------------------------------------------------
 
 
+# A deterministic chain MDP for an exact, seed-independent value_fn test.
+# (It replaces an earlier SAGBMDP V* test that asserted an exact Q on an
+# under-explored stochastic chance node, which made it RNG-seed dependent.)
 class _ChainMDP:
     """X --go--> Y (deterministic, reward 2); Y --stop--> Z (terminal).
 
@@ -303,8 +306,11 @@ class _ChainMDP:
     def is_terminal(self, s):
         return s == "Z"
 
-    def sample_transition(self, s, a, rng):
-        return {"X": ("Y", 2.0), "Y": ("Z", 0.0)}.get(s, (s, 0.0))
+    def sample_transition(self, s, a, rng):  # deterministic; rng unused
+        transitions = {"X": ("Y", 2.0), "Y": ("Z", 0.0)}
+        if s not in transitions:
+            raise ValueError(f"_ChainMDP: no transition from {s!r}")
+        return transitions[s]
 
 
 def test_value_fn_bootstrap_equals_reward_plus_discounted_leaf_value():
@@ -335,7 +341,10 @@ def test_value_fn_replaces_rollout_at_leaf():
 
 
 def test_value_fn_none_matches_rollout_default():
-    """value_fn=None must leave behavior byte-identical to the rollout path."""
+    """The default (no value_fn) path is the unchanged rollout path: same
+    seed and config give identical Q estimates run-to-run. (The actual
+    value_fn-vs-rollout divergence is asserted in
+    test_value_fn_replaces_rollout_at_leaf.)"""
     mdp = SAGBGenerative()
     cfg = MCTSConfig(num_simulations=200, c_puct=1.0, discount=1.0,
                      rollout_depth_limit=10)
