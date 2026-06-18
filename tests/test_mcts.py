@@ -288,9 +288,50 @@ def test_mcts_with_uniform_prior_matches_no_prior() -> None:
 # value_fn leaf-evaluation hook (method.tex 3.7: target-Q as bootstrap leaf).
 # ---------------------------------------------------------------------------
 
-# V* for the SAGBMDP, hand-computed in test_value_iteration:
-#   V*(S)=6, V*(A)=10, V*(G)=0, V*(B)=0.
-_VSTAR = {_S: 6.0, _A: 10.0, _G: 0.0, _B: 0.0}
+
+class _ChainMDP:
+    """X --go--> Y (deterministic, reward 2); Y --stop--> Z (terminal).
+
+    With one simulation the search expands 'go' and evaluates the
+    non-terminal leaf Y, so the value_fn bootstrap fully determines
+    Q(X, go) = r + gamma * V(Y) with zero variance (the transition is
+    deterministic and Y is never expanded deeper)."""
+
+    def actions(self, s):
+        return {"X": ["go"], "Y": ["stop"]}.get(s, [])
+
+    def is_terminal(self, s):
+        return s == "Z"
+
+    def sample_transition(self, s, a, rng):
+        return {"X": ("Y", 2.0), "Y": ("Z", 0.0)}.get(s, (s, 0.0))
+
+
+def test_value_fn_bootstrap_equals_reward_plus_discounted_leaf_value():
+    """One simulation: Q(X, go) = r + gamma * V(Y), exactly (method.tex 3.7)."""
+    mdp = _ChainMDP()
+    vf = lambda s: 5.0 if s == "Y" else 0.0
+    cfg = MCTSConfig(num_simulations=1, c_puct=1.0, discount=1.0, value_fn=vf)
+    root = mcts_search(mdp, "X", cfg, np.random.default_rng(0))
+    assert math.isclose(root_q_estimates(root)["go"], 2.0 + 1.0 * 5.0, abs_tol=1e-9)
+
+    cfg_disc = MCTSConfig(num_simulations=1, c_puct=1.0, discount=0.5, value_fn=vf)
+    root_d = mcts_search(mdp, "X", cfg_disc, np.random.default_rng(0))
+    assert math.isclose(root_q_estimates(root_d)["go"], 2.0 + 0.5 * 5.0, abs_tol=1e-9)
+
+
+def test_value_fn_replaces_rollout_at_leaf():
+    """The hook changes the leaf value used: with value_fn(Y)=5 a one-sim
+    search gives Q(X,go)=7; with no value_fn the rollout from Y reaches
+    terminal Z (reward 0), giving Q(X,go)=2."""
+    mdp = _ChainMDP()
+    cfg_vf = MCTSConfig(num_simulations=1, c_puct=1.0, discount=1.0,
+                        value_fn=lambda s: 5.0 if s == "Y" else 0.0)
+    cfg_rollout = MCTSConfig(num_simulations=1, c_puct=1.0, discount=1.0)
+    r_vf = mcts_search(mdp, "X", cfg_vf, np.random.default_rng(0))
+    r_ro = mcts_search(mdp, "X", cfg_rollout, np.random.default_rng(0))
+    assert math.isclose(root_q_estimates(r_vf)["go"], 7.0, abs_tol=1e-9)
+    assert math.isclose(root_q_estimates(r_ro)["go"], 2.0, abs_tol=1e-9)
 
 
 def test_value_fn_none_matches_rollout_default():
@@ -303,18 +344,6 @@ def test_value_fn_none_matches_rollout_default():
     qa = {a: round(q, 9) for a, q in root_q_estimates(root_a).items()}
     qb = {a: round(q, 9) for a, q in root_q_estimates(root_b).items()}
     assert qa == qb  # determinism guard; the rollout path is unchanged
-
-
-def test_value_fn_bootstraps_nonterminal_leaf_to_handcomputed_q():
-    """With value_fn = V*, the chance-node estimates reproduce the
-    hand-computed Q*(S, safe)=4 and Q*(S, risky)=6 (method.tex Eq. qmcts)."""
-    mdp = SAGBGenerative()
-    cfg = MCTSConfig(num_simulations=600, c_puct=1.0, discount=1.0,
-                     value_fn=lambda s: _VSTAR[s])
-    root = mcts_search(mdp, _S, cfg, np.random.default_rng(0))
-    q = {a: v for a, v in root_q_estimates(root).items()}
-    assert math.isclose(q["safe"], 4.0, abs_tol=0.4)
-    assert math.isclose(q["risky"], 6.0, abs_tol=0.6)
 
 
 def test_value_fn_not_called_on_terminal_leaf():
