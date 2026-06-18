@@ -1,0 +1,183 @@
+"""The outer collection-and-train loop (method.tex 3.7, Algorithm 1).
+
+Approximate Q-learning with MCTS-supplied targets, alternated with policy
+distillation. MCTS is the policy-improvement operator: each iteration it
+turns the current heads (online policy as prior, target-Q as bootstrap leaf
+value) into stronger targets pi_MCTS and Q_MCTS, which the Trainer distills
+back into the heads, which then drive better search next iteration.
+
+This module is the orchestration only. The loss/optimizer step, priority
+update, and target sync live in train.Trainer; the prior/leaf reads live in
+planner_actor.StateActor; the leaf hook lives in mcts. The loop is CPU-
+testable end to end with a FakeEncoder; the real run uses SharedForwardEncoder.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+import numpy as np
+
+from .mcts import MCTSConfig, mcts_search, root_q_estimates, visit_count_policy
+from .replay import sample_from_record
+
+
+@dataclass
+class IterationStats:
+    """Per-iteration record: the loss curve, FLOP counters, and counts."""
+
+    iteration: int
+    losses: list[dict[str, float]] = field(default_factory=list)
+    prefill_calls: int = 0
+    prefill_tokens: int = 0
+    gen_calls: int = 0
+    gen_tokens: int = 0
+    n_trajectories: int = 0
+    n_decisions: int = 0
+    n_simulations: int = 0
+    buffer_size: int = 0
+
+
+def _flop_counters(encoder: Any) -> dict[str, int]:
+    """Read the encoder's token/call counters (zeros if absent)."""
+    return {
+        "prefill_calls": int(getattr(encoder, "prefill_calls", 0)),
+        "prefill_tokens": int(getattr(encoder, "prefill_tokens", 0)),
+        "gen_calls": int(getattr(encoder, "gen_calls", 0)),
+        "gen_tokens": int(getattr(encoder, "gen_tokens", 0)),
+    }
+
+
+def collect_iteration(
+    problems: list[Any],
+    mdp_factory: Callable[[Any], Any],
+    state_actor: Any,
+    config: MCTSConfig,
+    buffer: Any,
+    rng: np.random.Generator,
+    *,
+    tau: float,
+    max_turns: int,
+    record_sink: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, int]:
+    """Drive one trajectory per problem, adding one ReplaySample per node.
+
+    At each visited non-terminal node: run MCTS (config carries the heads as
+    prior_fn and value_fn), read pi_MCTS at temperature ``tau`` and Q_MCTS,
+    embed the state, build a distillation record, and add it to the buffer.
+    The trajectory is advanced by SAMPLING the next verb from pi_MCTS (vs a
+    greedy argmax) so the buffer's state distribution stays diverse.
+    """
+    from .llm_context_mdp import available_actions
+
+    n_traj = 0
+    n_dec = 0
+    for problem in problems:
+        mdp = mdp_factory(problem)
+        state = mdp.initial_state()
+        n_traj += 1
+        while not mdp.is_terminal(state) and state.turn < max_turns:
+            avail = list(available_actions(state, depth_limit=mdp.depth_limit))
+            if not avail:
+                break
+            root = mcts_search(mdp, state, config, rng)
+            if not root.children:
+                break
+            pi = visit_count_policy(root, temperature=tau)  # {action: prob}
+            q = root_q_estimates(root)                       # {action: q}
+            record = {
+                "embedding": state_actor.embed(state).detach().cpu().tolist(),
+                "available_verbs": [a.value for a in avail],
+                "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
+                "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
+            }
+            buffer.add(sample_from_record(record))
+            if record_sink is not None:
+                record_sink(record)
+            n_dec += 1
+
+            # Advance by sampling the next verb from pi_MCTS (method.tex 3.7
+            # visit-count distribution at temperature tau).
+            actions = list(pi.keys())
+            probs = np.array([pi[a] for a in actions], dtype=float)
+            probs = probs / probs.sum()
+            action = actions[int(rng.choice(len(actions), p=probs))]
+            state, _reward = mdp.sample_transition(state, action, rng)
+
+    return {
+        "n_trajectories": n_traj,
+        "n_decisions": n_dec,
+        "n_simulations": n_dec * config.num_simulations,
+    }
+
+
+def run_outer_loop(
+    problems: list[Any],
+    mdp_factory: Callable[[Any], Any],
+    state_actor: Any,
+    trainer: Any,
+    buffer: Any,
+    *,
+    n_iterations: int,
+    train_steps_per_iter: int,
+    batch_size: int,
+    min_buffer_size: int,
+    num_simulations: int,
+    c_puct: float,
+    discount: float,
+    tau: float,
+    max_turns: int,
+    rng: np.random.Generator,
+    encoder: Any = None,
+    record_sink: Callable[[dict[str, Any]], None] | None = None,
+) -> list[IterationStats]:
+    """Run Algorithm 1 for ``n_iterations``: collect, then train M steps.
+
+    The MCTS prior is the online policy head and the leaf value is the
+    target-Q head, both via ``state_actor``. Training is gated behind a
+    ``min_buffer_size`` warmup. Target sync fires inside ``trainer`` on its
+    own N-step schedule.
+    """
+    stats: list[IterationStats] = []
+    for it in range(1, n_iterations + 1):
+        config = MCTSConfig(
+            num_simulations=num_simulations,
+            c_puct=c_puct,
+            discount=discount,
+            prior_fn=state_actor.prior,
+            value_fn=state_actor.leaf_value,
+        )
+        before = _flop_counters(encoder)
+        # Clear the prefill cache so each iteration counts its own encoder
+        # calls from scratch. The cache is an intra-iteration optimization
+        # (one forward per decision); cross-iteration reuse would make the
+        # FLOP counter deltas meaningless.
+        if hasattr(state_actor, "cache"):
+            state_actor.cache._store.clear()
+        counts = collect_iteration(
+            problems, mdp_factory, state_actor, config, buffer, rng,
+            tau=tau, max_turns=max_turns, record_sink=record_sink,
+        )
+        after = _flop_counters(encoder)
+
+        losses: list[dict[str, float]] = []
+        if len(buffer) >= min_buffer_size:
+            losses = trainer.run(train_steps_per_iter, batch_size, rng)
+
+        stats.append(IterationStats(
+            iteration=it,
+            losses=losses,
+            prefill_calls=after["prefill_calls"] - before["prefill_calls"],
+            prefill_tokens=after["prefill_tokens"] - before["prefill_tokens"],
+            gen_calls=after["gen_calls"] - before["gen_calls"],
+            gen_tokens=after["gen_tokens"] - before["gen_tokens"],
+            n_trajectories=counts["n_trajectories"],
+            n_decisions=counts["n_decisions"],
+            n_simulations=counts["n_simulations"],
+            buffer_size=len(buffer),
+        ))
+    return stats
+
+
+__all__ = ["IterationStats", "collect_iteration", "run_outer_loop"]

@@ -72,6 +72,8 @@ from .mcts import (
     root_q_estimates,
     visit_count_policy,
 )
+from .outer_loop import IterationStats, collect_iteration, run_outer_loop
+from .planner_actor import Encoder, PrefillCache, StateActor
 from .policies import TabularPolicy, policy_as_prior
 from .transformers_client import (
     TransformersEmbeddingClient,
@@ -87,10 +89,12 @@ __all__ = [
     "EmbeddingClient",
     "EmbeddingError",
     "ExpertIterationConfig",
+    "Encoder",
     "Fact",
     "Hypothesis",
     "INTERMEDIATE_VERIFIER_REWARD",
     "IterationResult",
+    "IterationStats",
     "LLMClient",
     "LLMContextMDP",
     "LLMResponseError",
@@ -113,7 +117,10 @@ __all__ = [
     "Verb",
     "VerifierCall",
     "available_actions",
+    "PrefillCache",
+    "StateActor",
     "best_action",
+    "collect_iteration",
     "evaluate_policy",
     "evaluate_with_search",
     "mcts_search",
@@ -121,6 +128,7 @@ __all__ = [
     "policy_as_prior",
     "root_q_estimates",
     "run_expert_iteration",
+    "run_outer_loop",
     "serialize_state",
     "visit_count_policy",
 ]
