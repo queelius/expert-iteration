@@ -108,3 +108,23 @@ def test_state_actor_embed_uses_cache_once_per_state():
     sa.prior(state, actions)
     sa.leaf_value(state)
     assert enc.prefill_calls == 1  # all three reads share one prefill
+
+
+def test_state_actor_prior_is_aligned_to_action_order():
+    pytest.importorskip("torch")
+    from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.planner_actor import StateActor
+
+    enc = FakeEncoder(embed_dim=16)
+    actor = HiddenStateActor(embed_dim=16)
+    sa = StateActor(enc, actor, depth_limit=3)
+
+    mdp = _toy_mdp()
+    state = mdp.initial_state()
+    actions = list(mdp.actions(state))
+
+    prior_fwd = sa.prior(state, actions)
+    prior_rev = sa.prior(state, list(reversed(actions)))
+    # The masked softmax is over the same verb set either way, so reversing
+    # the action list must reverse the returned probabilities exactly.
+    assert prior_rev == list(reversed(prior_fwd))

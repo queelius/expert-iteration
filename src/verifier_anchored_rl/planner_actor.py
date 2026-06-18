@@ -85,11 +85,11 @@ class StateActor:
         from .heads import NUM_VERBS, VERB_NAME_TO_INDEX
 
         idxs = [VERB_NAME_TO_INDEX[a.verb.value] for a in actions]
-        h = self.embed(state).unsqueeze(0)
         mask = torch.zeros(1, NUM_VERBS, dtype=torch.bool)
         for j in idxs:
             mask[0, j] = True
         with torch.no_grad():
+            h = self.embed(state).unsqueeze(0)
             pi = self.actor.pi(h, mask)  # masked softmax, 0 off the mask
         return [float(pi[0, j]) for j in idxs]
 
@@ -102,8 +102,8 @@ class StateActor:
         avail = list(available_actions(state, depth_limit=self.depth_limit))
         if not avail:
             return 0.0  # defensive: MCTS only calls value_fn at non-terminal leaves
-        h = self.embed(state).unsqueeze(0)
         with torch.no_grad():
+            h = self.embed(state).unsqueeze(0)
             qt = self.actor.target_q(h)[0]
         return max(float(qt[VERB_NAME_TO_INDEX[v.value]]) for v in avail)
 
