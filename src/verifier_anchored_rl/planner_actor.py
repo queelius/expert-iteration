@@ -53,7 +53,6 @@ class PrefillCache:
             return self._store[prefix_text]
         prefill = encoder.encode(prefix_text)
         self._store[prefix_text] = prefill
-        self._store.move_to_end(prefix_text)
         if len(self._store) > self.capacity:
             self._store.popitem(last=False)  # FIFO/LRU eviction of the oldest
         return prefill

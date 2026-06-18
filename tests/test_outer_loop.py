@@ -58,27 +58,48 @@ def test_outer_loop_runs_and_populates_stats():
 
 
 def test_outer_loop_closes_prior_shifts_search():
-    """After training, the policy prior is no longer uniform and it changes
-    the MCTS visit distribution (search -> distill -> better prior ->
-    different search)."""
+    """The loop CLOSES: training moves the learned prior, which then steers
+    MCTS differently. Captures the prior BEFORE training and asserts it
+    changed after (a random init is already non-uniform, so the before/after
+    delta is what isolates the training effect), that the combined loss
+    trended down, and that the trained prior yields a different search visit
+    distribution than a uniform prior."""
     pytest.importorskip("torch")
     from verifier_anchored_rl.mcts import MCTSConfig, mcts_search, visit_count_policy
     from verifier_anchored_rl.outer_loop import run_outer_loop
 
+    import torch
+    torch.manual_seed(135)
     enc, actor, sa, buf, trainer, mdp_factory = _build()
     problems = [("2+2", "4")]
-    run_outer_loop(
+    mdp = mdp_factory(problems[0])
+    s0 = mdp.initial_state()
+    acts = list(mdp.actions(s0))
+
+    prior_before = sa.prior(s0, acts)  # untrained (random init)
+
+    stats = run_outer_loop(
         problems, mdp_factory, sa, trainer, buf,
         n_iterations=4, train_steps_per_iter=40, batch_size=8,
         min_buffer_size=4, num_simulations=8, c_puct=1.5, discount=1.0,
         tau=1.0, max_turns=4, rng=np.random.default_rng(0), encoder=enc)
 
-    mdp = mdp_factory(problems[0])
-    s0 = mdp.initial_state()
-    acts = list(mdp.actions(s0))
-    prior = sa.prior(s0, acts)
-    assert max(prior) - min(prior) > 1e-3        # diverged from uniform
+    prior_after = sa.prior(s0, acts)
+    # Training MOVED the prior (not merely that it is non-uniform at init).
+    assert max(abs(a - b) for a, b in zip(prior_after, prior_before)) > 1e-3
 
+    # The combined loss trended down across training (mean of the last
+    # iteration's steps below the mean of the first iteration's steps).
+    # Use the first and last iterations that actually trained (training is
+    # gated behind min_buffer_size, so iteration 0 may be empty).
+    trained = [s for s in stats if s.losses]
+    assert trained, "expected at least one training iteration"
+    first = [d["total"] for d in trained[0].losses]
+    last = [d["total"] for d in trained[-1].losses]
+    assert first and last
+    assert sum(last) / len(last) < sum(first) / len(first)
+
+    # The learned prior steers search differently from a uniform prior.
     cfg_u = MCTSConfig(num_simulations=24, c_puct=2.0, discount=1.0)
     cfg_t = MCTSConfig(num_simulations=24, c_puct=2.0, discount=1.0,
                        prior_fn=sa.prior)
@@ -86,4 +107,4 @@ def test_outer_loop_closes_prior_shifts_search():
     rt = mcts_search(mdp, s0, cfg_t, np.random.default_rng(1))
     vu = {a.verb.value: round(v, 6) for a, v in visit_count_policy(ru).items()}
     vt = {a.verb.value: round(v, 6) for a, v in visit_count_policy(rt).items()}
-    assert vu != vt                              # the learned prior steers search
+    assert vu != vt
