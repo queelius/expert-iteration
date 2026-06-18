@@ -743,18 +743,29 @@ def _schema_for(verb: Verb, state: MathState) -> dict[str, Any]:
     raise ValueError(f"unknown verb: {verb!r}")
 
 
-def _prompt_for(verb: Verb, state: MathState) -> str:
-    """User-message body for the verb-instantiator call.
+def _state_prefix(state: MathState) -> str:
+    """The verb-independent prefix of the verb-instantiator prompt: the
+    serialized state, ending exactly at the ``[STATE_END]`` sentinel.
 
-    The prompt encodes the expected JSON shape as a natural-language
-    field list with a one-shot example, rather than handing the model a
-    JSON Schema dict. Small instruct-tuned models tend to reproduce
-    JSON Schema structures verbatim (returning the schema's
-    ``properties``/``required``/``type`` keys instead of values
-    matching them); the field-list-plus-example form sidesteps this
-    failure mode.
+    This is the shared span that the benchmark architecture's single
+    forward pass prefills once (method.tex Section 3.4): ``embed(s) =
+    h_T`` is the hidden state at this span's final token (the sentinel),
+    and the same prefill's KV cache seeds the verb continuation. Holding
+    the id-block and verb fields in the per-verb suffix keeps ``h_T``
+    literally at ``[STATE_END]`` and keeps the cached prefix the
+    expensive, verb-independent part.
     """
-    serialized = serialize_state(state)
+    return f"State:\n{serialize_state(state)}"
+
+
+def _verb_suffix(verb: Verb, state: MathState) -> str:
+    """The per-verb suffix appended after the shared state prefix:
+    addressable identifiers, the chosen verb, and its field description.
+
+    ``_state_prefix(state) + _verb_suffix(verb, state)`` is byte-identical
+    to the historical ``_prompt_for`` output, so the HTTP and mock paths
+    are unchanged.
+    """
     sg_ids = _ids_of_type(state, "sg_")
     hyp_ids = _ids_of_type(state, "hyp_")
     fact_ids = _ids_of_type(state, "fact_")
@@ -771,12 +782,32 @@ def _prompt_for(verb: Verb, state: MathState) -> str:
     fields = _verb_fields_description(verb, state)
 
     return (
-        f"State:\n{serialized}\n\n"
+        f"\n\n"
         f"Existing identifiers:\n{id_block}\n\n"
         f"Verb: {verb.value}\n\n"
         f"{fields}\n\n"
         f"Return only the JSON object."
     )
+
+
+def _prompt_for(verb: Verb, state: MathState) -> str:
+    """User-message body for the verb-instantiator call.
+
+    The prompt encodes the expected JSON shape as a natural-language
+    field list with a one-shot example, rather than handing the model a
+    JSON Schema dict. Small instruct-tuned models tend to reproduce
+    JSON Schema structures verbatim (returning the schema's
+    ``properties``/``required``/``type`` keys instead of values
+    matching them); the field-list-plus-example form sidesteps this
+    failure mode.
+
+    Composed from ``_state_prefix`` (the shared, cacheable state span)
+    and ``_verb_suffix`` (the per-verb tail) so the benchmark
+    architecture's shared-forward encoder can prefill the prefix once;
+    the concatenation here is byte-identical to the historical single
+    f-string.
+    """
+    return _state_prefix(state) + _verb_suffix(verb, state)
 
 
 def _verb_fields_description(verb: Verb, state: MathState) -> str:

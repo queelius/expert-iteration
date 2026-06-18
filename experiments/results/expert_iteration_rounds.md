@@ -680,3 +680,51 @@ return_tensors="pt")` returns a BatchEncoding (input_ids +
 attention_mask), not a bare tensor; the client uses return_dict=True and
 passes both to generate(). 13 client tests use injected fakes honoring
 this contract; no GPU needed for the test suite.
+
+
+## Shared single-forward encoder: frodo verification (2026-06-18)
+
+Module 2 of the benchmark architecture (method.tex 3.4 "one forward, not
+two"): one state prefill yields both h_T for the heads and the KV cache
+for verb generation, replacing the pilot's two independent forwards (one
+embed-endpoint call, one full re-encode for generation).
+`SharedForwardEncoder`, verified on frodo against Qwen2.5-1.5B.
+
+Refactor: `_prompt_for` split into `_state_prefix(state)` (ends at the
+[STATE_END] sentinel) + `_verb_suffix(verb, state)`, byte-identical
+concatenation, so the HTTP/mock paths are unchanged and the shared
+prefix is exactly the verb-independent, cacheable span.
+
+Verified properties:
+
+* **h_T equivalence: max|h_T_shared - h_T_standalone| = 0.00e+00** (both
+  bf16 and fp32). The hidden state from the shared prefill is bit-
+  identical to a standalone forward over the same prefix: the heads see
+  the same embedding whether or not the cache is reused.
+* **greedy generation equivalence: token-identical under fp32** (cached-
+  prefill vs a fresh full prefix+suffix prefill produce the same tokens).
+  Under bf16 they agree except for an occasional final token (observed:
+  "Divide by 2." vs "Divide by 2:"): the documented GPU-compute /
+  reduction-order floor (cf. the B-sweep section), amplified by bf16,
+  not a plumbing error. The fp32 run isolates this cleanly.
+* **prefill saving: 53%** for a 4-verb node (1 state prefill of 228 tok +
+  4 short suffixes = 616 tok, vs 4 full re-prefills = 1300 tok). The
+  saving grows with state length and branching factor.
+
+Two findings worth carrying forward:
+
+1. A cache-plumbing bug was caught only by the real-model smoke comparing
+   against ground truth: passing the suffix alone to generate (instead of
+   the full prefix+suffix with the cache) makes generate infer a wrong
+   attention mask, and the continuation degenerates
+   (target_id "none", empty children). The fix passes the full sequence
+   plus the prefix cache; generate then recomputes only the suffix
+   onward. The fake-based unit tests could not have caught this (it is
+   real-attention behavior) -- the frodo smoke is load-bearing.
+2. Under raw completion (no chat template, the faithful 3.4 form), the
+   1.5B model's output is structurally valid JSON but sometimes
+   semantically off on a fresh state (it produced valid content here once
+   the cache was correct). Whether the benchmark study uses raw
+   completion or chat-template framing for the verb-instantiator is an
+   open question to settle empirically; the encoder supports either via
+   the prefix/suffix text it is handed.
