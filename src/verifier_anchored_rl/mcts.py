@@ -124,6 +124,12 @@ PriorFn = Callable[[object, list[object]], list[float]]
 # A rollout policy takes (state, action_list, rng) and returns one action.
 RolloutPolicy = Callable[[object, list[object], object], object]
 
+# A leaf-value estimator V(s): used in place of a rollout to bootstrap the
+# value of a non-terminal expanded leaf. In expert iteration this is
+# max_a' Q_target(s', a') (method.tex Eq. bellmantarget); MCTS thus becomes
+# AlphaZero-style (value net at the leaf) rather than pure rollout.
+ValueFn = Callable[[object], float]
+
 
 @dataclass
 class MCTSConfig(Generic[S, A]):
@@ -152,6 +158,11 @@ class MCTSConfig(Generic[S, A]):
         Optional rollout policy. Signature
         ``rollout(state, action_list, rng)`` returns one action. If
         ``None``, a uniform random action is sampled.
+    value_fn:
+        Optional leaf-value estimator ``value(state) -> float``. When
+        provided, a non-terminal expanded leaf is scored by ``value_fn``
+        instead of a rollout (terminal leaves remain 0). ``None`` keeps
+        the rollout behavior unchanged.
     """
 
     num_simulations: int = 100
@@ -160,6 +171,7 @@ class MCTSConfig(Generic[S, A]):
     rollout_depth_limit: int = 100
     prior_fn: PriorFn | None = None
     rollout_policy: RolloutPolicy | None = None
+    value_fn: ValueFn | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +463,11 @@ def mcts_search(
 
         if child_decision.terminal:
             leaf_value = 0.0
+        elif config.value_fn is not None:
+            # Bootstrap V(s') from the learned estimator (method.tex 3.7),
+            # in place of a rollout. The per-edge backup still folds in the
+            # expansion reward, so Q(s,a) -> r + gamma * V(s').
+            leaf_value = config.value_fn(child_decision.state)
         else:
             leaf_value = _rollout(mdp, child_decision.state, config, rng)
 
