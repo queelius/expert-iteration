@@ -772,3 +772,36 @@ collection with the current heads as priors and the target-Q as leaf
 value -> replay add -> M train steps -> repeat), and the FLOP-accounting
 of per-decision forwards for the compute axis. Both are GPU/orchestration
 layers on top of the three CPU-verified modules now in place.
+
+
+## Outer loop: collect -> train -> re-prior (2026-06-18)
+
+The outer collection-and-train loop (method.tex 3.7, Algorithm 1) wiring
+the three CPU-verified modules (architecture/train/replay) to the planner
+(mcts) and the in-process encoder (shared_forward). What it adds over the
+pilot's one-shot offline distillation:
+
+* a `value_fn` leaf-evaluation hook in MCTS (additive; value_fn=None keeps
+  the rollout path, so the section-10 triangulation tests are untouched).
+  The leaf value is max_a' Q_target(s', a'), the bootstrap of approximate
+  Q-learning, so search is now AlphaZero-style rather than pure rollout.
+* a StateActor bridge (planner_actor.py) that supplies the MCTS prior
+  (online policy head) and leaf value (target-Q head) plus embed(s) over
+  MathState, all sharing one prefill per node via a state-prefix-keyed
+  PrefillCache (the "one forward per decision" property).
+* an additive encoder generation path in LLMContextMDP (one forward per
+  node via encoder.instantiate_json; the llm_client path is unchanged when
+  no encoder is passed).
+* the loop itself (outer_loop.py): collect_iteration drives one trajectory
+  per problem, samples the next verb from pi_MCTS at temperature tau, and
+  adds one ReplaySample per node; run_outer_loop alternates collection with
+  Trainer.run(M) under a warmup gate and records per-iteration FLOP/loss
+  counts in IterationStats.
+
+CPU-tested end to end with FakeEncoder + EchoLLMClient: the load-bearing
+test asserts the loop CLOSES (after training the learned prior diverges
+from uniform and shifts the MCTS visit distribution), not merely that it
+runs. Full suite green.
+
+Frodo run: `python experiments/run_outer_loop.py` (record numbers here
+after the first GPU run).
