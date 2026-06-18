@@ -134,9 +134,17 @@ class TransformersLLMClient:
 
         last_err: Exception | None = None
         for attempt in range(self.max_retries + 1):
-            input_ids = self.tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True, return_tensors="pt"
-            ).to(self.model.device)
+            # transformers 5.x returns a BatchEncoding (input_ids +
+            # attention_mask), not a bare tensor; pass both to generate so
+            # the mask is correct under padding.
+            encoded = self.tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                return_dict=True,
+            )
+            encoded = {k: v.to(self.model.device) for k, v in encoded.items()}
+            prompt_len = encoded["input_ids"].shape[1]
 
             if seed is not None:
                 # Per-attempt bump mirrors OpenAICompatibleLLMClient: a
@@ -147,7 +155,7 @@ class TransformersLLMClient:
             do_sample = temperature > 0
             with torch.no_grad():
                 output = self.model.generate(
-                    input_ids,
+                    **encoded,
                     max_new_tokens=max_tokens,
                     do_sample=do_sample,
                     temperature=temperature if do_sample else None,
@@ -155,7 +163,7 @@ class TransformersLLMClient:
                     top_k=None,
                     pad_token_id=self.tokenizer.eos_token_id,
                 )
-            new_tokens = output[0][input_ids.shape[1] :]
+            new_tokens = output[0][prompt_len:]
             self.generate_calls += 1
             self.generated_tokens += int(new_tokens.shape[0])
             content = self.tokenizer.decode(new_tokens, skip_special_tokens=True)

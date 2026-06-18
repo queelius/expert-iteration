@@ -642,3 +642,41 @@ embedder/checkpoint dim mismatches fail loudly. If old-space continuity
 is ever required: pin an older Ollama on a second port, or serve the
 qwen2.5:3b GGUF via a bare llama-server with embeddings enabled (pin a
 known-good build; upstream had a 501-even-with-flag regression).
+
+
+## In-process Transformers backend: frodo smoke PASS (2026-06-18)
+
+Stage 2 of the migration off the Ollama HTTP serving stack (post-mortem
+above). The frozen model now runs in-process on the GPU box (frodo,
+RTX 3060 12 GB) via `TransformersLLMClient` / `TransformersEmbeddingClient`,
+both implementing the existing protocols so the MDP/MCTS/heads are
+untouched.
+
+Environment (run provenance): torch 2.12.0+cu130, transformers 5.12.0,
+Python 3.12, CUDA 13.0, driver 580.159.03, uv-managed venv at
+`frodo:~/expert-iteration/.venv`. Substrate Qwen/Qwen2.5-1.5B-Instruct
+(hidden_size 1536, bf16, 2.88 GiB VRAM, 4.6s load).
+
+Smoke (`experiments/run_transformers_smoke.py`) verified all four
+properties the HTTP stack could not provide:
+
+* seeded-generation reproducibility: seed 42 / temp 0.7 -> identical
+  output across 3 calls (the property server-side seeding could not
+  guarantee under load);
+* hidden-state embedding: masked-mean pool of the last hidden layer,
+  dim 1536, L2 = 1.0, deterministic (the adapter architecture's real
+  input, not the embed-endpoint proxy);
+* countable forwards: 3 generate calls / 72 tokens reported by the
+  client (the compute-axis truth an API hides);
+* one frozen model serving both roles via share_model_with (one copy
+  in VRAM).
+
+Latencies: ~0.3s warm generation, 0.16s embedding, B=3 MCTS in 2.9s
+(~25 tok/s incl. search overhead). The 1.5B substrate is comfortable on
+12 GB.
+
+API note for future readers: transformers 5.x `apply_chat_template(...,
+return_tensors="pt")` returns a BatchEncoding (input_ids +
+attention_mask), not a bare tensor; the client uses return_dict=True and
+passes both to generate(). 13 client tests use injected fakes honoring
+this contract; no GPU needed for the test suite.

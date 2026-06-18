@@ -40,9 +40,13 @@ class FakeTokenizer:
         self.chat_template_calls = []  # records the messages of each call
 
     def apply_chat_template(self, messages, add_generation_prompt=True,
-                            return_tensors="pt"):
+                            return_tensors="pt", return_dict=False):
         self.chat_template_calls.append([dict(m) for m in messages])
-        return torch.arange(1, 6).unsqueeze(0)  # (1, 5) prompt ids
+        ids = torch.arange(1, 6).unsqueeze(0)  # (1, 5) prompt ids
+        if return_dict:
+            # transformers 5.x returns a BatchEncoding (dict-like).
+            return {"input_ids": ids, "attention_mask": torch.ones_like(ids)}
+        return ids
 
     def decode(self, token_ids, skip_special_tokens=True):
         text = self.scripted[min(self.decode_calls, len(self.scripted) - 1)]
@@ -77,7 +81,9 @@ class FakeModel:
         # interface), NOT Python's eval() builtin; nothing is executed.
         return self
 
-    def generate(self, input_ids, **kwargs):
+    def generate(self, input_ids=None, attention_mask=None, **kwargs):
+        # The client calls generate(**encoded, ...), so input_ids and
+        # attention_mask arrive as keywords (transformers 5.x contract).
         self.generate_kwargs.append(kwargs)
         continuation = torch.full((1, self.continuation_len), 9, dtype=torch.long)
         return torch.cat([input_ids, continuation], dim=1)
