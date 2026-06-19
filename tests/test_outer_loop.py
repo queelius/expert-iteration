@@ -134,3 +134,51 @@ def test_loss_summary_handles_empty():
 
     s = loss_summary([])
     assert math.isnan(s["q_first"]) and math.isnan(s["total_last"])
+
+
+def test_collect_iteration_fires_decision_and_trajectory_callbacks():
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    decisions = []
+    trajectories = []
+    counts = collect_iteration(
+        [("2+2", "4"), ("3+3", "6")], mdp_factory, sa, config, buf,
+        np.random.default_rng(0), tau=1.0, max_turns=4,
+        on_decision=lambda info: decisions.append(info),
+        on_trajectory_end=lambda done: trajectories.append(done),
+    )
+
+    assert len(decisions) == counts["n_decisions"]
+    assert decisions[0]["iteration_problem_index"] == 0
+    assert "chosen_verb" in decisions[0]
+    assert "gen_tokens" in decisions[0]
+    assert trajectories == [1, 2]      # one callback per completed trajectory
+
+
+def test_collect_iteration_start_problem_skips_done_trajectories():
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    trajectories = []
+    collect_iteration(
+        [("2+2", "4"), ("3+3", "6")], mdp_factory, sa, config, buf,
+        np.random.default_rng(0), tau=1.0, max_turns=4, start_problem=1,
+        on_trajectory_end=lambda done: trajectories.append(done),
+    )
+    # problem index 0 skipped, only the second trajectory runs
+    assert trajectories == [2]

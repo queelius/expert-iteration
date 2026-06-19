@@ -90,20 +90,26 @@ def collect_iteration(
     tau: float,
     max_turns: int,
     record_sink: Callable[[dict[str, Any]], None] | None = None,
+    on_decision: Callable[[dict[str, Any]], None] | None = None,
+    on_trajectory_end: Callable[[int], None] | None = None,
+    start_problem: int = 0,
+    iteration_index: int = 0,
 ) -> dict[str, int]:
     """Drive one trajectory per problem, adding one ReplaySample per node.
 
-    At each visited non-terminal node: run MCTS (config carries the heads as
-    prior_fn and value_fn), read pi_MCTS at temperature ``tau`` and Q_MCTS,
-    embed the state, build a distillation record, and add it to the buffer.
-    The trajectory is advanced by SAMPLING the next verb from pi_MCTS (vs a
-    greedy argmax) so the buffer's state distribution stays diverse.
+    See module docstring. ``start_problem`` skips the first k problems (for
+    resume); ``on_decision`` fires per decision with a labeled info dict;
+    ``on_trajectory_end(done)`` fires after each completed trajectory with the
+    1-based count of trajectories finished this iteration.
     """
     from .llm_context_mdp import available_actions
 
     n_traj = 0
     n_dec = 0
-    for problem in problems:
+    enc = getattr(state_actor, "encoder", None)
+    for p_idx, problem in enumerate(problems):
+        if p_idx < start_problem:
+            continue
         mdp = mdp_factory(problem)
         state = mdp.initial_state()
         n_traj += 1
@@ -114,8 +120,8 @@ def collect_iteration(
             root = mcts_search(mdp, state, config, rng)
             if not root.children:
                 break
-            pi = visit_count_policy(root, temperature=tau)  # {action: prob}
-            q = root_q_estimates(root)                       # {action: q}
+            pi = visit_count_policy(root, temperature=tau)
+            q = root_q_estimates(root)
             record = {
                 "embedding": state_actor.embed(state).detach().cpu().tolist(),
                 "available_verbs": [a.value for a in avail],
@@ -127,13 +133,31 @@ def collect_iteration(
                 record_sink(record)
             n_dec += 1
 
-            # Advance by sampling the next verb from pi_MCTS (method.tex 3.7
-            # visit-count distribution at temperature tau).
             actions = list(pi.keys())
             probs = np.array([pi[a] for a in actions], dtype=float)
             probs = probs / probs.sum()
-            action = actions[int(rng.choice(len(actions), p=probs))]
-            state, _reward = mdp.sample_transition(state, action, rng)
+            chosen = actions[int(rng.choice(len(actions), p=probs))]
+
+            if on_decision is not None:
+                top = max(pi.items(), key=lambda kv: kv[1])
+                on_decision({
+                    "iteration": iteration_index,
+                    "iteration_problem_index": p_idx,
+                    "turn": int(state.turn),
+                    "chosen_verb": chosen.verb.value,
+                    "pi_argmax_verb": top[0].verb.value,
+                    "pi_argmax_prob": float(top[1]),
+                    "q_chosen": float(q.get(chosen, float("nan"))),
+                    "prefill_calls": int(getattr(enc, "prefill_calls", 0)),
+                    "prefill_tokens": int(getattr(enc, "prefill_tokens", 0)),
+                    "gen_calls": int(getattr(enc, "gen_calls", 0)),
+                    "gen_tokens": int(getattr(enc, "gen_tokens", 0)),
+                })
+
+            state, _reward = mdp.sample_transition(state, chosen, rng)
+
+        if on_trajectory_end is not None:
+            on_trajectory_end(p_idx + 1)
 
     return {
         "n_trajectories": n_traj,
