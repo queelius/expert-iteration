@@ -10,6 +10,7 @@ per-trajectory checkpoint.pt, and a summary.md rewritten each iteration.
 from __future__ import annotations
 
 import argparse
+import json
 import platform
 import socket
 import subprocess
@@ -145,6 +146,19 @@ def main(argv=None) -> int:
         else:
             start_iteration = ckpt["iteration"] + 1
             start_problem = 0
+        # Mark the run live again and record that a resume happened (the dir
+        # was left "failed" by the interrupted process). Status flips to
+        # "completed" at the end as usual.
+        meta_path = run_dir / "metadata.json"
+        meta = json.loads(meta_path.read_text())
+        meta["status"] = "running"
+        meta["resume_count"] = int(meta.get("resume_count", 0)) + 1
+        meta["resumed_from"] = {
+            "phase": ckpt["phase"], "iteration": ckpt["iteration"],
+            "global_step": ckpt["global_step"],
+            "start_iteration": start_iteration, "start_problem": start_problem,
+        }
+        meta_path.write_text(json.dumps(meta, indent=2, default=str))
     else:
         meta = {
             "args": vars(args), "hostname": socket.gethostname(),
@@ -168,7 +182,13 @@ def main(argv=None) -> int:
     records_path = str(run_dir / "records.jsonl")
     metrics_path = str(run_dir / "metrics.jsonl")
     summary_path = run_dir / "summary.md"
+    # On resume, re-seed the rendered summary from the iterations already
+    # recorded in metrics.jsonl (which is append-only and complete) so the
+    # rewritten summary.md keeps the pre-resume rows rather than starting blank.
     summaries = []
+    if args.resume and Path(metrics_path).exists():
+        with open(metrics_path) as f:
+            summaries = [json.loads(line) for line in f if line.strip()]
 
     def log(msg: str) -> None:
         line = msg if msg.endswith("\n") else msg + "\n"
