@@ -84,17 +84,32 @@ class StateActor:
 
         return self.cache.get_or_encode(_state_prefix(state), self.encoder).hidden
 
+    def _head_input(self, state: Any) -> Any:
+        """``embed(s)`` reconciled to the heads' device and dtype.
+
+        The frozen encoder runs on the GPU in bf16, so ``embed(s) = h_T`` is a
+        bf16 CUDA tensor, whereas the small trainable heads live wherever their
+        parameters do (fp32 on CPU in the harness). Feeding the raw hidden
+        state straight into the heads is a device/dtype mismatch; cast it to
+        the heads' own (device, dtype) so the bridge works regardless of where
+        either side lives."""
+        h = self.embed(state).unsqueeze(0)
+        ref = next(self.actor.parameters(), None)
+        if ref is not None:
+            h = h.to(device=ref.device, dtype=ref.dtype)
+        return h
+
     def prior(self, state: Any, actions: list[Any]) -> list[float]:
         import torch
 
         from .heads import NUM_VERBS, VERB_NAME_TO_INDEX
 
         idxs = [VERB_NAME_TO_INDEX[a.verb.value] for a in actions]
-        mask = torch.zeros(1, NUM_VERBS, dtype=torch.bool)
-        for j in idxs:
-            mask[0, j] = True
         with torch.no_grad():
-            h = self.embed(state).unsqueeze(0)
+            h = self._head_input(state)
+            mask = torch.zeros(1, NUM_VERBS, dtype=torch.bool, device=h.device)
+            for j in idxs:
+                mask[0, j] = True
             pi = self.actor.pi(h, mask)  # masked softmax, 0 off the mask
         return [float(pi[0, j]) for j in idxs]
 
@@ -108,7 +123,7 @@ class StateActor:
         if not avail:
             return 0.0  # defensive: MCTS only calls value_fn at non-terminal leaves
         with torch.no_grad():
-            h = self.embed(state).unsqueeze(0)
+            h = self._head_input(state)
             qt = self.actor.target_q(h)[0]
         return max(float(qt[VERB_NAME_TO_INDEX[v.value]]) for v in avail)
 

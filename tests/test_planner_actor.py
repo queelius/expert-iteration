@@ -110,6 +110,70 @@ def test_state_actor_embed_uses_cache_once_per_state():
     assert enc.prefill_calls == 1  # all three reads share one prefill
 
 
+class _CastingFakeEncoder(FakeEncoder):
+    """FakeEncoder that returns the hidden state in a chosen dtype/device,
+    mimicking the real SharedForwardEncoder (bf16 on CUDA) instead of the
+    default fp32-on-CPU fake. Used to reproduce the GPU-box device/dtype
+    mismatch on a machine without changing any other behavior."""
+
+    def __init__(self, embed_dim: int, *, dtype, device: str = "cpu"):
+        super().__init__(embed_dim=embed_dim)
+        self._dtype = dtype
+        self._device = device
+
+    def encode(self, prefix_text: str):
+        prefill = super().encode(prefix_text)
+        prefill.hidden = prefill.hidden.to(device=self._device, dtype=self._dtype)
+        return prefill
+
+
+def test_state_actor_reconciles_bf16_hidden_with_fp32_heads():
+    """The real encoder emits a bf16 hidden state; the fp32 heads must still
+    consume it. Reproduces the dtype half of the GPU-box crash on CPU."""
+    pytest.importorskip("torch")
+    import torch
+    from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.planner_actor import StateActor
+
+    enc = _CastingFakeEncoder(embed_dim=16, dtype=torch.bfloat16)
+    actor = HiddenStateActor(embed_dim=16)  # fp32 on CPU, like the harness
+    sa = StateActor(enc, actor, depth_limit=3)
+
+    mdp = _toy_mdp()
+    state = mdp.initial_state()
+    actions = list(mdp.actions(state))
+
+    prior = sa.prior(state, actions)
+    assert abs(sum(prior) - 1.0) < 1e-5
+    assert np.isfinite(sa.leaf_value(state))
+
+
+@pytest.mark.skipif(
+    "not __import__('torch').cuda.is_available()",
+    reason="needs a CUDA device",
+)
+def test_state_actor_reconciles_cuda_hidden_with_cpu_heads():
+    """The real encoder emits a CUDA bf16 hidden state while the heads stay on
+    CPU; the bridge must reconcile both device and dtype. This is the exact
+    configuration that crashed the first GPU run."""
+    pytest.importorskip("torch")
+    import torch
+    from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.planner_actor import StateActor
+
+    enc = _CastingFakeEncoder(embed_dim=16, dtype=torch.bfloat16, device="cuda")
+    actor = HiddenStateActor(embed_dim=16)  # fp32 on CPU, like the harness
+    sa = StateActor(enc, actor, depth_limit=3)
+
+    mdp = _toy_mdp()
+    state = mdp.initial_state()
+    actions = list(mdp.actions(state))
+
+    prior = sa.prior(state, actions)
+    assert abs(sum(prior) - 1.0) < 1e-5
+    assert np.isfinite(sa.leaf_value(state))
+
+
 def test_state_actor_prior_is_aligned_to_action_order():
     pytest.importorskip("torch")
     from verifier_anchored_rl.architecture import HiddenStateActor

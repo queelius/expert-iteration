@@ -803,5 +803,107 @@ test asserts the loop CLOSES (after training the learned prior diverges
 from uniform and shifts the MCTS visit distribution), not merely that it
 runs. Full suite green.
 
-Frodo run: `python experiments/run_outer_loop.py` (record numbers here
-after the first GPU run).
+Frodo run: `python experiments/run_outer_loop.py` (numbers recorded below).
+
+
+## First GPU outer-loop run: frodo (2026-06-18)
+
+The first end-to-end run of the outer collection-and-train loop on real
+model forwards (the headline algorithm of method.tex 3.7, Algorithm 1).
+The CPU FakeEncoder had already proven the loop CLOSES; this run measures
+the real magnitudes and the per-decision compute cost on the GPU box.
+
+Provenance: host frodo, RTX 3060 12 GB, driver 580.159.03, torch
+2.9.1+cu128, transformers 5.5.3, CUDA 12.8, Python 3.12.8. Code: base
+commit 218aa88 PLUS an uncommitted device/dtype fix in
+`planner_actor.StateActor` (see "Device/dtype bridge" below); that fix is
+required for any GPU run and should be committed alongside this entry.
+
+Config (all defaults): model Qwen/Qwen2.5-Math-1.5B-Instruct, iterations 3,
+num_simulations 16, train_steps 200, batch_size 16, c_puct 1.5,
+discount 1.0, tau 1.0, sync_interval 200, max_turns 8, depth_limit 3,
+seed 0, problems=train (4 toy problems: multiply_small, gsm8k_toy_1,
+algebra_toy_1, factor). Wall clock about 14.7 hours (08:30 to 23:15),
+GPU about 20 percent utilization throughout (latency-bound batch-1
+decoding), about 3.75 GB VRAM, 50 to 65 W. No crash, no mid-run errors.
+
+### Per-iteration results
+
+| iter | decisions | sims | buffer | prefill calls | prefill tok | gen calls | gen tok | L_total first to last |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 32 | 512 | 32 | 39 | 3995 | 876 | 284071 | 1.4175 to 1.3863 |
+| 2 | 32 | 512 | 64 | 38 | 3790 | 880 | 286935 | 1.4361 to 1.4113 |
+| 3 | 32 | 512 | 96 | 33 | 3119 | 880 | 291439 | 1.3878 to 1.3874 |
+
+decisions=32 per iteration is 4 problems times 8 turns: every trajectory
+ran to max_turns. buffer grows by 32 per iteration (capacity 2048, no
+eviction). The loop ran the full 3 iterations and trained 200 steps per
+iteration (buffer was past the min_buffer warmup from iteration 1).
+
+### Per-decision compute cost (the GPU-specific headline)
+
+Averaged over all 96 decisions:
+
+* generation: 27.5 LLM calls and 8984 generated tokens per decision
+* prefill: 1.15 calls and 114 tokens per decision
+* generation to prefill token ratio: about 79 to 1
+
+Totals over the run: 2636 generation calls (862445 tokens) and 110 prefill
+calls (10904 tokens). Two readings:
+
+1. The "one forward per decision" prefill property holds: prefill calls per
+   decision is about 1.15 (close to 1), so the state-prefix PrefillCache is
+   doing its job. The slight excess over 1.0 is the depth-limit lookahead
+   states that also get prefilled. State prefixes are about 114 tokens.
+2. Generation dominates compute by about 79 to 1 in tokens. The cost of a
+   decision is overwhelmingly the verb-instantiation generations inside
+   MCTS (about 27 generations per decision at num_simulations=16), not the
+   single state prefill the heads consume. This is why the run is 14.7
+   hours of mostly-generation on a 3060, and it is the number the
+   compute-vs-accuracy frontier in the experimental plan builds on.
+
+### Loss reading and an important limitation
+
+The harness summary prints L_total only (the combined objective
+L_Q + lambda*L_pi), first vs last train step per iteration. L_total sits
+near 1.39 to 1.44 and is roughly flat across iterations: within an
+iteration the 200 train steps lower it slightly, and the first-step value
+ticks back up at the start of the next iteration as newly collected
+samples shift the buffer distribution (clearest at iteration 2 start,
+1.4361).
+
+The flat L_total is expected and is NOT evidence against the
+approximate-Q-learning signal: L_total here is dominated by L_pi (the
+policy cross-entropy), whose floor is the target entropy, about 1.4, which
+matches the pilot's v2 final policy CE of 1.4512 and the run_train_demo
+floor of about 1.46. The L_Q term is small (order 0.01 to 0.1 in the CPU
+demo) and is buried inside L_total at this scale.
+
+LIMITATION (motivates the harness retrofit): this run did NOT persist the
+L_Q vs L_pi split, the per-step loss curves, the policy-prior sharpening,
+or any checkpoint. The summary line is all that survived a 14.7 hour run.
+So the two signals the handoff asked to read on the GPU, L_Q trending down
+(the pilot saw about 10x) and the prior sharpening, could NOT be read from
+this run; they remain established only on CPU (test_train.py and
+run_train_demo). The next run must instrument these (per-iteration L_Q and
+L_pi separately, periodic flushed progress lines, a checkpoint per
+iteration, and a unique run dir with full metadata) so a long run is
+observable and resumable rather than yielding three summary lines.
+
+### Device/dtype bridge (the fix this run depends on)
+
+The first GPU launch crashed immediately in the actor's LayerNorm:
+`Expected all tensors to be on the same device, but got weight is on cpu,
+different from other tensors on cuda:0`. Root cause: the frozen encoder
+loads on CUDA in bf16, so embed(s) = h_T is a bf16 CUDA tensor, while the
+small trainable HiddenStateActor heads default to fp32 on CPU. The CPU
+FakeEncoder returns fp32 on CPU, so the 191-test suite never exercised
+this boundary (exactly the gap the handoff flagged: "the one thing that
+needs the GPU box is the real model forwards"). Fix: StateActor now
+reconciles the hidden state and the action mask to the actor's own
+parameter (device, dtype) at the head-input boundary (a `_head_input`
+helper), so the bridge works whether the heads live on CPU or GPU and the
+all-CPU training path is untouched. Two regression tests were added in
+tests/test_planner_actor.py: a bf16-on-CPU case (reproduces the dtype
+half on any machine) and a CUDA case (reproduces the exact device crash,
+skipped without a GPU). Suite is 193 passed.
