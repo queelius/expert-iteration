@@ -14,6 +14,7 @@ testable end to end with a FakeEncoder; the real run uses SharedForwardEncoder.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -185,16 +186,24 @@ def run_outer_loop(
     rng: np.random.Generator,
     encoder: Any = None,
     record_sink: Callable[[dict[str, Any]], None] | None = None,
+    on_decision: Callable[[dict[str, Any]], None] | None = None,
+    on_train_step: Callable[[dict[str, Any]], None] | None = None,
+    on_iteration_end: Callable[["IterationStats"], None] | None = None,
+    save_checkpoint: Callable[[dict[str, Any]], None] | None = None,
+    log_every: int = 25,
+    start_iteration: int = 1,
+    start_problem: int = 0,
 ) -> list[IterationStats]:
     """Run Algorithm 1 for ``n_iterations``: collect, then train M steps.
 
-    The MCTS prior is the online policy head and the leaf value is the
-    target-Q head, both via ``state_actor``. Training is gated behind a
-    ``min_buffer_size`` warmup. Target sync fires inside ``trainer`` on its
-    own N-step schedule.
+    Observability and resume hooks are all optional and default-off, so the
+    original behavior is unchanged when none are passed. ``start_iteration`` /
+    ``start_problem`` resume a partially completed run (1-based iteration index;
+    ``start_problem`` only applies to ``start_iteration``).
     """
     stats: list[IterationStats] = []
-    for it in range(1, n_iterations + 1):
+    for it in range(start_iteration, n_iterations + 1):
+        t0 = time.monotonic()
         config = MCTSConfig(
             num_simulations=num_simulations,
             c_puct=c_puct,
@@ -203,22 +212,45 @@ def run_outer_loop(
             value_fn=state_actor.leaf_value,
         )
         before = _flop_counters(encoder)
-        # Clear the prefill cache so each iteration counts its own encoder
-        # calls from scratch. The cache is an intra-iteration optimization
-        # (one forward per decision); cross-iteration reuse would make the
-        # FLOP counter deltas meaningless.
         state_actor.cache.clear()
+
+        def _on_trajectory_end(done: int) -> None:
+            if save_checkpoint is not None:
+                save_checkpoint({
+                    "phase": "collecting",
+                    "iteration": it,
+                    "problems_done_this_iter": done,
+                })
+
         counts = collect_iteration(
             problems, mdp_factory, state_actor, config, buffer, rng,
             tau=tau, max_turns=max_turns, record_sink=record_sink,
+            on_decision=on_decision, on_trajectory_end=_on_trajectory_end,
+            start_problem=(start_problem if it == start_iteration else 0),
+            iteration_index=it,
         )
         after = _flop_counters(encoder)
 
         losses: list[dict[str, float]] = []
         if len(buffer) >= min_buffer_size:
-            losses = trainer.run(train_steps_per_iter, batch_size, rng)
+            def _on_step(global_step: int, step_losses: dict[str, float]) -> None:
+                if on_train_step is not None and (
+                    global_step % log_every == 0 or global_step == 1
+                ):
+                    on_train_step({"global_step": global_step, **step_losses})
+            losses = trainer.run(
+                train_steps_per_iter, batch_size, rng, on_step=_on_step
+            )
 
-        stats.append(IterationStats(
+        if save_checkpoint is not None:
+            save_checkpoint({
+                "phase": "training",
+                "iteration": it,
+                "problems_done_this_iter": len(problems),
+            })
+
+        summary = loss_summary(losses)
+        s = IterationStats(
             iteration=it,
             losses=losses,
             prefill_calls=after["prefill_calls"] - before["prefill_calls"],
@@ -229,7 +261,14 @@ def run_outer_loop(
             n_decisions=counts["n_decisions"],
             n_simulations=counts["n_simulations"],
             buffer_size=len(buffer),
-        ))
+            wall_seconds=time.monotonic() - t0,
+            q_first=summary["q_first"], q_last=summary["q_last"],
+            pi_first=summary["pi_first"], pi_last=summary["pi_last"],
+            total_first=summary["total_first"], total_last=summary["total_last"],
+        )
+        stats.append(s)
+        if on_iteration_end is not None:
+            on_iteration_end(s)
     return stats
 
 

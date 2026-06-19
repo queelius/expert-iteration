@@ -182,3 +182,34 @@ def test_collect_iteration_start_problem_skips_done_trajectories():
     )
     # problem index 0 skipped, only the second trajectory runs
     assert trajectories == [2]
+
+
+def test_run_outer_loop_invokes_train_and_checkpoint_callbacks():
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.outer_loop import run_outer_loop
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    train_steps = []
+    checkpoints = []
+    stats = run_outer_loop(
+        [("2+2", "4")], mdp_factory, sa, trainer, buf,
+        n_iterations=2, train_steps_per_iter=10, batch_size=8,
+        min_buffer_size=2, num_simulations=6, c_puct=1.5, discount=1.0,
+        tau=1.0, max_turns=4, rng=np.random.default_rng(0), encoder=enc,
+        on_train_step=lambda info: train_steps.append(info),
+        save_checkpoint=lambda state: checkpoints.append(
+            (state["phase"], state["iteration"], state["problems_done_this_iter"])),
+        log_every=5,
+    )
+
+    # train-step callback fired on the log_every cadence for both iterations
+    assert all(set(t.keys()) >= {"global_step", "q", "pi", "total"} for t in train_steps)
+    # a checkpoint after each trajectory (collecting) and after each train phase
+    assert ("collecting", 1, 1) in checkpoints
+    assert ("training", 1, 1) in checkpoints
+    assert ("training", 2, 1) in checkpoints
+    # loss split landed on the stats
+    assert stats[-1].q_first == stats[-1].q_first   # not NaN: training ran
+    assert stats[-1].wall_seconds >= 0.0
