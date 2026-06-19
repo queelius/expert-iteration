@@ -328,9 +328,9 @@ training is attributable to the heads and the search procedure.
 \paragraph{Serialization.}
 A math state $s$ is rendered into a token sequence by a deterministic
 template using explicit structural markers (\texttt{[PROBLEM]},
-\texttt{[FACT id=\ldots source=\ldots]}, \texttt{[HYPOTHESIS id=\ldots
-parent=\ldots depth=\ldots]}, \texttt{[VERIFIER\_CALL \ldots]}, and a
-closing \texttt{[STATE\_END]} sentinel); the full template is given in
+\texttt{[FACT \ldots]}, \texttt{[HYPOTHESIS \ldots]},
+\texttt{[VERIFIER\_CALL \ldots]}, and a closing \texttt{[STATE\_END]}
+sentinel); the full template is given in
 Appendix~\ref{app:state-listings}. Two properties of this template
 matter. First, the structural markers
 give the LLM's self-attention stable positional anchors, so per-slot
