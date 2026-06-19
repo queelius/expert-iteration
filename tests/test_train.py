@@ -206,3 +206,35 @@ def test_trainer_run_returns_history():
     )
     assert len(history) == 10
     assert all("total" in h for h in history)
+
+
+def test_trainer_run_fires_on_step_callback():
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    import torch
+    from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.replay import ReplayBuffer, ReplaySample
+    from verifier_anchored_rl.train import Trainer
+
+    actor = HiddenStateActor(embed_dim=8)
+    buf = ReplayBuffer(capacity=8)
+    g = torch.Generator().manual_seed(0)
+    for _ in range(4):
+        buf.add(ReplaySample(
+            hidden=torch.randn(8, generator=g),
+            available_mask=torch.ones(7, dtype=torch.bool),
+            q_target=torch.randn(7, generator=g),
+            q_target_mask=torch.ones(7, dtype=torch.bool),
+            pi_target=torch.softmax(torch.randn(7, generator=g), dim=-1),
+        ))
+    opt = torch.optim.Adam(actor.parameters(), lr=1e-2)
+    trainer = Trainer(actor, opt, buf, sync_interval=100)
+
+    seen = []
+    trainer.run(5, batch_size=4, rng=np.random.default_rng(0),
+                on_step=lambda step, losses: seen.append((step, losses)))
+
+    assert len(seen) == 5
+    assert seen[0][0] == 1 and seen[-1][0] == 5      # 1-based global step
+    assert set(seen[0][1].keys()) == {"q", "pi", "total"}

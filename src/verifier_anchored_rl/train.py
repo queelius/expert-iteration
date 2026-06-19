@@ -152,9 +152,19 @@ class Trainer:
         return losses
 
     def run(
-        self, num_steps: int, batch_size: int, rng: np.random.Generator
+        self,
+        num_steps: int,
+        batch_size: int,
+        rng: np.random.Generator,
+        on_step: Any = None,
     ) -> list[dict[str, float]]:
-        return [self.step(batch_size, rng) for _ in range(num_steps)]
+        out = []
+        for _ in range(num_steps):
+            losses = self.step(batch_size, rng)
+            out.append(losses)
+            if on_step is not None:
+                on_step(self.global_step, losses)
+        return out
 
 
 __all__ = ["Trainer", "policy_loss", "q_loss", "td_errors", "train_step"]
