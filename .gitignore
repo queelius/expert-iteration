@@ -36,6 +36,7 @@ ENV/
 # Project artifacts
 experiments/output/
 experiments/logs/
+experiments/results/runs/
 *.log
 
 # LaTeX build artifacts

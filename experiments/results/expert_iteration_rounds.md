@@ -907,3 +907,55 @@ all-CPU training path is untouched. Two regression tests were added in
 tests/test_planner_actor.py: a bf16-on-CPU case (reproduces the dtype
 half on any machine) and a CUDA case (reproduces the exact device crash,
 skipped without a GPU). Suite is 193 passed.
+
+
+## Observable and resumable harness: frodo validation (2026-06-19)
+
+The harness retrofit motivated by the 14.7 hour run above. The outer loop now
+emits a flushed per-decision and per-train-step progress line, streams every
+collected record to records.jsonl, writes a per-iteration metrics.jsonl with
+the L_Q and L_pi split separated (not buried in L_total), checkpoints the full
+learning state (actor, optimizer, replay buffer, numpy RNG, global step) after
+each trajectory and after training, and supports resume from that checkpoint.
+Every run lands in a unique directory under experiments/results/runs/ with a
+metadata.json carrying full provenance (git sha, host, GPU, driver, torch and
+transformers versions, dtype, device, seeds, start and end time, status). Spec
+and plan: docs/superpowers/specs/2026-06-19-observable-resumable-outer-loop-design.md
+and docs/superpowers/plans/2026-06-19-observable-resumable-outer-loop.md.
+CPU-tested across new unit tests plus a load-bearing resume-equivalence test
+(an uninterrupted 2-iteration run and a stop-after-iteration-1-then-resume run
+produce identical final actor weights). Full suite 206 passed.
+
+GPU validation on frodo (RTX 3060, torch 2.9.1+cu128, transformers 5.5.3, bf16,
+device cuda:0):
+
+1. Smoke (1 iteration, 8 simulations, 1 problem, 8 decisions, 1719s): produced
+   the full artifact set (metadata.json, progress.log with a live line per
+   decision, records.jsonl with one record per decision, an atomically written
+   8.3 MB checkpoint.pt carrying all of actor, optimizer, buffer, RNG, and
+   global step, metrics.jsonl, and summary.md), status completed. Training was
+   gated off here (8 collected records below the default min-buffer of 16), so
+   the loss split read NaN, which is correct behavior, not a defect.
+
+2. Resume validation (fast config: 4 simulations, max-turns 2, min-buffer 2,
+   train-steps 20, log-every 5). Run A: iterations=1 ran to completion (collect
+   2 decisions, train 20 steps, checkpoint phase=training iteration=1
+   global_step=20). Run B: the same command with --resume <dir> --iterations 2
+   loaded the checkpoint and continued. Confirmations:
+   * the resumed run's first decision is labeled iter 2 (it did NOT re-collect
+     iteration 1; progress.log holds exactly 2 iter-1 lines and 2 iter-2 lines);
+   * training resumed at global_step 25, 30, 35, 40, proving the optimizer and
+     step counter were restored rather than reset to 1;
+   * metrics.jsonl has two non-NaN lines. L_Q first to last was 0.00098 to
+     0.00065 in iteration 1 and 0.00028 to 0.000041 in iteration 2 (the
+     approximate-Q-learning signal trending down, now directly observable per
+     iteration), while L_pi stayed near its target-entropy floor of about 1.386
+     (matching the pilot's v2 floor of 1.4512 and the big GPU run above);
+   * the final checkpoint is phase=training iteration=2 global_step=40 with a
+     buffer of 4 samples, status completed.
+
+Net: the two signals the 14.7 hour run could not surface (the L_Q trend and the
+per-iteration loss split) are now persisted and were read directly off a real
+GPU run, and a crashed run is recoverable from its last checkpoint. Run outputs
+under experiments/results/runs/ are gitignored (checkpoints are large and are
+run artifacts, not source).
