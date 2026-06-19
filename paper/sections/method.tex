@@ -34,13 +34,25 @@ The learning algorithm is approximate $Q$-learning
 \citep{mnih2015human, sutton2018reinforcement}; the use of MCTS as a
 policy improvement operator that produces training targets is expert
 iteration \citep{anthony2017thinking, silver2017alphagozero,
-silver2018alphazero}. The novel ingredients are the verifier-anchored
-context MDP itself (Section~\ref{sec:method-state}), the chance-node
-$Q$-estimate $\Qmcts(s, a)$ used as a direct Bellman target in place of
-single-sample targets (Section~\ref{sec:method-mcts}), and the
+silver2018alphazero}; and the bifurcation of the search tree into
+decision and chance (afterstate) nodes, which lets the sampled chance
+node estimate the inner Bellman expectation in a stochastic environment,
+is borrowed from Stochastic MuZero
+\citep{antonoglou2022stochastic}. The novel ingredients are
+(i) the verifier-anchored context MDP itself
+(Section~\ref{sec:method-state}); (ii) the shared-encoder, multi-head-$Q$
+architecture, in which one frozen LLM serves as both encoder and
+generator so a single forward yields the state embedding and the
+verb-instantiator's continuation rather than running two models
+(Section~\ref{sec:method-architecture}); and (iii) the
 \textsc{InvokeVerifier} action that makes checker calls a first-class
 move within the MDP rather than a post-hoc filter
-(Section~\ref{sec:method-actions}).
+(Section~\ref{sec:method-actions}). The chance-node $Q$-estimate
+$\Qmcts(s, a)$ is used as a direct Bellman target in place of
+single-sample targets (Section~\ref{sec:method-mcts}); the afterstate
+mechanism is borrowed, and what is specific to our setting is its
+application to the non-enumerable LLM-induced transition, where the
+sampled chance node is the only available estimator of that expectation.
 
 \subsection{Structured Context State}
 \label{sec:method-state}
@@ -409,12 +421,12 @@ position of the $\texttt{[STATE\_END]}$ sentinel:
 
 \begin{equation}
 \label{eq:embed}
-\mathrm{embed}(s) \;=\; h_{T} \;\in\; \R^{d},
+\mathrm{embed}(s) \;=\; h_{T} \;\in\; \R^{d_h},
 \qquad
 h_{1{:}T} \;=\; \mathrm{LLM}\bigl(\mathrm{tokenize}(\mathrm{serialize}(s))\bigr),
 \end{equation}
 
-where $T$ is the index of $\texttt{[STATE\_END]}$ and $d$ is the LLM's
+where $T$ is the index of $\texttt{[STATE\_END]}$ and $d_h$ is the LLM's
 hidden dimension (typically $2048$ to $4096$ for the $1$-to-$7$ billion
 parameter base models we consider). Causal self-attention guarantees
 that $h_{T}$ has integrated the entire prefix, and decoder-only LLMs
@@ -427,18 +439,18 @@ only the new tokens introduced by the latest action (a single new
 hypothesis, fact, or verifier-call record, typically).
 
 \paragraph{Adapter MLP.}
-The LLM's hidden state $h \in \R^{d}$ is compressed by a small adapter:
+The LLM's hidden state $h \in \R^{d_h}$ is compressed by a small adapter:
 
 \begin{equation}
 \label{eq:adapter}
-\phi: \R^{d} \to \R^{m},
+\phi: \R^{d_h} \to \R^{m},
 \qquad
 \phi(h) \;=\; W_{2}\,\sigma(W_{1} h + b_{1}) + b_{2},
 \end{equation}
 
 with $m = 256$ and $\sigma$ the GELU activation. The adapter does three
-things. First, $m \ll d$ reduces head parameter counts by a factor of
-$d / m \approx 10$, which matters during repeated MCTS rollouts. Second,
+things. First, $m \ll d_h$ reduces head parameter counts by a factor of
+$d_h / m \approx 10$, which matters during repeated MCTS rollouts. Second,
 the adapter gives the heads a task-tuned representation without
 unfreezing the LLM: it absorbs the projection that turns a
 next-token-prediction hidden state into a useful $Q$-input. Third, the
@@ -505,7 +517,7 @@ Approximate $Q$-learning is unstable when the Bellman target chases
 its own moving estimate. Following the standard DQN remedy
 \citep{mnih2015human}, we maintain a target network $Q_{\bar{\psi}}$
 that is a frozen copy of $\Qpsi$ (and the adapter), synchronized
-every $N$ optimizer steps. Bellman targets use $Q_{\bar{\psi}}$:
+every $N_{\mathrm{sync}}$ optimizer steps. Bellman targets use $Q_{\bar{\psi}}$:
 
 \begin{equation}
 \label{eq:bellmantarget}
@@ -562,25 +574,30 @@ with averages over many trajectories whose actions were chosen by
 search rather than by the behavior policy (Section~\ref{sec:method-training});
 at inference they refine the head estimate at a state on which extra
 compute is being spent (Section~\ref{sec:method-inference}). The MCTS
-variant we use sits between two extremes. Collapsing decision and
-chance nodes into a single node type, the pattern most often encountered
-in deterministic-game tutorials, breaks the analogy to Bellman
-recursion: the chance-node mean value is exactly the empirical
-estimator of the inner expectation
+variant we use sits between two extremes. The bifurcation of the tree
+into decision and chance (afterstate) nodes is borrowed from Stochastic
+MuZero \citep{antonoglou2022stochastic}, which introduced the afterstate
+node as the device for planning with a learned model in a stochastic
+environment; we adopt it rather than invent it. The bifurcation matters
+because the chance-node mean value is exactly the empirical estimator of
+the inner expectation
 $\E_{s' \sim P(\cdot \given s, a)}[r + \gamma V^{\ast}(s')]$ in the
-Bellman optimality equation, and folding it into the decision node
-discards the very statistic that converges to $Q^{\ast}(s, a)$. A fully
+Bellman optimality equation, and collapsing decision and chance nodes
+into a single node type would fold that statistic into the decision node
+and discard the very quantity that converges to $Q^{\ast}(s, a)$. A fully
 model-based MCTS that enumerates $P(s' \given s, a)$ exactly is also
 unavailable to us: the LLM-induced transition is not enumerable, since
 $s'$ is determined by the verb-instantiator's continuation tokens and
 the parser that lifts those tokens into the schema of
-Section~\ref{sec:method-state}. Sampled chance nodes are therefore the
-natural estimator of the Bellman inner expectation: the middle path is
-chance-node bifurcation with sampled transitions and per-edge reward
-backup, with explicit decision and chance nodes, the LLM used only as a
-sampler of $s' \sim P(\cdot \given s, a)$, and returns accumulated from
-the leaf inward so that each ancestor receives the return computed from
-its own vantage point.
+Section~\ref{sec:method-state}. This non-enumerability is what makes the
+borrowed mechanism specific to our setting: the sampled chance node is
+the only available estimator of the Bellman inner expectation, since
+neither enumeration nor a closed-form transition model is on offer. The
+middle path is therefore chance-node bifurcation with sampled transitions
+and per-edge reward backup, with explicit decision and chance nodes, the
+LLM used only as a sampler of $s' \sim P(\cdot \given s, a)$, and returns
+accumulated from the leaf inward so that each ancestor receives the return
+computed from its own vantage point.
 
 \paragraph{Node types.}
 The search tree alternates between two node types:
@@ -638,16 +655,17 @@ a^{\ast}
 \;=\;
 \arg\max_{a \in \mathrm{avail}(s)}
 \Bigl[\,
-\Qpsi(s, a)
+\widehat{Q}(s, a)
 \;+\;
 c_{\PUCT} \cdot \ptheta(a \given s) \cdot \frac{\sqrt{N(s)}}{1 + N(s, a)}
 \,\Bigr],
 \end{equation}
 
 with $a \notin \mathrm{avail}(s)$ assigned PUCT score $-\infty$ before
-the argmax. The exploitation term $\Qpsi(s, a)$ is the chance node's
-empirical mean once visited and the head estimate $\Qpsi(s, a)$
-otherwise. The exploration term $\ptheta(a \given s)$ comes from the
+the argmax. The exploitation term $\widehat{Q}(s, a)$ is the chance node's
+empirical mean $W(s, a) / N(s, a)$ once the node has been visited and the
+head estimate $\Qpsi(s, a)$ otherwise. The exploration term
+$\ptheta(a \given s)$ comes from the
 policy head and steers early-visit allocation toward actions the
 policy distillation has identified as promising. The exploration
 constant $c_{\PUCT}$ controls the relative weight; we take $c_{\PUCT}
@@ -692,9 +710,11 @@ correct return and that terminal scalar.
 Under the UCT convergence conditions of \citet{kocsis2006bandit}
 (sufficient exploration of every descendant, bounded rewards, and the
 sample-size conditions required for the tail-bound argument), the
-chance-node mean value $W(s, a) / N(s, a)$ is a consistent estimator
-of the inner Bellman expectation
-$\E_{s' \sim P(\cdot \given s, a)}[\, r + \gamma V^{\ast}(s') \,]$. Our
+chance-node mean value $W(s, a) / N(s, a)$ estimates the inner expectation
+$\E_{s' \sim P(\cdot \given s, a)}[\, r + \gamma \widehat{V}(s') \,]$ formed
+from the leaf evaluator $\widehat{V}$; this coincides with the Bellman
+expectation $\E_{s' \sim P(\cdot \given s, a)}[\, r + \gamma V^{\ast}(s') \,]$
+only in the limit where the leaf evaluator is itself exact. Our
 chance-node estimator inherits the same conditions; we do not re-derive
 convergence here. Two practical caveats apply. First, MCTS rollout
 estimators are biased at finite sample sizes: the leaf-value estimator
@@ -708,7 +728,7 @@ the relevant constants; the adapted bound for PUCT-with-priors is what
 the AlphaZero family relies on in practice but is not what the
 \citet{kocsis2006bandit} theorem proves. We treat Section~\ref{sec:exp-ablations}
 (the sanity-check ablations) as the operative test of the estimator's
-practical adequacy on our gridworld, rather than as a proof of the
+practical adequacy on our verifiable-math tasks, rather than as a proof of the
 asymptotic statement.
 \end{remark}
 
@@ -814,7 +834,11 @@ granularity.
 
 \paragraph{The Goodhart argument.}
 The asymmetry between verifier-anchored and learned-aesthetic signals
-is structural. Let $f: \Sset \to [0, 1]$ be a learned classifier
+is structural, and it instantiates a result established formally in the
+reward-hacking literature \citep{skalse2022reward, gao2023scaling}: an
+optimizer run against a learned proxy converges on the proxy's defects,
+and the gap between proxy and true objective widens under optimization
+\citep{gao2023scaling}. Let $f: \Sset \to [0, 1]$ be a learned classifier
 trained to predict an aesthetic property of a state (``this looks like
 careful reasoning''). A policy optimized against $f$ as a reward
 signal converges, in the limit of enough updates, to behavior that
@@ -881,7 +905,7 @@ most in the verifiable-math setting.
            \log \ptheta(a \given s)$
     \State Step optimizer on $\mathcal{L}_Q + \lambda \mathcal{L}_\pi$
   \EndFor
-  \State Every $N$ steps: $Q_{\bar\psi} \gets \Qpsi$
+  \State Every $N_{\mathrm{sync}}$ steps: $Q_{\bar\psi} \gets \Qpsi$
 \EndFor
 \end{algorithmic}
 \end{algorithm}
@@ -965,7 +989,7 @@ $\tau$ in Equation~(\ref{eq:pimcts}) is annealed: high $\tau$ early
 exploration during distillation; later iterations anneal toward
 $\tau = 1$ (proportional to raw visit counts) and then below $1$ for
 sharper, more deterministic targets. The target-network sync interval
-$N$ is on the order of one thousand optimizer steps; faster sync
+$N_{\mathrm{sync}}$ is on the order of one thousand optimizer steps; faster sync
 destabilizes the Bellman target, slower sync wastes gradient signal.
 We list these starting values as the operative reference; the final
 configuration is tuned on the validation split of the smallest

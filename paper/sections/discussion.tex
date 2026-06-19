@@ -114,7 +114,11 @@ Consider a learned classifier $f: X \to [0, 1]$ optimized as a reward
 signal. After enough updates, the policy converges to behavior that satisfies
 $f$ at $f$'s decision boundary; the policy learns the classifier's failure
 modes (regions where $f$ disagrees with the underlying property it was
-trained on) and exploits them. The exploitation is not adversarial in
+trained on) and exploits them. This is the reward-hacking pattern
+characterized formally by \citet{skalse2022reward}, and the proxy-objective
+gap it opens has been shown to widen with optimization pressure in the
+reward-model overoptimization scaling study of \citet{gao2023scaling}. The
+exploitation is not adversarial in
 intent; it is the natural fixed point of running an optimizer against an
 imperfect target. Any imperfection in $f$ becomes an attack surface, and
 since all learned classifiers are imperfect, the attack surface is always
@@ -250,7 +254,11 @@ between two MCTS visit-count distributions on the same state at the
 same prior but with different random seeds, on a stratified sample of
 training states for each benchmark, and to running additional MCTS
 seeds at the heavy-search budget on any state where target stability
-falls below a pre-committed threshold. The pre-registered $N_{\mathrm{large}}
+falls below a pre-committed threshold.
+\textcolor{red}{\textbf{[PRE-REG TODO: commit the target-stability
+threshold (the same number used in Section~\ref{sec:pilot-lessons});
+suggested: pairwise recommended-verb agreement $\geq 0.70$ at the
+collection budget, stratified by family, confirm]}} The pre-registered $N_{\mathrm{large}}
 = 500$ is substantially above the pilot's $B = 20$ and we expect target
 stability to improve accordingly, but the expectation is now a
 falsifiable monitoring claim rather than an unstated assumption.
@@ -280,9 +288,11 @@ serves both the heads and verb generation
 (Section~\ref{sec:pilot-closedloop}), the decoder forwards become countable,
 and the first closed-loop run shows generation dominating a decision's token
 cost over the prefill by about $79$ to $1$. The compute axis of the
-pre-registered plan (Section~\ref{sec:exp-compute}) is accordingly
-denominated in generated tokens per decision, since a search simulation's
-cost is itself dominated by generation. The second is that observability and
+pre-registered plan (Section~\ref{sec:exp-compute}) remains denominated in
+total inference FLOPs as its primary metric, and this measurement shows where
+those FLOPs are spent: generation, not prefill, dominates a decision's cost,
+and a search simulation's cost is itself dominated by generation, so the FLOP
+accounting must charge every generated token inside the search. The second is that observability and
 resumability are research infrastructure rather than conveniences: the
 framework's central claim is an across-iteration trend (the
 approximate-$Q$-learning $L_Q$ decrease and the expert-iteration sharpening

@@ -114,9 +114,9 @@ broken out by problem family. \texttt{v3} heads improve uniformly over
 \texttt{v2} heads; \texttt{v4} heads improve on the targeted word
 problem family ($+6.7$ pp) but regress sharply on algebra
 ($-33.3$ pp). The rebalanced \texttt{v4b} heads hold the word-problem
-gain but do not recover algebra despite restoring its training share,
-the controlled test that Section~\ref{sec:pilot-v4b} uses to rule out
-class dilution as the dominant regression mechanism.}
+gain but do not recover algebra despite raising its training share above
+the baseline, the controlled test that Section~\ref{sec:pilot-v4b} uses
+to rule out class dilution as the dominant regression mechanism.}
 \label{fig:pilot-headline}
 \end{figure}
 
@@ -164,13 +164,14 @@ Dataset & $N$ & mean max & med max & entropy & frac $\geq 0.5$ \\
 
 The sharper targets translate into a lower training-loss floor for the
 distilled heads. Table~\ref{tab:pilot-training} reports the final
-policy cross-entropy and value mean-squared-error after $200$
+policy cross-entropy (in nats) and value mean-squared-error after $200$
 full-batch Adam epochs at learning rate $10^{-3}$ on each round's
 dataset. The \texttt{v3} heads converge to a final policy CE of $1.29$
-against \texttt{v2}'s $1.45$, a relative reduction of $10.9\%$; the
+nats against \texttt{v2}'s $1.45$ nats, a relative reduction of $10.9\%$; the
 $Q$-MSE drops by $39.1\%$. The lower CE floor is a direct consequence
 of lower target entropy: cross-entropy against a target distribution
-is bounded below by the entropy of the target, and sharper targets
+is bounded below by the entropy of the target (here $1.855$ bits
+$\approx 1.286$ nats for \texttt{v3-train}), and sharper targets
 relax this lower bound. Training-set argmax agreement, defined as the
 fraction of records on which $\arg\max_a \ptheta(a \given s)$ matches
 $\arg\max_a \pimcts(a \given s)$, rises from $85.0\%$ to $91.7\%$.
@@ -185,7 +186,7 @@ dataset.}
 \small
 \begin{tabular}{@{}lrrr@{}}
 \toprule
-Round & Final policy CE & Final $Q$-MSE & Training argmax \\
+Round & Final policy CE (nats) & Final $Q$-MSE & Training argmax \\
 \midrule
 \texttt{v2}   & 1.4512 & 0.006829 & 85.0\% \\
 \texttt{v3}   & \textbf{1.2934} & \textbf{0.004156} & \textbf{91.7\%} \\
@@ -376,8 +377,14 @@ overall mean $L_1$ is $0.347$, the second-best across rounds after
 moves slightly toward \texttt{v3}'s floor (CE $1.350$ vs \texttt{v4}'s
 $1.357$ and \texttt{v3}'s $1.293$).
 
-\paragraph{Interpretation.} The class-dilution mechanism, taken
-alone, predicts that rebalancing recovers algebra. Rebalancing did
+\paragraph{Interpretation.} \texttt{v4b} is a rebalance-plus-expansion
+rather than a pure rebalance: it both raises algebra's training share
+and enlarges the set with three fresh instances (two algebra, one
+factoring), so it gives algebra more absolute data as well as a larger
+relative share. This strengthens the refutation rather than weakening
+it: the class-dilution mechanism, taken
+alone, predicts that rebalancing (let alone adding fresh algebra
+instances) recovers algebra. Rebalancing did
 not recover algebra, so class dilution is not the dominant mechanism
 behind the \texttt{v3}-to-\texttt{v4} algebra regression at the
 pilot's scale. The two remaining candidates from
@@ -717,7 +724,11 @@ sample of training states per benchmark and \emph{stratified by
 problem family} rather than pooled. Agreement below a pre-committed
 threshold at the chosen budget is a precondition for trusting any
 round-over-round improvement claim, and the budget is set by the
-slowest-converging family rather than the average. The closed-loop harness of
+slowest-converging family rather than the average.
+\textcolor{red}{\textbf{[PRE-REG TODO: commit the numerical
+target-stability threshold; suggested: pairwise recommended-verb
+agreement $\geq 0.70$ at the collection budget, stratified by problem
+family, confirm]}} The closed-loop harness of
 Section~\ref{sec:pilot-closedloop} already records this diagnostic, the entropy
 of $\pimcts$ and of $\ptheta$ per iteration, so the benchmark study inherits the
 monitoring by construction rather than retrofitting it onto a long run.
@@ -753,12 +764,12 @@ accuracy claim.
 
 The pilot's artifacts are released alongside this paper for independent
 verification. The release contains the collection script
-(\texttt{experiments/collect\_distillation.py}), the head architecture
-(\texttt{src/verifier\_anchored\_rl/heads.py}), the head-training script
-(\texttt{experiments/train\_heads.py}), the round-comparison
-analyzer (\texttt{experiments/analyze\_distillation\_rounds.py}), and
+(\path{experiments/collect_distillation.py}), the head architecture
+(\path{src/verifier_anchored_rl/heads.py}), the head-training script
+(\path{experiments/train_heads.py}), the round-comparison
+analyzer (\path{experiments/analyze_distillation_rounds.py}), and
 the budget-sweep probe of Section~\ref{sec:pilot-bsweep}
-(\texttt{experiments/b\_sweep\_stability.py}), all
+(\path{experiments/b_sweep_stability.py}), all
 under an open-source licence in the companion repository. Each
 distillation dataset (\texttt{v2}, \texttt{v3-train}, \texttt{v3-holdout},
 \texttt{v4-train}, \texttt{v4-holdout}, \texttt{v4b-train},
@@ -767,27 +778,27 @@ per (problem, seed, turn) triple, containing the serialized state, the
 available verb set, the MCTS visit counts, the chance-node $Q$
 estimates, the recommended verb, and the 2048-dimensional embedding
 fetched at collection time. The trained head checkpoints
-(\texttt{heads\_v2.pt}, \texttt{heads\_v3.pt}, \texttt{heads\_v4.pt},
-\texttt{heads\_v4b.pt})
+(\path{heads_v2.pt}, \path{heads_v3.pt}, \path{heads_v4.pt},
+\path{heads_v4b.pt})
 are PyTorch state dictionaries that the released loader script
-(\texttt{src/verifier\_anchored\_rl/trained\_prior.py}) instantiates
+(\path{src/verifier_anchored_rl/trained_prior.py}) instantiates
 into the architecture above. Every random seed used (MCTS seeds $0$
 through $4$ per problem; training seed $0$ for the heads) is logged in
 the per-record artifacts and in the training-history JSON dumps. The
 hyperparameters are summarized in Section~\ref{sec:pilot-setup}; the
-companion repository's \texttt{experiments/results/} directory contains
+companion repository's \path{experiments/results/} directory contains
 the full metric dumps. The pilot is reproducible end-to-end on a single
 machine with the Qwen2.5-3B model available through any
 OpenAI-compatible inference endpoint (the release defaults to Ollama).
 
 The closed-loop extension of Section~\ref{sec:pilot-closedloop} is released
 alongside it: the in-process model backend
-(\texttt{src/verifier\_anchored\_rl/transformers\_client.py}), the shared
-single-forward encoder (\texttt{shared\_forward.py}), the training loop with
-its prioritized replay buffer and target-network sync (\texttt{train.py},
-\texttt{replay.py}, \texttt{architecture.py}), the outer-loop orchestration
-(\texttt{outer\_loop.py}), and the run harness
-(\texttt{experiments/run\_outer\_loop.py}), which writes each run to a
+(\path{src/verifier_anchored_rl/transformers_client.py}), the shared
+single-forward encoder (\path{shared_forward.py}), the training loop with
+its prioritized replay buffer and target-network sync (\path{train.py},
+\path{replay.py}, \path{architecture.py}), the outer-loop orchestration
+(\path{outer_loop.py}), and the run harness
+(\path{experiments/run_outer_loop.py}), which writes each run to a
 self-contained directory carrying full provenance metadata, the per-iteration
 metrics above (the separated $L_Q$ and $L_{\pi}$, the visit- and
 prior-distribution entropies, and the FLOP counters), the streamed collection

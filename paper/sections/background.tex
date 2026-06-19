@@ -79,14 +79,14 @@ The greedy deterministic policy derived from $\Qstar$ is
 \label{eq:greedy-policy}
 \end{equation}
 and a smooth stochastic alternative is the softmax policy with temperature
-$\tau > 0$,
+$\tau_{\pi} > 0$,
 \begin{equation}
-\pi_{\tau}(a \given s)
-= \frac{\exp(\Qstar(s, a) / \tau)}{\sum_{b \in \Aset(s)} \exp(\Qstar(s, b) / \tau)}.
+\pi_{\tau_{\pi}}(a \given s)
+= \frac{\exp(\Qstar(s, a) / \tau_{\pi})}{\sum_{b \in \Aset(s)} \exp(\Qstar(s, b) / \tau_{\pi})}.
 \label{eq:softmax-policy}
 \end{equation}
-As $\tau \to 0$, $\pi_{\tau}$ concentrates on $\pi^{\ast}$; as
-$\tau \to \infty$, it approaches the uniform distribution over $\Aset(s)$.
+As $\tau_{\pi} \to 0$, $\pi_{\tau_{\pi}}$ concentrates on $\pi^{\ast}$; as
+$\tau_{\pi} \to \infty$, it approaches the uniform distribution over $\Aset(s)$.
 Soft policies are convenient for exploration and for differentiable
 training, both of which appear later.
 
@@ -194,9 +194,9 @@ which is simply
 \text{minimize } (\Qpsi(s, a) - y)^2.
 \label{eq:approxq-loop}
 \end{equation}
-Section~\ref{sec:method-architecture} instantiates $\Qpsi$ as an LLM
-backbone with a small action-value head, trained via LoRA adapters
-\citep{hu2022lora} for parameter efficiency.
+Section~\ref{sec:method-architecture} instantiates $\Qpsi$ as a small
+action-value head over a frozen LLM backbone, with LoRA adaptation
+\citep{hu2022lora} of the backbone reserved as a phase-2 option.
 
 \subsection{Exploration and Behavior Policies}
 \label{sec:background-exploration}
@@ -216,8 +216,8 @@ onto a suboptimal action under biased $\Qpsi$); the
 \emph{$\epsilon$-greedy} policy that flips between random and greedy
 with probability $\epsilon$ (typically annealed over training); the
 \emph{softmax / Boltzmann} policy
-$\mu(a \given s) \propto \exp(\Qpsi(s, a) / \tau)$ with temperature
-$\tau$; and the \emph{search-guided} policy
+$\mu(a \given s) \propto \exp(\Qpsi(s, a) / \tau_{\pi})$ with temperature
+$\tau_{\pi}$; and the \emph{search-guided} policy
 $\mu(a \given s) = \pimcts(a \given s)$ produced by an online procedure
 such as MCTS that uses $\Qpsi$ and a policy prior $\ptheta$ to focus
 sampling on promising actions.
@@ -276,16 +276,16 @@ through a single imagined trajectory.
 \paragraph{Per-edge reward backup.}
 Returns are computed backward along the path of (chance node, sampled
 reward) pairs visited during a simulation. If a rollout traverses the
-sequence of $(s_t, a_t, r_t, s_{t+1})$ for $t = 0, 1, \ldots, T-1$ and
+sequence of $(s_t, a_t, r_{t+1}, s_{t+1})$ for $t = 0, 1, \ldots, T-1$ and
 terminates with a leaf value $\hat V(s_T)$, the return at depth $t$ is
 \begin{equation}
-G_t = r_t + \gamma\, G_{t+1}, \qquad G_T = \hat V(s_T),
+G_t = r_{t+1} + \gamma\, G_{t+1}, \qquad G_T = \hat V(s_T),
 \label{eq:per-edge-backup}
 \end{equation}
 and $G_t$ is added to the running statistics $W(s_t, a_t)$ and
 $N(s_t, a_t)$ of every ancestor chance node. The crucial point, often
 missed in tutorial presentations that only credit terminal rewards, is
-that each intermediate reward $r_t$ enters the backup at its own
+that each intermediate reward $r_{t+1}$ enters the backup at its own
 discount level. Section~\ref{sec:method-mcts} works through this in
 implementation detail.
 

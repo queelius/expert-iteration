@@ -14,11 +14,16 @@ programmatic benchmarks such as GSM8K \citep{cobbe2021gsm8k} and MATH
 \citep{hendrycks2021math}, even when given generous decoding budgets. The
 gap is widest precisely where it should be most closable: on problems whose
 solutions can be checked by a non-LLM verifier such as a symbolic algebra
-system, a unit-test harness, or a proof assistant. Whenever a cheap and
-trustworthy verifier exists, the loop from candidate solution to scalar reward
-is short, dense, and not subject to reward hacking by a learned critic
-\citep{lightman2024verify}. This is the classical setting in which
-reinforcement learning excels.
+system, a unit-test harness, or a proof assistant. Process-level
+verifier supervision has been shown to outperform outcome-only supervision
+on MATH \citep{lightman2024verify}, evidence that verifier signals carry
+usable learning content at fine granularity. Whenever a cheap and
+trustworthy verifier exists, the loop from candidate solution to scalar
+reward is also short and dense, and, because the reward is a deterministic
+check rather than a learned critic, it sidesteps the reward-hacking surface
+that a learned proxy opens under optimization
+\citep{skalse2022reward, gao2023scaling}. This is the classical setting in
+which reinforcement learning excels.
 
 We therefore frame the problem squarely as reinforcement learning. The agent
 interacts with an environment whose dynamics are induced by a base language
@@ -99,7 +104,7 @@ We make six contributions:
         explicit threat model for compute leaks in test-time-compute claims.
   \item A toy-problem pilot (Section~\ref{sec:pilot}) that exercises every
         component of the framework end-to-end across two rounds of expert
-        iteration plus a controlled rebalancing test, demonstrates that a
+        iteration plus a controlled rebalancing test, shows that a
         single round improves zero-shot held-out argmax agreement by $15$
         percentage points ($57\% \to 72\%$) and reduces mean $L_1$ to MCTS
         targets by $42\%$, and dissects a second-round regression: the

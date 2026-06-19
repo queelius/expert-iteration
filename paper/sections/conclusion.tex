@@ -24,8 +24,8 @@ The pilot (Section~\ref{sec:pilot}) demonstrated that a single round of
 expert iteration on four toy problems closes the loop on every metric we
 measured: distillation targets become sharper across rounds, the trained
 heads converge to a lower training-loss floor, and zero-shot held-out
-argmax agreement against the MCTS targets improves by $15$ percentage
-points after one round at a single training seed (the pre-registered
+argmax agreement against the MCTS targets shows a $15$ percentage-point
+improvement after one round at a single training seed (the pre-registered
 benchmark study runs at least three). A second round, with a naively-expanded training
 set, produced a structurally informative regression. A controlled
 rebalanced re-fit of the second round restored class balance without
@@ -43,11 +43,14 @@ falsification criteria (Section~\ref{sec:experimental-plan}), we
 constrain the eventual results section to test the framework rather than
 to fit to it: a frontier that fails to clear the best-of-$N$ baseline at
 matched compute is reported as such, not retrofitted into a different
-claim. The expected experimental headline is a compute-versus-accuracy
-frontier on verifiable math benchmarks showing that a small base model
-paired with the learned $\Qpsi$, $\ptheta$, and modest search compute
-matches a substantially larger reasoning model at matched inference
-compute; whether that frontier holds is the question the implementation
-will answer. The pilot has established that the framework's mechanics are
+claim. The pre-registered falsifiable hypothesis is precisely that the
+heavy-search B4 curve lies strictly above the best-of-$N$ B1 curve at
+matched inference compute on the benchmarks where both produce signal
+(Section~\ref{sec:exp-frontier}); the larger reasoning model B5 is a
+reference point, not a target, and the distance between B4 and B5
+calibrates how much of the headline gap the loop has closed rather than
+serving as a bar the framework must clear. Whether B4 clears B1, and how
+far it narrows the B4-to-B5 distance, is the question the implementation
+will answer. The pilot has shown that the framework's mechanics are
 not vacuous; whether they generalize to standardized benchmarks under the
 pre-registered protocol is the next empirical question.

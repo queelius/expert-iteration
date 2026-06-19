@@ -118,8 +118,9 @@ roles for each baseline, removes that degree of freedom.
 ID & Method & Description \\
 \midrule
 B0 & Base greedy        & Base LLM with greedy decoding; no deliberation. \\
-B1 & Best-of-$N$        & Base LLM with $N$-sample best-of-$N$, FLOP-matched
-                          to B2--B4. \\
+B1 & Best-of-$N$        & Base LLM with $N$-sample best-of-$N$, reported as a
+                          swept curve over $N$ and FLOP-matched per problem to
+                          B4 at the headline comparison point. \\
 B2 & Policy $B{=}0$     & Frozen LLM + learned policy/$Q$ heads; fast mode,
                           no search. \\
 B3 & MCTS $B{=}N_{\mathrm{small}}$ & Same as B2 plus light MCTS at
@@ -136,10 +137,18 @@ The roles assigned to the six baselines are deliberately
 non-overlapping. B0 is the raw capability floor: greedy decoding from
 the base model with no deliberation scaffold of any kind. The B0 score
 is the number that the rest of the grid is trying to beat. B1 is the
-cheap-deliberation control: best-of-$N$ sampling from the base model
-with $N$ chosen so that the total inference FLOPs match the average
-inference compute spent by B2 through B4 on the same benchmark. The
-FLOP match is what makes the comparison honest. A method that beats
+cheap-deliberation control: best-of-$N$ sampling from the base model,
+the canonical repeated-sampling baseline whose inference-compute scaling
+\citet{brown2024monkeys} characterize, reported here as a swept curve over
+$N$. The single FLOP-matched comparison
+point used in the falsification test sizes $N$ per problem so that B1's
+total inference FLOPs match B4's on that same problem
+(Section~\ref{sec:exp-frontier}).
+\textcolor{red}{\textbf{[PRE-REG TODO: confirm the single B1 FLOP-match
+target is per-problem match to B4 (not the B2--B4 average); suggested:
+per-problem match to B4, with B1 also reported as a full swept curve,
+confirm]}}
+The FLOP match is what makes the comparison honest. A method that beats
 best-of-$N$ at strictly more compute has not necessarily learned
 anything; a method that beats best-of-$N$ at matched compute has.
 
@@ -226,8 +235,8 @@ $N_{\mathrm{small}}$ exceeds the seven-verb branching factor by enough
 to give every action multiple visits on average from the root, and so
 that $N_{\mathrm{large}} = 10 \cdot N_{\mathrm{small}}$ tests a
 one-order-of-magnitude compute scaling. Best-of-$N$ for B1 is sized
-problem-by-problem so that B1's total inference FLOPs match the
-average FLOPs spent by B4 on that same problem; the FLOP match is the
+problem-by-problem so that B1's total inference FLOPs match the FLOPs
+spent by B4 on that same problem; the FLOP match is the
 control that makes B1 a fair cheap-deliberation baseline rather than a
 straw man.
 
@@ -243,6 +252,15 @@ $K = 5$ evaluation points (a total of $10$ tests). The hypothesis is
 the strong form ``strictly above at all evaluation points'' rather
 than the weak form ``above at some evaluation point'' because the weak
 form invites cherry-picking of the FLOP value that reports best.
+\textcolor{red}{\textbf{[PRE-REG TODO: the conjunctive ``all $10$ tests
+reject'' criterion controls cherry-picking but inflates Type II risk
+(diminishing returns make the top-FLOP point most likely to fail and
+sink the whole claim), and no power analysis or test-set size $n$ is
+stated; suggested: add a power analysis at the expected effect size, or
+restrict the conjunction to the evaluation points where a gap is
+expected, or pre-register a ``supported with saturation'' verdict for
+failures confined to the top FLOP point, and state $n$ (the test-set
+size) per benchmark, confirm]}}
 
 If the hypothesis fails, the approximate $Q$-learning loop with
 MCTS-supplied targets has not produced value beyond cheap sampling
@@ -277,7 +295,16 @@ than the bare MCTS scaffold, are doing the work. Each ablation
 isolates one component of the trained system by replacing it with a
 neutral default and re-evaluating on GSM8K and MATH levels $1$ through
 $3$. Like the baseline grid, the ablation set is fixed before training
-begins.
+begins. The pass/fail verdicts below are stated qualitatively
+(``visibly below'', ``indistinguishable from B4'', ``zero or
+negative''); to remove the post-hoc degree of freedom that a qualitative
+threshold introduces, each should be operationalized against the same
+bootstrap machinery the headline test uses.
+\textcolor{red}{\textbf{[PRE-REG TODO: commit numerical pass/fail
+thresholds for A1/A2/A3 before training; suggested: reuse the paired
+bootstrap CI-excludes-zero rule and the $|\bar{\Delta}| = 0.02$
+effect-size band already defined in Section~\ref{sec:exp-stats}, applied
+to the relevant A-vs-B4 or A-vs-B0 accuracy difference, confirm]}}
 
 \textit{A1: untrained heads with heavy MCTS}. We replace $\Qpsi$ with a
 random initialization and $\ptheta$ with the uniform distribution over
@@ -347,6 +374,10 @@ $1$ through $3$) and $K = 5$ FLOP-matched evaluation points per
 benchmark, for a total of $10$ tests. We apply Holm-Bonferroni
 correction at family-wise error rate $\alpha = 0.05$. The hypothesis
 is supported only if all $10$ tests reject after correction.
+\textcolor{red}{\textbf{[PRE-REG TODO: state the per-benchmark test-set
+size $n$ used in the bootstrap, and accompany the all-$10$-reject rule
+with a stated power target (or the ``supported with saturation''
+fallback noted in Section~\ref{sec:exp-frontier}); confirm]}}
 
 \paragraph{Seed variance.}
 All trained methods (B2, B3, B4 and the ablations) are trained from
@@ -412,7 +443,13 @@ parse as correct, and a too-aggressive canonicalization can collapse
 distinct symbolic answers into a single equivalence class. We will
 audit a stratified sample of $200$ verifier verdicts per benchmark
 before the headline run, with the audit prompts and results released
-alongside the experimental code. The verifier interface is held
+alongside the experimental code.
+\textcolor{red}{\textbf{[PRE-REG TODO: commit a verifier-audit
+acceptance threshold (the audited verdict error rate above which the
+benchmark is flagged); suggested: mirror the $5\%$ contamination
+convention used below, i.e. flag any benchmark whose audited
+verifier-error rate exceeds $5\%$, confirm]}}
+The verifier interface is held
 constant across the baseline grid, so this risk does not preferentially
 inflate the proposed method, but a buggy verifier still pollutes the
 absolute numbers.

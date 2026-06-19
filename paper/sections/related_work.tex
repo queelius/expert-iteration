@@ -77,9 +77,29 @@ verifier call, intermediate verifier outputs land in the structured state
 and become available to the heads, and a hypothesis can be promoted to a
 verified fact mid-trajectory. The choice converts verifier interaction
 from a wrapper around the model into a first-class part of the
-deliberation, which is what makes verifier-anchored intermediate rewards
-(Equation~\ref{eq:rewardterminal} and the fallback discussion that
-follows it) consistent with the no-Goodhart principle.
+deliberation, which is what makes the verifier-anchored intermediate
+rewards of Section~\ref{sec:method-reward} (the fallback that follows
+the terminal reward of Equation~\ref{eq:rewardterminal}) consistent with
+the no-Goodhart principle.
+
+The closest prior work on the $Q$-learning core itself is VerifierQ
+\citep{qi2024verifierq}, which casts verifier-supervised reasoning as
+offline $Q$-learning over an LLM MDP, using conservative offline
+objectives (IQL- and CQL-style updates with a modified Bellman backup)
+and identifying the verifier itself \emph{as} the learned $Q$-function
+for test-time compute. Our core differs on three axes that matter for the
+framing of this paper. First, the verifier is an \emph{action}
+(\textsc{InvokeVerifier}) the policy may take inside the MDP, not the
+$Q$-function itself: we keep a separate multi-head $Q$ over a structured
+context state (Section~\ref{sec:method-state}) and let the agent decide
+when to spend a check. Second, our targets are produced \emph{online} by
+expert iteration, with the chance-node estimate $\Qmcts(s, a)$
+(Section~\ref{sec:method-mcts}) distilled into the heads rather than fit
+offline against a fixed dataset. Third, the $Q$ output is a categorical
+multi-head over a small fixed verb set rather than a scorer over free-form
+$(s, a)$ text. VerifierQ is thus verifier-as-$Q$ and offline; ours is
+verifier-as-action with online, expert-iteration-distilled, multi-head
+$Q$ over a structured Markov state.
 
 \subsection{Test-Time Compute Scaling}
 \label{sec:rw-ttcs}
@@ -119,7 +139,15 @@ reasoning. \citet{feng2023alphazerollm} adapt the AlphaZero recipe
 directly, using a learned value model and PUCT to guide token-level or
 step-level decoding. \citet{xie2024monte} use MCTS to generate preference
 data for iterative DPO-style training, treating search as a trajectory
-generator whose output is consumed downstream. The closest prior
+generator whose output is consumed downstream. RAP \citep{hao2023rap}
+is the conceptual ancestor of our context-MDP framing: it repurposes the
+language model as a world model and treats reasoning as planning over the
+states that model induces, but it plans with a fixed prompted value
+heuristic rather than distilling a learned $Q$ over a structured state.
+Tree of Thoughts \citep{yao2023tot} searches breadth- or depth-first over
+free-form ``thought'' states scored by a prompted heuristic, with no
+learned value head and no value-distillation loop closing back into the
+generator, which is precisely the closed loop our framework centers. The closest prior
 published system to our framework is rStar-Math
 \citep{guan2025rstarmath}, which combines small base language models
 with MCTS-based self-training and a process reward model trained from
@@ -131,29 +159,49 @@ recognizable from the AlphaZero ancestor: tree search produces better
 trajectories than the base policy, and the base policy is updated toward
 what search would have done.
 
-Our work differs along four structural axes that together distinguish a
-framework paper from a fitted system. First, the search tree explicitly
-bifurcates decision and chance nodes (Section~\ref{sec:method-mcts}); this
-is what makes the chance-node mean $W(s, a) / N(s, a)$ a legitimate
-estimator of the inner Bellman expectation when the environment is
-stochastic, as it is whenever the transition is induced by LLM sampling
-rather than by deterministic game rules. Collapsing the two node types,
-the pattern most often seen in deterministic-game tutorials, biases every
-ancestor's $Q$-estimate. Second, the agent acts over a small fixed set of
-coarse verbs $\Aset$ (Section~\ref{sec:method-actions}) and the
-$Q$-function is a multi-head categorical output rather than a scorer over
-$(s, a)$ embeddings of free-form text. This trades expressivity for a
-stable categorical distribution that PUCT can branch on and that the
-policy head can match by cross-entropy. Third, $\textsc{InvokeVerifier}$
-is one of the verbs the agent may take rather than a step performed only
-on the committed answer (Section~\ref{sec:method-actions}); the verifier
-is a learnable resource the policy budgets. Fourth, the architecture,
-action space, evaluation protocol, and falsifiable hypotheses are
-pre-registered (Section~\ref{sec:experimental-plan}) before any training
-begins, which is what we take to distinguish a methodology paper from a
-post-hoc justification of an empirically tuned system.
+Our work differs along axes that together distinguish a framework paper
+from a fitted system, and we are careful to separate what we borrow from
+what is genuinely new. The two load-bearing distinctions are the
+verifier-anchored approximate $Q$-learning core and the shared-encoder
+architecture. First, the central learnable object is an approximate
+action-value function trained against verifier-anchored Bellman targets,
+with MCTS subordinate to that core as the operator that supplies stronger
+targets (Sections~\ref{sec:method-training} and~\ref{sec:method-mcts});
+the systems above keep search the narrative center. Second, the heads
+share one frozen LLM as both encoder and generator, so a single forward
+yields both the state embedding the multi-head $Q$ consumes and the
+verb-instantiator's continuation, rather than running two models
+(Section~\ref{sec:method-architecture}); the agent acts over a small
+fixed set of coarse verbs $\Aset$ (Section~\ref{sec:method-actions}) and
+the $Q$-function is a multi-head categorical output rather than a scorer
+over $(s, a)$ embeddings of free-form text, which trades expressivity for
+a stable categorical distribution that PUCT can branch on and that the
+policy head can match by cross-entropy. Third,
+$\textsc{InvokeVerifier}$ is one of the verbs the agent may take rather
+than a step performed only on the committed answer
+(Section~\ref{sec:method-actions}); the verifier is a learnable resource
+the policy budgets. Fourth, the architecture, action space, evaluation
+protocol, and falsifiable hypotheses are pre-registered
+(Section~\ref{sec:experimental-plan}) before any training begins, which
+is what we take to distinguish a methodology paper from a post-hoc
+justification of an empirically tuned system.
 
-Two of these axes deserve specific contrast with
+One mechanism we deliberately do not claim as novel is the bifurcation of
+the search tree into decision and chance (afterstate) nodes
+(Section~\ref{sec:method-mcts}), which makes the chance-node mean
+$W(s, a) / N(s, a)$ a legitimate estimator of the inner Bellman
+expectation in a stochastic environment. That construction was introduced
+by Stochastic MuZero \citep{antonoglou2022stochastic} as the afterstate
+machinery for planning with a learned model in stochastic environments,
+and we adopt it directly. Its only new use here is its realization over
+the non-enumerable LLM-induced transition: the successor state $s'$ is
+determined by the verb-instantiator's continuation tokens plus a lossy
+parser, so $P(s' \given s, a)$ cannot be enumerated and the sampled
+chance node is the only available estimator of the Bellman inner
+expectation. The borrowed mechanism applies; the application to an
+LLM-induced, non-enumerable transition is what is specific to our setting.
+
+Two of these distinctions deserve specific contrast with
 \citet{guan2025rstarmath}. On the state and action axis, rStar-Math
 operates over token-level or step-level decoding, with search nodes
 keyed to partial generations of natural-language reasoning; our context
@@ -203,3 +251,17 @@ receives a positive partial-credit signal at the chance node where it was
 introduced. The structural-state choice is therefore what allows the
 search-then-distill pattern of STaR's lineage to be carried over into a
 Bellman-style update rather than a trajectory-level supervised target.
+The closest per-step comparators are ReST-MCTS*
+\citep{zhang2024restmcts} and Math-Shepherd
+\citep{wang2024mathshepherd}, which both move credit assignment to the
+process (per-step) granularity: ReST-MCTS* uses process-reward-guided tree
+search to mine per-step targets for self-training, and Math-Shepherd
+derives per-step process supervision automatically from rollout
+correctness without human step labels. Our per-step target differs in
+kind rather than only in source. Their step signals supervise the policy
+or a process-reward model directly, whereas our chance-node estimate
+$\Qmcts(s, a)$ is a per-step \emph{Bellman} target tied to an explicit
+Markov state (Section~\ref{sec:method-state}) and consumed by an
+approximate $Q$-learning update, so credit at a step is the discounted
+return averaged over the continuations that branch from that action rather
+than a process score attached to a token prefix.
