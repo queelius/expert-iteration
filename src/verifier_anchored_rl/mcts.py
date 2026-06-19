@@ -171,6 +171,13 @@ class MCTSConfig(Generic[S, A]):
     rollout_depth_limit: int = 100
     prior_fn: PriorFn | None = None
     rollout_policy: RolloutPolicy | None = None
+    expansion_order: str = "random"
+    """Untried-action expansion order. "random" (default) pops a uniform
+    random untried action, the historical behavior. "prior" pops the
+    untried action with the highest prior, breaking ties by action
+    enumeration order. "prior" matters when the action space is large
+    (the rewrite MDP's O(nodes x verbs)) and a uniform sweep would leave
+    the root under-expanded at small simulation budgets."""
     value_fn: ValueFn | None = None
 
 
@@ -271,27 +278,38 @@ def _expand(
     node (terminal or otherwise), and the immediate reward observed for
     the sampled transition.
     """
-    # Pop an untried action. Random selection avoids any positional bias
-    # that would otherwise correlate the expansion order with the action
-    # enumeration order of the underlying MDP.
-    idx = int(rng.integers(len(decision.untried_actions)))
-    action = decision.untried_actions.pop(idx)
-
-    # Compute the prior over the full action list available at this state.
-    # We need this both to set the prior on the new chance node and so
-    # that priors for siblings (computed at their own expansion) are
-    # consistent. Using the original action ordering keeps priors aligned
-    # between calls.
+    # Compute the prior over the full action list available at this state
+    # first: it sets the new chance node's prior, and (when
+    # expansion_order == "prior") it selects which untried action to pop.
+    # Using the original action ordering keeps priors aligned between calls.
     all_actions = list(mdp.actions(decision.state))
     if config.prior_fn is not None:
         priors = list(config.prior_fn(decision.state, all_actions))
     else:
         priors = _uniform_prior(all_actions)
-    prior_for_action = 1.0
+    prior_by_action = {}
     for a, p in zip(all_actions, priors):
-        if a == action:
-            prior_for_action = float(p)
-            break
+        prior_by_action[a] = float(p)
+
+    if config.expansion_order == "prior":
+        # Pop the untried action with the highest prior; ties break by
+        # position in untried_actions (enumeration order), which is
+        # deterministic without consuming rng.
+        best_i = 0
+        best_p = prior_by_action.get(decision.untried_actions[0], 0.0)
+        for i, a in enumerate(decision.untried_actions):
+            p = prior_by_action.get(a, 0.0)
+            if p > best_p:
+                best_p = p
+                best_i = i
+        action = decision.untried_actions.pop(best_i)
+    else:
+        # Random selection avoids positional bias correlating expansion
+        # order with the MDP's action enumeration order.
+        idx = int(rng.integers(len(decision.untried_actions)))
+        action = decision.untried_actions.pop(idx)
+
+    prior_for_action = prior_by_action.get(action, 1.0)
 
     chance = ChanceNode(
         parent=decision,

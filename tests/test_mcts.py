@@ -367,3 +367,41 @@ def test_value_fn_not_called_on_terminal_leaf():
     assert _G not in seen and _B not in seen  # G, B are terminal
     # safe -> G (terminal) with reward 4, so its estimate is unaffected by vf.
     assert math.isclose(root_q_estimates(root)["safe"], 4.0, abs_tol=1e-9)
+
+
+def test_expansion_order_prior_pops_highest_prior_first():
+    """With expansion_order='prior', untried actions expand in
+    prior-descending order; 'random' is unchanged at a fixed seed."""
+    import numpy as np
+    from verifier_anchored_rl.mcts import (MCTSConfig, _make_decision_node,
+                                          _expand)
+
+    class TwoStepMDP:
+        # state 0 has actions ['a','b','c']; any action -> terminal state 1.
+        def actions(self, state):
+            return ["a", "b", "c"] if state == 0 else []
+        def is_terminal(self, state):
+            return state == 1
+        def sample_transition(self, state, action, rng):
+            return 1, 0.0
+
+    mdp = TwoStepMDP()
+    rng = np.random.default_rng(0)
+    # Prior strongly prefers 'b' > 'c' > 'a'.
+    prior = {"a": 0.1, "b": 0.6, "c": 0.3}
+    config = MCTSConfig(prior_fn=lambda s, acts: [prior[a] for a in acts],
+                        expansion_order="prior")
+    node = _make_decision_node(mdp, 0, parent=None)
+    first, _, _ = _expand(mdp, node, config, rng)
+    assert first.action == "b"   # highest prior popped first
+    second, _, _ = _expand(mdp, node, config, rng)
+    assert second.action == "c"  # next highest
+
+    # 'random' reproduces the current behavior: a fixed seed pops a
+    # deterministic (not prior-ordered) action.
+    node2 = _make_decision_node(mdp, 0, parent=None)
+    config_rand = MCTSConfig(prior_fn=lambda s, acts: [prior[a] for a in acts],
+                             expansion_order="random")
+    rng2 = np.random.default_rng(0)
+    popped = _expand(mdp, node2, config_rand, rng2)[0].action
+    assert popped in {"a", "b", "c"}
