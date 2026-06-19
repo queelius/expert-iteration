@@ -111,3 +111,26 @@ def test_outer_loop_closes_prior_shifts_search():
     vu = {a.verb.value: round(v, 6) for a, v in visit_count_policy(ru).items()}
     vt = {a.verb.value: round(v, 6) for a, v in visit_count_policy(rt).items()}
     assert vu != vt
+
+
+def test_loss_summary_extracts_q_pi_total_split():
+    from verifier_anchored_rl.outer_loop import loss_summary
+
+    losses = [
+        {"q": 1.0, "pi": 2.0, "total": 3.0},
+        {"q": 0.5, "pi": 1.5, "total": 2.0},
+        {"q": 0.1, "pi": 1.4, "total": 1.5},
+    ]
+    s = loss_summary(losses)
+    assert s["q_first"] == 1.0 and s["q_last"] == 0.1
+    assert abs(s["q_mean"] - (1.6 / 3)) < 1e-9
+    assert s["pi_first"] == 2.0 and s["pi_last"] == 1.4
+    assert s["total_first"] == 3.0 and s["total_last"] == 1.5
+
+
+def test_loss_summary_handles_empty():
+    from verifier_anchored_rl.outer_loop import loss_summary
+    import math
+
+    s = loss_summary([])
+    assert math.isnan(s["q_first"]) and math.isnan(s["total_last"])

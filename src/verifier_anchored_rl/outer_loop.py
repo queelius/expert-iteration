@@ -23,6 +23,29 @@ from .mcts import MCTSConfig, mcts_search, root_q_estimates, visit_count_policy
 from .replay import sample_from_record
 
 
+def loss_summary(losses: list[dict[str, float]]) -> dict[str, float]:
+    """First, last, and mean of each loss component over a list of per-step
+    loss dicts. All NaN if the list is empty (training did not run)."""
+    nan = float("nan")
+    if not losses:
+        return {
+            "q_first": nan, "q_last": nan, "q_mean": nan,
+            "pi_first": nan, "pi_last": nan, "pi_mean": nan,
+            "total_first": nan, "total_last": nan, "total_mean": nan,
+        }
+
+    def col(key):
+        return [d[key] for d in losses]
+
+    out = {}
+    for key in ("q", "pi", "total"):
+        vals = col(key)
+        out[f"{key}_first"] = vals[0]
+        out[f"{key}_last"] = vals[-1]
+        out[f"{key}_mean"] = sum(vals) / len(vals)
+    return out
+
+
 @dataclass
 class IterationStats:
     """Per-iteration record: the loss curve, FLOP counters, and counts."""
@@ -37,6 +60,13 @@ class IterationStats:
     n_decisions: int = 0
     n_simulations: int = 0
     buffer_size: int = 0
+    wall_seconds: float = 0.0
+    q_first: float = float("nan")
+    q_last: float = float("nan")
+    pi_first: float = float("nan")
+    pi_last: float = float("nan")
+    total_first: float = float("nan")
+    total_last: float = float("nan")
 
 
 def _flop_counters(encoder: Any) -> dict[str, int]:
@@ -179,4 +209,4 @@ def run_outer_loop(
     return stats
 
 
-__all__ = ["IterationStats", "collect_iteration", "run_outer_loop"]
+__all__ = ["IterationStats", "collect_iteration", "loss_summary", "run_outer_loop"]
