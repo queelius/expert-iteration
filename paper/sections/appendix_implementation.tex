@@ -1,0 +1,112 @@
+\section{State Schema and Serialization Listings}
+\label{app:state-listings}
+
+This appendix collects the implementation-level listings for the
+structured context state of Section~\ref{sec:method-state} and the
+serialization template of Section~\ref{sec:method-architecture}. The
+load-bearing definitions (Definition~\ref{def:mathstate}, the
+fact-versus-hypothesis distinction) remain in the body; what follows is
+the concrete record layout and token template.
+
+\paragraph{Record dataclasses.}
+Each record type in Definition~\ref{def:mathstate} carries a stable
+identifier so that actions and parent pointers can address it. The
+forward-compatible \texttt{parent\_*} and \texttt{children} fields are
+left at their defaults in phase 1 and activated in phase 2 for
+structural decomposition (Section~\ref{sec:method-state}).
+
+\begin{lstlisting}
+@dataclass(frozen=True)
+class Fact:
+    id: str
+    statement: str
+    source: Literal["given", "derived", "verified"]
+    derivation: str | None
+
+@dataclass(frozen=True)
+class Subgoal:
+    id: str
+    statement: str
+    parent_subgoal: str | None = None
+    children: tuple[str, ...] = ()
+
+@dataclass(frozen=True)
+class Hypothesis:
+    id: str
+    statement: str
+    parent_subgoal: str | None
+    parent_hypothesis: str | None = None
+    children: tuple[str, ...] = ()
+
+@dataclass(frozen=True)
+class VerifierCall:
+    id: str
+    verb: Literal["check_arith", "solve", "simplify",
+                  "factor", "evaluate"]
+    input: str
+    output: str
+    success: bool
+    follow_up_to: str | None = None
+\end{lstlisting}
+
+\paragraph{Serialization template.}
+A math state $s$ is rendered into a token sequence by the deterministic
+template below, using the explicit structural markers discussed in
+Section~\ref{sec:method-architecture}. Two properties of this template
+matter and are explained there: the markers give the LLM's
+self-attention stable positional anchors, and depth-indexed identifiers
+render the implicit tree structure as a flat token sequence that causal
+self-attention can resolve without a tree-aware encoder.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize]
+[PROBLEM] {problem text} [/PROBLEM]
+[FACT id=fact_1 source=given]      {statement} [/FACT]
+[FACT id=fact_2 source=verified]   {statement} [/FACT]
+[OPEN_SUBGOAL id=sg_1]             {statement} [/OPEN_SUBGOAL]
+[HYPOTHESIS id=hyp_1 parent=sg_1  depth=1] {statement} [/HYPOTHESIS]
+[HYPOTHESIS id=hyp_2 parent=hyp_1 depth=2] {statement} [/HYPOTHESIS]
+[VERIFIER_CALL id=vcall_1 verb=factor success=true]
+   in:  {input}
+   out: {output}
+[/VERIFIER_CALL]
+[COMMITTED_ANSWER] <none> [/COMMITTED_ANSWER]
+[DEPTH] {d} [/DEPTH]
+[STATE_END]
+\end{lstlisting}
+
+\section{Action-Space Alternatives and Migration Path}
+\label{app:action-alternatives}
+
+The body (Section~\ref{sec:method-actions}) adopts the categorical
+seven-verb action set (Definition~\ref{def:actionset}) as the
+conservative phase 1 design. Two alternative action-space designs recur
+in the LLM-MCTS literature and represent different bets.
+
+\begin{description}[leftmargin=*, style=nextline]
+  \item[Verb $\times$ slot.]
+  Actions are pairs $(v, s)$ where $v$ is a verb and $s$ is a target
+  slot in the state. The action space grows as
+  $|V| \times |\text{slots}|$. This is more expressive for very
+  structured domains, but with our small verb set and id-based
+  targeting, the additional cardinality is unnecessary: the
+  verb-instantiator already supplies the target identifier as part of
+  its content, achieving the same expressivity without inflating the
+  categorical action space.
+  \item[Progressive widening with LLM-proposed candidates.]
+  At each decision node, sample $K$ candidate actions from the LLM as
+  free-form text; the children grow as
+  $K(s) = \lceil \alpha \cdot N(s)^{\beta} \rceil$. This is the
+  pattern in AlphaProof \citep{deepmind2024alphaproof} and AlphaCode
+  \citep{li2022alphacode}. It is powerful when the action space is
+  genuinely open (Lean tactics with arguments; arbitrary code
+  completions) but requires an $(s, a)$-embedding-based prior in place
+  of a categorical $Q$-head, and double progressive widening machinery
+  to handle the growing branching factor.
+\end{description}
+
+Migration to progressive widening is planned for phase 2 once the
+categorical version is stable; the architectural change required is
+bounded (replace the categorical $Q$-head with an
+$(s, a)$-embedding scorer), and the rest of the system
+(serialization, adapter, verifier-anchored reward) carries over
+unchanged.

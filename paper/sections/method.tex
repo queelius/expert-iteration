@@ -90,41 +90,9 @@ and $d \in \mathbb{N}$ is the turn count.
 \end{definition}
 
 Concretely, each record type carries a stable identifier so that actions and
-parent pointers can address it:
-
-\begin{lstlisting}
-@dataclass(frozen=True)
-class Fact:
-    id: str
-    statement: str
-    source: Literal["given", "derived", "verified"]
-    derivation: str | None
-
-@dataclass(frozen=True)
-class Subgoal:
-    id: str
-    statement: str
-    parent_subgoal: str | None = None
-    children: tuple[str, ...] = ()
-
-@dataclass(frozen=True)
-class Hypothesis:
-    id: str
-    statement: str
-    parent_subgoal: str | None
-    parent_hypothesis: str | None = None
-    children: tuple[str, ...] = ()
-
-@dataclass(frozen=True)
-class VerifierCall:
-    id: str
-    verb: Literal["check_arith", "solve", "simplify",
-                  "factor", "evaluate"]
-    input: str
-    output: str
-    success: bool
-    follow_up_to: str | None = None
-\end{lstlisting}
+parent pointers can address it; the full \texttt{Fact}, \texttt{Subgoal},
+\texttt{Hypothesis}, and \texttt{VerifierCall} dataclass definitions are
+listed in Appendix~\ref{app:state-listings}.
 
 \paragraph{The fact-versus-hypothesis distinction.}
 The schema's most load-bearing element is the separation of \texttt{Fact}
@@ -317,40 +285,15 @@ $Q$-head or the action set: \textsc{CommitAnswer} is a single
 categorical action regardless of how its content is produced.
 
 \paragraph{Alternatives and migration path.}
-Two alternative action-space designs recur in the LLM-MCTS literature
-and represent different bets.
-
-\begin{description}[leftmargin=*, style=nextline]
-  \item[Verb $\times$ slot.]
-  Actions are pairs $(v, s)$ where $v$ is a verb and $s$ is a target
-  slot in the state. The action space grows as
-  $|V| \times |\text{slots}|$. This is more expressive for very
-  structured domains, but with our small verb set and id-based
-  targeting, the additional cardinality is unnecessary: the
-  verb-instantiator already supplies the target identifier as part of
-  its content, achieving the same expressivity without inflating the
-  categorical action space.
-  \item[Progressive widening with LLM-proposed candidates.]
-  At each decision node, sample $K$ candidate actions from the LLM as
-  free-form text; the children grow as
-  $K(s) = \lceil \alpha \cdot N(s)^{\beta} \rceil$. This is the
-  pattern in AlphaProof \citep{deepmind2024alphaproof} and AlphaCode
-  \citep{li2022alphacode}. It is powerful when the action space is
-  genuinely open (Lean tactics with arguments; arbitrary code
-  completions) but requires an $(s, a)$-embedding-based prior in place
-  of a categorical $Q$-head, and double progressive widening machinery
-  to handle the growing branching factor.
-\end{description}
-
 We adopt the categorical seven-verb design as the conservative phase 1
-starting point. The verb-instantiator supplies enough action-content
+starting point: the verb-instantiator supplies enough action-content
 variation that MCTS still explores meaningfully, and the small fixed
 action set keeps the multi-head $Q$ architecture
-(Section~\ref{sec:method-architecture}) simple. Migration to
-progressive widening is planned for phase 2 once the categorical
-version is stable; the architectural change required is bounded
-(replace the categorical $Q$-head with an $(s, a)$-embedding scorer),
-and the rest of the system carries over.
+(Section~\ref{sec:method-architecture}) simple. Two alternative
+action-space designs that recur in the LLM-MCTS literature (verb-times-slot
+pairs and progressive widening with LLM-proposed candidates), and the
+bounded migration path to the latter in phase 2, are discussed in
+Appendix~\ref{app:action-alternatives}.
 
 \subsection{Architecture: Shared LLM and Trainable Heads}
 \label{sec:method-architecture}
@@ -384,25 +327,12 @@ training is attributable to the heads and the search procedure.
 
 \paragraph{Serialization.}
 A math state $s$ is rendered into a token sequence by a deterministic
-template using explicit structural markers:
-
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize]
-[PROBLEM] {problem text} [/PROBLEM]
-[FACT id=fact_1 source=given]      {statement} [/FACT]
-[FACT id=fact_2 source=verified]   {statement} [/FACT]
-[OPEN_SUBGOAL id=sg_1]             {statement} [/OPEN_SUBGOAL]
-[HYPOTHESIS id=hyp_1 parent=sg_1  depth=1] {statement} [/HYPOTHESIS]
-[HYPOTHESIS id=hyp_2 parent=hyp_1 depth=2] {statement} [/HYPOTHESIS]
-[VERIFIER_CALL id=vcall_1 verb=factor success=true]
-   in:  {input}
-   out: {output}
-[/VERIFIER_CALL]
-[COMMITTED_ANSWER] <none> [/COMMITTED_ANSWER]
-[DEPTH] {d} [/DEPTH]
-[STATE_END]
-\end{lstlisting}
-
-Two properties of this template matter. First, the structural markers
+template using explicit structural markers (\texttt{[PROBLEM]},
+\texttt{[FACT id=\ldots source=\ldots]}, \texttt{[HYPOTHESIS id=\ldots
+parent=\ldots depth=\ldots]}, \texttt{[VERIFIER\_CALL \ldots]}, and a
+closing \texttt{[STATE\_END]} sentinel); the full template is given in
+Appendix~\ref{app:state-listings}. Two properties of this template
+matter. First, the structural markers
 give the LLM's self-attention stable positional anchors, so per-slot
 information is recoverable from the pooled hidden state even though no
 slot-specific encoding is performed explicitly. Second, depth-indexed
@@ -838,21 +768,15 @@ is structural, and it instantiates a result established formally in the
 reward-hacking literature \citep{skalse2022reward, gao2023scaling}: an
 optimizer run against a learned proxy converges on the proxy's defects,
 and the gap between proxy and true objective widens under optimization
-\citep{gao2023scaling}. Let $f: \Sset \to [0, 1]$ be a learned classifier
-trained to predict an aesthetic property of a state (``this looks like
-careful reasoning''). A policy optimized against $f$ as a reward
-signal converges, in the limit of enough updates, to behavior that
-satisfies $f$ at $f$'s decision boundary; the policy learns the
-classifier's failure modes (regions where $f$ disagrees with the
-underlying property it was trained on) and exploits them. Verifier-anchored
-signals do not exhibit the intrinsic Goodhart gap that attends
-learned-aesthetic critics, where a learned proxy drifts from the true
-objective under optimization. They can still exhibit extrinsic Goodhart
-effects, where the formally specified verifier fails to capture the
-full intended objective and optimization exploits the gap. We address
-the extrinsic case by treating verifier coverage as a threat to validity
-(Section~\ref{sec:exp-threats}) rather than by claiming verifier signals
-are gap-free. We expand this position in Section~\ref{sec:disc-verifier}.
+\citep{gao2023scaling}. In our terms, verifier-anchored signals close
+the \emph{intrinsic} Goodhart gap by construction (the signal is a
+deterministic program, not a learned proxy off whose training
+distribution a policy can wander), while the \emph{extrinsic} gap (the
+formally specified verifier failing to capture the full intended
+objective) remains and is treated as a threat to validity
+(Section~\ref{sec:exp-threats}) rather than assumed away. The full
+intrinsic-versus-extrinsic taxonomy, with worked examples, is developed
+in Section~\ref{sec:disc-verifier}, which this subsection defers to.
 
 \paragraph{Channel decomposition deferred.}
 The channel-decomposed reward sketched in the design notes
@@ -964,15 +888,9 @@ sample rather than recomputed from the current heads.
 
 \paragraph{Phase 1 backprop scope.}
 Gradients flow only through the adapter, the $Q$-head, the policy
-head, and the verb-instantiator's verb-specific prompt prefixes. The
-LLM is frozen, so optimizer state and memory footprint are dominated
-by the heads (under five million parameters total, two to three orders
-of magnitude smaller than the LLM backbone). A modest GPU suffices
-even with a $7$B-parameter base model, and any measured improvement
-during training is attributable to the heads and the search procedure
-rather than to capability gains in the LLM. This framing is what the
-experimental plan relies on when reporting compute-versus-accuracy
-frontiers (Section~\ref{sec:experimental-plan}).
+head, and the verb-instantiator's verb-specific prompt prefixes; the
+LLM is frozen. The freezing rationale and its compute-attribution
+consequences are stated in Section~\ref{sec:method-architecture}.
 
 \paragraph{Hyperparameters worth flagging.}
 Three hyperparameters carry disproportionate weight in early

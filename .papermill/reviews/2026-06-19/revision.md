@@ -113,3 +113,91 @@ None. All dispatched fixes passed verification on the first attempt.
 - Fixed and verified: Critical (1) + Major M1-M5, M10, M11/P-12 (8) + mechanical Minor 1-10, 15, 16, 17, 18 (15) = 24 findings fixed and verified (4 specialist verifiers, all RESOLVED on first pass).
 - Deferred as visible TODO markers: M6, M7 (confirm-half), M8, M9 = 4 commitments, 7 red markers placed.
 - Failed: 0.
+
+---
+
+# Revision Report (WAVE 2: structure and length)
+
+**Date**: 2026-06-19
+**Source review**: `.papermill/reviews/2026-06-19/review.md` (Section C, Structure and Length)
+**Scope**: The Structure-and-Length restructure deferred by WAVE 1. Goal: relocate implementation and diagnostic detail to appendices and genuinely condense Background and Discussion, keeping all load-bearing content in the body.
+**Build**: clean, 54 pages total, 0 undefined refs, 0 undefined citations, no em-dash glyph.
+
+## Build
+- `cd paper && latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex` -> exit 0 (clean rebuild from `latexmk -C`, 5 passes, no "Rerun to get cross-references" warning remaining).
+- `grep -rlP '\x{2014}' paper/sections paper/references.bib` -> no matches (exit 1).
+- Duplicate-label check across all section + appendix files: none.
+
+## Page counts (before / after WAVE 2), from main.aux label pages
+| Section | Before (WAVE 1, 54 pp, no appendix) | After (WAVE 2) |
+|---|---|---|
+| Abstract + Intro | ~3 | ~3 (pp 1-3) |
+| Background | ~6 | ~5 (pp 4-8) |
+| Method | ~14 | ~13 (pp 9-21) |
+| Experimental Plan | ~7 | ~7 (pp 22-28, untouched) |
+| Pilot Results | ~11 | ~9 (pp 29-37) |
+| Related Work | ~4 | ~4 (pp 38-41, untouched) |
+| Discussion | ~6 | ~4 (pp 42-45) |
+| Conclusion | ~1 | ~1 (p 46) |
+| Bibliography | ~3 | ~3 (pp 47-49) |
+| **Appendix (new)** | 0 | **~5 (pp 50-54)** |
+| **TOTAL** | **54** | **54** |
+| **Main narrative (secs 1-8, excl. bib + appendix)** | **~51** | **46** |
+
+Net effect: the main narrative dropped from ~51 to 46 pages. About 5 pages of implementation and diagnostic detail moved to a new appendix (pp 50-54), and Background (-1 pp) and Discussion (-2 pp) were genuinely condensed. Total page count is unchanged because the moved material was relocated, not deleted, and the appendix carries its own section overhead. The condensing landed the main narrative at 46 pp rather than the aspirational 40-42; the gap is a deliberate consequence of the "move, do not delete" constraint and the requirement to keep all load-bearing definitions, the full pre-registered plan, the v4b honesty narrative, and all 7 PRE-REG TODO markers in place.
+
+## Restructure actions
+
+### 1. Background condensed (6 -> ~5 pp; genuine cut)
+- **Agent**: papermill:formal-writer (brief led with the RL-first directive verbatim and the no-em-dash rule).
+- **Compressed** (tighter statements citing `\citet{sutton2018reinforcement}`): sec:background-mdp, sec:background-bellman, sec:background-qlearning (Robbins-Monro convergence folded to one sentence), and sec:background-exploration (the behavior-policy zoo reduced from a multi-item list to one tight paragraph).
+- **Kept in full**: sec:background-approxq, sec:background-mcts ("MCTS as Sample-Efficient Policy Improvement"), sec:background-expit, sec:background-llm-mdp. RL-first ordering and the pedagogical expanded-sum style preserved in the paper-unique subsections.
+- **Labels preserved (all 24 in the file)**: every equation label retained (eq:markov, eq:bellman, eq:vstar, eq:greedy-policy, eq:softmax-policy, eq:sample-transition, eq:qlearning, eq:qlearning-error, eq:bellman-target, eq:bellman-target-approx, eq:approx-q-loss, eq:approxq-loop, eq:mcts-q-estimate, eq:per-edge-backup, eq:puct-bg, eq:visit-policy, eq:expit-q-loss, eq:expit-pi-loss, eq:llm-transition) and all subsection labels. Notation tau_pi / N(s,a) / d_h / widehat{Q} preserved; no collision reintroduced. No labels moved out of Background.
+
+### 2. Method trimmed + two blocks moved to appendix (14 -> 13 pp main body)
+- **Duplication removed**: the "Phase 1 backprop scope" paragraph (sec:method-training) was cut to its one new fact (gradient-flow scope) plus a back-reference to the "Phase 1 freezing rationale" in sec:method-architecture, which is kept in full. Removes the near-verbatim frozen-LLM-attribution echo.
+- **Moved to Appendix `app:action-alternatives`**: the action-space "Alternatives and migration path" discussion (verb-times-slot and progressive widening). Body now carries a one-paragraph keep ("we adopt the categorical seven-verb design...") plus a one-line pointer to the appendix. No labels were attached to this block, so no `\ref` breaks.
+- **Moved to Appendix `app:state-listings`**: (a) the four record dataclass listings (Fact / Subgoal / Hypothesis / VerifierCall) and (b) the serialization-template `lstlisting`. Body keeps def:mathstate, def:actionset, the Fact-versus-Hypothesis paragraph, the "two properties of this template" explanatory prose, and one-line pointers to the appendix listings. No labels were attached to the listings, so no `\ref` breaks.
+- **Goodhart development trimmed** (review item 4 / prose-auditor P-5): the method "Goodhart argument" paragraph was reduced to the principle plus the intrinsic/extrinsic naming and a pointer; the full taxonomy with worked examples is now owned solely by discussion sec:disc-verifier. Citations `\citep{skalse2022reward, gao2023scaling}` retained in the method principle statement.
+- **Labels preserved in body**: def:mathstate, def:actionset, fig:architecture, eq:embed, eq:adapter, eq:qhead, eq:policy, eq:bellmantarget, eq:rewardterminal, alg:outer-loop, eq:lossq, eq:losspi, eq:losstotal, rem:mcts-consistency, eq:puct, eq:backup, eq:pimcts, eq:qmcts, eq:fastmode, eq:searchmode, and all sec:method-* labels. None moved.
+
+### 3. Pilot Results: B-sweep deep-dive moved to appendix (11 -> 9 pp main body)
+- **Moved to Appendix `app:bsweep`**: the full budget-stability table (`tab:pilot-bsweep`), the figure (`fig:pilot-bsweep`), the negative per-call-seeding result, and the K=6-versus-K=20 small-sample artifact discussion. **The labels `tab:pilot-bsweep` and `fig:pilot-bsweep` traveled with the blocks to the appendix.**
+- **Kept in body (sec:pilot-bsweep, label retained)**: one summary paragraph stating the four headline conclusions (B=20 sits at the agreement floor; agreement rises with budget; mean-L1 is confounded so pairwise recommended-verb argmax agreement is the metric; set the budget by the slowest-converging family), ending with a one-line pointer to Appendix `app:bsweep`.
+- **Cross-reference integrity**: the two surviving body `\ref{tab:pilot-bsweep}` references (in the sec:pilot-bsweep summary and in sec:pilot-lessons) now resolve into the appendix; build confirms 0 undefined references. The five `\ref{sec:pilot-bsweep}` references elsewhere (sec:pilot-v3-v4, sec:pilot-closedloop, sec:pilot-lessons, sec:pilot-reproducibility) still resolve because sec:pilot-bsweep remains a body subsection.
+- **Three-mechanism post-mortem (sec:pilot-v3-v4 / sec:pilot-v4b)**: left in the pilot as the single owner; the discussion side (sec:disc-pilot) was rewritten to a pointer (see item 4). No pilot post-mortem content was deleted.
+
+### 4. Discussion condensed (6 -> 4 pp; genuine cut)
+- **Agent**: papermill:results-writer (brief led with the RL-first directive verbatim and the no-em-dash rule).
+- **sec:disc-verifier**: kept as the authoritative full Goodhart taxonomy (the method version now defers to it). Intrinsic/extrinsic distinction, worked examples, and `\citet{skalse2022reward}` / `\citet{gao2023scaling}` all preserved.
+- **sec:disc-pilot**: the lengthy restatement of the pilot post-mortem was replaced with a short pointer into the pilot (sec:pilot-v3-v4, sec:pilot-v4b) plus the forward-looking monitoring commitments the discussion uniquely owns (per-round composition + per-class held-out breakdown reporting; target-stability monitoring; the two closed-loop methodological commitments, ~79:1 generation:prefill and observability/resumability). **The red PRE-REG TODO marker in sec:disc-pilot was kept verbatim and in place.**
+- **sec:disc-extensions and sec:disc-llm-deliberation**: tightened ~25-35%; all `\citep` keys (deepmind2024alphaproof, li2022alphacode, hu2022lora) and all `\ref` cross-references preserved.
+- **sec:disc-limits, sec:disc-threats**: light tightening only.
+- **Labels preserved**: all seven discussion subsection labels intact.
+
+## Appendix scaffolding
+- Added `\appendix` after the bibliography in `main.tex`, with `\input{sections/appendix_implementation}` and `\input{sections/appendix_pilot}`.
+- New file `sections/appendix_implementation.tex`: `\section` "State Schema and Serialization Listings" (label `app:state-listings`) holding the dataclass + serialization listings, and `\section` "Action-Space Alternatives and Migration Path" (label `app:action-alternatives`).
+- New file `sections/appendix_pilot.tex`: `\section` "Budget--Stability Sweep: Full Results" (label `app:bsweep`) holding `tab:pilot-bsweep`, `fig:pilot-bsweep`, the per-call-seeding result, and the K=6-vs-K=20 artifact.
+
+## Labels relocated (summary)
+| Label | From | To |
+|---|---|---|
+| tab:pilot-bsweep | pilot_results.tex (body) | appendix_pilot.tex (app:bsweep) |
+| fig:pilot-bsweep | pilot_results.tex (body) | appendix_pilot.tex (app:bsweep) |
+| (dataclass + serialization listings, unlabeled) | method.tex (body) | appendix_implementation.tex (app:state-listings) |
+| (action-space alternatives, unlabeled) | method.tex (body) | appendix_implementation.tex (app:action-alternatives) |
+
+New labels introduced: app:state-listings, app:action-alternatives, app:bsweep (all referenced from the body; all resolve, 0 undefined).
+
+## Preserved per the hard constraints
+- Kept in body: structured-state schema (def:mathstate, def:actionset), the Fact-versus-Hypothesis paragraph, the entire experimental_plan.tex (untouched), the v4b controlled-rebalancing honesty narrative (sec:pilot-v4b, incl. the "rebalance-plus-expansion" sentence), and all 7 PRE-REG TODO markers (1 discussion + 5 experimental_plan + 1 pilot).
+- Not touched: the three pending-run spots (pilot sec:pilot-closedloop last paragraph; abstract "currently executing, with those learning-signal results pending"; sec:pilot-caveats "pending a run still in progress"); experiments/, src/, the journal; experimental_plan.tex, related_work.tex, abstract.tex, introduction.tex, conclusion.tex (all unchanged).
+- Wave-1 notation preserved: tau_pi, N_sync, d_h, and widehat{Q}; no collision reintroduced while condensing.
+- RL-first framing held throughout: MCTS remains subordinate to the approximate-Q-learning core in every condensed/rewritten passage.
+
+## Could not move without risking a broken reference
+- None among the items in scope. Every block flagged for relocation either carried no `\label` (the listings and the action-space alternatives) or had its `\label` travel with it (tab:pilot-bsweep, fig:pilot-bsweep), and every body `\ref` to a moved block now resolves into the appendix. sec:pilot-bsweep was deliberately kept as a body subsection (holding the summary paragraph) so that the five `\ref{sec:pilot-bsweep}` cross-references elsewhere continue to resolve.
+
+## Note on the page target
+The brief's aspirational main-narrative target was ~40-42 pp; the pass landed the main narrative at 46 pp (54 total, of which ~5 are the new appendix and ~3 the bibliography). The shortfall is a deliberate consequence of the "move, do not delete" rule plus the requirement to keep the full pre-registered plan, the structured-state definitions, the v4b narrative, and the MCTS/expert-iteration/LLM-context-MDP background subsections intact. Reaching 40-42 would require cutting load-bearing content the brief explicitly protects, so it was not attempted.
