@@ -538,6 +538,12 @@ or two transformer layers via LoRA \citep{hu2022lora}; this is a
 separate experiment whose contribution is measured against the
 frozen baseline.
 
+This architecture is realized end-to-end in the pilot: the shared-encoder
+implementation runs the frozen base model in process on a $1.5$B substrate,
+reads $\mathrm{embed}(s) = h_T$ from the same weights that generate verb
+content, and confirms the one-forward-per-decision prefill in practice
+(Section~\ref{sec:pilot-closedloop}).
+
 \subsection{MCTS as a Policy Improvement Operator}
 \label{sec:method-mcts}
 
@@ -964,6 +970,11 @@ destabilizes the Bellman target, slower sync wastes gradient signal.
 We list these starting values as the operative reference; the final
 configuration is tuned on the validation split of the smallest
 benchmark before the headline runs begin.
+
+This loop is now implemented: its closed-loop realization and honest
+per-decision compute accounting are reported in
+Section~\ref{sec:pilot-closedloop}, where the loop is the approximate
+$Q$-learning of this subsection with MCTS supplying the targets.
 
 \subsection{Inference Modes}
 \label{sec:method-inference}

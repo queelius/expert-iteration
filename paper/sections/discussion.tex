@@ -273,6 +273,25 @@ benchmark performance, but it establishes that the framework's
 mechanics are not vacuous, which is a precondition for the
 pre-registered study being worth running.
 
+The closed-loop implementation surfaced two methodological commitments the
+pre-registered study inherits. The first is honest per-decision compute
+accounting: once the frozen model runs in process and one state prefill
+serves both the heads and verb generation
+(Section~\ref{sec:pilot-closedloop}), the decoder forwards become countable,
+and the first closed-loop run shows generation dominating a decision's token
+cost over the prefill by about $79$ to $1$. The compute axis of the
+pre-registered plan (Section~\ref{sec:exp-compute}) is accordingly
+denominated in generated tokens per decision, since a search simulation's
+cost is itself dominated by generation. The second is that observability and
+resumability are research infrastructure rather than conveniences: the
+framework's central claim is an across-iteration trend (the
+approximate-$Q$-learning $L_Q$ decrease and the expert-iteration sharpening
+of $\ptheta$), and a first long run that persisted only a per-iteration
+$L_{\mathrm{total}}$ summary, in which $L_{\pi}$ near its entropy floor masks
+the small $L_Q$ term, could not surface it. A run long enough to matter must
+persist the separated learning signals per iteration and checkpoint often
+enough to resume from a crash.
+
 \subsection{Threats to the Empirical Story}
 \label{sec:disc-threats}
 
