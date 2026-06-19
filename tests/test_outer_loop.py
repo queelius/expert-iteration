@@ -184,6 +184,85 @@ def test_collect_iteration_start_problem_skips_done_trajectories():
     assert trajectories == [2]
 
 
+def _checkpoint_state(actor, opt, buf, trainer, rng, phase, iteration, done):
+    return {
+        "phase": phase,
+        "iteration": iteration,
+        "problems_done_this_iter": done,
+        "actor_state": actor.state_dict(),
+        "optimizer_state": opt.state_dict(),
+        "buffer": buf.state_dict(),
+        "global_step": trainer.global_step,
+        "numpy_rng_state": rng.bit_generator.state,
+    }
+
+
+def test_resume_from_iteration_checkpoint_matches_uninterrupted_run(tmp_path):
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    import torch
+    from verifier_anchored_rl.outer_loop import run_outer_loop
+    from verifier_anchored_rl.run_artifacts import (
+        save_checkpoint_atomic, load_checkpoint,
+    )
+
+    problems = [("2+2", "4")]
+    common = dict(
+        n_iterations=2, train_steps_per_iter=10, batch_size=8,
+        min_buffer_size=2, num_simulations=6, c_puct=1.5, discount=1.0,
+        tau=1.0, max_turns=4,
+    )
+
+    # Uninterrupted reference run. Seed torch so the actor init is fixed.
+    torch.manual_seed(0)
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    run_outer_loop(problems, mdp_factory, sa, trainer, buf,
+                   rng=np.random.default_rng(0), encoder=enc, **common)
+    ref_weights = {k: v.clone() for k, v in actor.state_dict().items()}
+
+    # Interruptible run: identical torch seed gives identical actor init.
+    # Stop after iteration 1, save a "training"-phase checkpoint.
+    torch.manual_seed(0)
+    enc2, actor2, sa2, buf2, trainer2, mdp2 = _build()
+    rng2 = np.random.default_rng(0)
+    ckpt_path = str(tmp_path / "checkpoint.pt")
+
+    def _save(state):
+        if state["phase"] == "training" and state["iteration"] == 1:
+            save_checkpoint_atomic(ckpt_path, _checkpoint_state(
+                actor2, trainer2.optimizer, buf2, trainer2, rng2,
+                "training", 1, len(problems)))
+
+    run_outer_loop(problems, mdp2, sa2, trainer2, buf2,
+                   rng=rng2, encoder=enc2, n_iterations=1,
+                   train_steps_per_iter=common["train_steps_per_iter"],
+                   batch_size=common["batch_size"],
+                   min_buffer_size=common["min_buffer_size"],
+                   num_simulations=common["num_simulations"],
+                   c_puct=common["c_puct"], discount=common["discount"],
+                   tau=common["tau"], max_turns=common["max_turns"],
+                   save_checkpoint=_save)
+
+    # Fresh stack, restore, resume iteration 2.
+    torch.manual_seed(0)
+    enc3, actor3, sa3, buf3, trainer3, mdp3 = _build()
+    ckpt = load_checkpoint(ckpt_path)
+    actor3.load_state_dict(ckpt["actor_state"])
+    trainer3.optimizer.load_state_dict(ckpt["optimizer_state"])
+    buf3.load_state_dict(ckpt["buffer"])
+    trainer3.global_step = ckpt["global_step"]
+    rng3 = np.random.default_rng(0)
+    rng3.bit_generator.state = ckpt["numpy_rng_state"]
+
+    run_outer_loop(problems, mdp3, sa3, trainer3, buf3,
+                   rng=rng3, encoder=enc3, start_iteration=2, **common)
+
+    resumed_weights = actor3.state_dict()
+    for k in ref_weights:
+        assert torch.allclose(ref_weights[k], resumed_weights[k], atol=1e-6), k
+
+
 def test_run_outer_loop_invokes_train_and_checkpoint_callbacks():
     import pytest
     pytest.importorskip("torch")
