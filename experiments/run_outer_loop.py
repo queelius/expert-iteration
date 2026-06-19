@@ -1,25 +1,96 @@
-"""Run the outer collection-and-train loop on toy problems (method.tex 3.7).
+"""Run the outer collection-and-train loop on toy problems (method.tex 3.7),
+with full observability and resume. See
+docs/superpowers/specs/2026-06-19-observable-resumable-outer-loop-design.md.
 
-This is the GPU-bound integration of the three CPU-verified modules
-(architecture/train/replay) with the planner (mcts) and the in-process
-encoder (shared_forward). It runs a few outer iterations on the toy `train`
-problem group, sharing one frozen model between generation and the heads'
-embeddings, and prints the per-iteration loss curve and FLOP counters.
-
-Usage::
-
-    python experiments/run_outer_loop.py \\
-        --model Qwen/Qwen2.5-Math-1.5B-Instruct \\
-        --iterations 3 --num-simulations 16 --train-steps 200 \\
-        --batch-size 16 --max-turns 8
-"""
+Each run gets a unique directory under --run-root with metadata.json,
+progress.log (flushed, tee'd to stdout), records.jsonl, metrics.jsonl, a
+per-trajectory checkpoint.pt, and a summary.md rewritten each iteration.
+--resume <run-dir> continues a crashed run from its checkpoint."""
 
 from __future__ import annotations
 
 import argparse
+import platform
+import socket
+import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
+
+from verifier_anchored_rl.outer_loop import run_outer_loop
+from verifier_anchored_rl.run_artifacts import (
+    append_jsonl,
+    create_run_dir,
+    load_checkpoint,
+    save_checkpoint_atomic,
+    update_status,
+)
+
+
+def _git_sha() -> tuple[str, bool]:
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short=8", "HEAD"], text=True).strip()
+        dirty = bool(subprocess.check_output(
+            ["git", "status", "--porcelain"], text=True).strip())
+        return sha, dirty
+    except Exception:
+        return "nogit", False
+
+
+def _gpu_info() -> dict:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return {"gpu": torch.cuda.get_device_name(0),
+                    "cuda": torch.version.cuda}
+    except Exception:
+        pass
+    return {"gpu": "cpu", "cuda": None}
+
+
+def _build_stack(args):
+    """Construct the run stack. Heavy: loads the frozen model. Factored out so
+    tests can stub it. Returns (encoder, state_actor, trainer, buffer, actor,
+    optimizer, llm_client, cache)."""
+    import torch
+
+    from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
+    from verifier_anchored_rl.replay import ReplayBuffer
+    from verifier_anchored_rl.shared_forward import SharedForwardEncoder
+    from verifier_anchored_rl.train import Trainer
+    from verifier_anchored_rl.transformers_client import TransformersLLMClient
+
+    llm_client = TransformersLLMClient(model_name=args.model)
+    encoder = SharedForwardEncoder.from_llm_client(llm_client)
+    cache = PrefillCache(capacity=4096)
+    actor = HiddenStateActor(embed_dim=encoder.embed_dim)
+    state_actor = StateActor(encoder, actor, cache, depth_limit=args.depth_limit)
+    buffer = ReplayBuffer(capacity=args.capacity)
+    opt = torch.optim.Adam(actor.parameters(), lr=args.lr)
+    trainer = Trainer(actor, opt, buffer, sync_interval=args.sync_interval)
+    return encoder, state_actor, trainer, buffer, actor, opt, llm_client, cache
+
+
+def _save_checkpoint_for(run_dir, actor, opt, buffer, trainer, rng):
+    """Return a save_checkpoint(state) closure that assembles the full
+    checkpoint dict from the live objects and writes it atomically."""
+    ckpt_path = str(Path(run_dir) / "checkpoint.pt")
+
+    def _save(state: dict) -> None:
+        full = {
+            **state,
+            "actor_state": actor.state_dict(),
+            "optimizer_state": opt.state_dict(),
+            "buffer": buffer.state_dict(),
+            "global_step": trainer.global_step,
+            "numpy_rng_state": rng.bit_generator.state,
+        }
+        save_checkpoint_atomic(ckpt_path, full)
+
+    return _save
 
 
 def main(argv=None) -> int:
@@ -39,19 +110,13 @@ def main(argv=None) -> int:
     p.add_argument("--max-turns", type=int, default=8)
     p.add_argument("--depth-limit", type=int, default=3)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--log-every", type=int, default=25)
     p.add_argument("--problems", nargs="+", default=["train"])
+    p.add_argument("--run-root", default="experiments/results/runs")
+    p.add_argument("--tag", default=None)
+    p.add_argument("--resume", default=None,
+                   help="path to an existing run dir to resume")
     args = p.parse_args(argv)
-
-    import torch
-
-    from verifier_anchored_rl.architecture import HiddenStateActor
-    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
-    from verifier_anchored_rl.outer_loop import run_outer_loop
-    from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
-    from verifier_anchored_rl.replay import ReplayBuffer
-    from verifier_anchored_rl.shared_forward import SharedForwardEncoder
-    from verifier_anchored_rl.train import Trainer
-    from verifier_anchored_rl.transformers_client import TransformersLLMClient
 
     try:
         from problems import PROBLEMS, resolve_problem_selection
@@ -60,43 +125,123 @@ def main(argv=None) -> int:
 
     keys = resolve_problem_selection(args.problems)
     problems = [(PROBLEMS[k]["problem"], PROBLEMS[k]["expected"]) for k in keys]
-    print(f"=== Outer loop: {len(problems)} problems, model={args.model} ===",
-          flush=True)
 
-    llm_client = TransformersLLMClient(model_name=args.model)
-    encoder = SharedForwardEncoder.from_llm_client(llm_client)
-    cache = PrefillCache(capacity=4096)
-    actor = HiddenStateActor(embed_dim=encoder.embed_dim)
-    state_actor = StateActor(encoder, actor, cache, depth_limit=args.depth_limit)
-    buffer = ReplayBuffer(capacity=args.capacity)
-    opt = torch.optim.Adam(actor.parameters(), lr=args.lr)
-    trainer = Trainer(actor, opt, buffer, sync_interval=args.sync_interval)
+    (encoder, state_actor, trainer, buffer, actor, opt,
+     llm, cache) = _build_stack(args)
+    rng = np.random.default_rng(args.seed)
+
+    start_iteration, start_problem = 1, 0
+    if args.resume:
+        run_dir = Path(args.resume)
+        ckpt = load_checkpoint(str(run_dir / "checkpoint.pt"))
+        actor.load_state_dict(ckpt["actor_state"])
+        opt.load_state_dict(ckpt["optimizer_state"])
+        buffer.load_state_dict(ckpt["buffer"])
+        trainer.global_step = ckpt["global_step"]
+        rng.bit_generator.state = ckpt["numpy_rng_state"]
+        if ckpt["phase"] == "collecting":
+            start_iteration = ckpt["iteration"]
+            start_problem = ckpt["problems_done_this_iter"]
+        else:
+            start_iteration = ckpt["iteration"] + 1
+            start_problem = 0
+    else:
+        meta = {
+            "args": vars(args), "hostname": socket.gethostname(),
+            "python": platform.python_version(), **_gpu_info(),
+            "model": args.model, "seed": args.seed,
+        }
+        sha, dirty = _git_sha()
+        meta["git_sha"], meta["git_dirty"] = sha, dirty
+        try:
+            import torch
+            import transformers
+            meta["torch"] = torch.__version__
+            meta["transformers"] = transformers.__version__
+            meta["dtype"] = str(getattr(encoder.model, "dtype", "unknown"))
+            meta["device"] = str(getattr(encoder.model, "device", "unknown"))
+        except Exception:
+            pass
+        run_dir = create_run_dir(root=args.run_root, tag=args.tag, metadata=meta)
+
+    log_path = run_dir / "progress.log"
+    records_path = str(run_dir / "records.jsonl")
+    metrics_path = str(run_dir / "metrics.jsonl")
+    summary_path = run_dir / "summary.md"
+    summaries = []
+
+    def log(msg: str) -> None:
+        line = msg if msg.endswith("\n") else msg + "\n"
+        with open(log_path, "a") as f:
+            f.write(line)
+            f.flush()
+        sys.stdout.write(line)
+        sys.stdout.flush()
 
     def mdp_factory(problem):
+        from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
         return LLMContextMDP(
             problem_statement=problem[0], expected_answer=problem[1],
-            llm_client=llm_client, encoder=encoder, prefill_cache=cache,
+            llm_client=llm, encoder=encoder, prefill_cache=state_actor.cache,
             depth_limit=args.depth_limit, max_turns=args.max_turns)
 
-    stats = run_outer_loop(
-        problems, mdp_factory, state_actor, trainer, buffer,
-        n_iterations=args.iterations, train_steps_per_iter=args.train_steps,
-        batch_size=args.batch_size, min_buffer_size=args.min_buffer,
-        num_simulations=args.num_simulations, c_puct=args.c_puct,
-        discount=args.discount, tau=args.tau, max_turns=args.max_turns,
-        rng=np.random.default_rng(args.seed), encoder=encoder)
+    def on_decision(info):
+        log(f"iter {info['iteration']} prob {info['iteration_problem_index']} "
+            f"turn {info['turn']}: verb={info['chosen_verb']} "
+            f"pi_argmax={info['pi_argmax_verb']}({info['pi_argmax_prob']:.2f}) "
+            f"gen={info['gen_calls']} ({info['gen_tokens']} tok) "
+            f"prefill={info['prefill_calls']} ({info['prefill_tokens']} tok)")
 
-    print("\n=== Per-iteration summary ===", flush=True)
-    for s in stats:
-        first = s.losses[0]["total"] if s.losses else float("nan")
-        last = s.losses[-1]["total"] if s.losses else float("nan")
-        print(
-            f"iter {s.iteration}: decisions={s.n_decisions} "
-            f"sims={s.n_simulations} buffer={s.buffer_size} "
-            f"prefill={s.prefill_calls} ({s.prefill_tokens} tok) "
-            f"gen={s.gen_calls} ({s.gen_tokens} tok) "
-            f"L_total {first:.4f} -> {last:.4f}",
-            flush=True)
+    def on_train_step(info):
+        log(f"  train step {info['global_step']}: "
+            f"L_Q {info['q']:.4f} L_pi {info['pi']:.4f} L_total {info['total']:.4f}")
+
+    def on_iteration_end(s):
+        row = {
+            "iteration": s.iteration, "decisions": s.n_decisions,
+            "sims": s.n_simulations, "buffer": s.buffer_size,
+            "prefill_calls": s.prefill_calls, "prefill_tokens": s.prefill_tokens,
+            "gen_calls": s.gen_calls, "gen_tokens": s.gen_tokens,
+            "L_Q_first": s.q_first, "L_Q_last": s.q_last,
+            "L_pi_first": s.pi_first, "L_pi_last": s.pi_last,
+            "L_total_first": s.total_first, "L_total_last": s.total_last,
+            "wall_seconds": s.wall_seconds,
+        }
+        append_jsonl(metrics_path, row)
+        summaries.append(row)
+        lines = ["# Run summary", "",
+                 "| iter | decisions | buffer | gen tok | L_Q first to last | L_total first to last |",
+                 "|---|---:|---:|---:|---|---|"]
+        for r in summaries:
+            lines.append(
+                f"| {r['iteration']} | {r['decisions']} | {r['buffer']} | "
+                f"{r['gen_tokens']} | {r['L_Q_first']:.4f} to {r['L_Q_last']:.4f} | "
+                f"{r['L_total_first']:.4f} to {r['L_total_last']:.4f} |")
+        summary_path.write_text("\n".join(lines) + "\n")
+        log(f"=== iter {s.iteration} done in {s.wall_seconds:.0f}s: "
+            f"L_total {s.total_first:.4f} to {s.total_last:.4f} ===")
+
+    save_ckpt = _save_checkpoint_for(run_dir, actor, opt, buffer, trainer, rng)
+
+    log(f"=== Outer loop: {len(problems)} problems, model={args.model}, "
+        f"run_dir={run_dir} ===")
+    try:
+        run_outer_loop(
+            problems, mdp_factory, state_actor, trainer, buffer,
+            n_iterations=args.iterations, train_steps_per_iter=args.train_steps,
+            batch_size=args.batch_size, min_buffer_size=args.min_buffer,
+            num_simulations=args.num_simulations, c_puct=args.c_puct,
+            discount=args.discount, tau=args.tau, max_turns=args.max_turns,
+            rng=rng, encoder=encoder,
+            record_sink=lambda rec: append_jsonl(records_path, rec),
+            on_decision=on_decision, on_train_step=on_train_step,
+            on_iteration_end=on_iteration_end, save_checkpoint=save_ckpt,
+            log_every=args.log_every,
+            start_iteration=start_iteration, start_problem=start_problem)
+    except BaseException:
+        update_status(run_dir, "failed")
+        raise
+    update_status(run_dir, "completed")
     return 0
 
 
