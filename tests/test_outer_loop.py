@@ -113,6 +113,62 @@ def test_outer_loop_closes_prior_shifts_search():
     assert vu != vt
 
 
+def test_entropy_helper_is_in_bits():
+    from verifier_anchored_rl.outer_loop import _entropy
+
+    assert abs(_entropy([0.5, 0.5]) - 1.0) < 1e-9          # 1 bit
+    assert abs(_entropy([1.0]) - 0.0) < 1e-9               # delta, 0 bits
+    assert abs(_entropy([0.25, 0.25, 0.25, 0.25]) - 2.0) < 1e-9
+    assert abs(_entropy([0.5, 0.5, 0.0]) - 1.0) < 1e-9     # zero-prob skipped
+
+
+def test_collect_iteration_reports_visit_and_prior_entropy():
+    import math
+
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    decisions = []
+    counts = collect_iteration(
+        [("2+2", "4")], mdp_factory, sa, config, buf,
+        np.random.default_rng(0), tau=1.0, max_turns=4,
+        on_decision=lambda info: decisions.append(info),
+    )
+
+    assert math.isfinite(counts["mean_visit_entropy"])
+    assert math.isfinite(counts["mean_prior_entropy"])
+    assert counts["mean_visit_entropy"] >= 0.0
+    assert counts["mean_prior_entropy"] >= 0.0
+    assert "pi_mcts_entropy" in decisions[0]
+    assert "prior_entropy" in decisions[0]
+
+
+def test_run_outer_loop_stats_carry_entropy_metrics():
+    import math
+
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.outer_loop import run_outer_loop
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    stats = run_outer_loop(
+        [("2+2", "4")], mdp_factory, sa, trainer, buf,
+        n_iterations=2, train_steps_per_iter=10, batch_size=8,
+        min_buffer_size=2, num_simulations=6, c_puct=1.5, discount=1.0,
+        tau=1.0, max_turns=4, rng=np.random.default_rng(0), encoder=enc)
+
+    assert math.isfinite(stats[-1].visit_entropy)
+    assert math.isfinite(stats[-1].prior_entropy)
+
+
 def test_loss_summary_extracts_q_pi_total_split():
     from verifier_anchored_rl.outer_loop import loss_summary
 

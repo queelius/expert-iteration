@@ -209,6 +209,7 @@ def main(argv=None) -> int:
         log(f"iter {info['iteration']} prob {info['iteration_problem_index']} "
             f"turn {info['turn']}: verb={info['chosen_verb']} "
             f"pi_argmax={info['pi_argmax_verb']}({info['pi_argmax_prob']:.2f}) "
+            f"H_visit={info['pi_mcts_entropy']:.2f} H_prior={info['prior_entropy']:.2f} "
             f"gen={info['gen_calls']} ({info['gen_tokens']} tok) "
             f"prefill={info['prefill_calls']} ({info['prefill_tokens']} tok)")
 
@@ -225,18 +226,21 @@ def main(argv=None) -> int:
             "L_Q_first": s.q_first, "L_Q_last": s.q_last,
             "L_pi_first": s.pi_first, "L_pi_last": s.pi_last,
             "L_total_first": s.total_first, "L_total_last": s.total_last,
+            "visit_entropy": s.visit_entropy, "prior_entropy": s.prior_entropy,
             "wall_seconds": s.wall_seconds,
         }
         append_jsonl(metrics_path, row)
         summaries.append(row)
         lines = ["# Run summary", "",
-                 "| iter | decisions | buffer | gen tok | L_Q first to last | L_total first to last |",
-                 "|---|---:|---:|---:|---|---|"]
+                 "| iter | decisions | buffer | gen tok | L_Q first to last "
+                 "| visit H (bits) | prior H (bits) |",
+                 "|---|---:|---:|---:|---|---:|---:|"]
         for r in summaries:
             lines.append(
                 f"| {r['iteration']} | {r['decisions']} | {r['buffer']} | "
                 f"{r['gen_tokens']} | {r['L_Q_first']:.4f} to {r['L_Q_last']:.4f} | "
-                f"{r['L_total_first']:.4f} to {r['L_total_last']:.4f} |")
+                f"{r.get('visit_entropy', float('nan')):.3f} | "
+                f"{r.get('prior_entropy', float('nan')):.3f} |")
         summary_path.write_text("\n".join(lines) + "\n")
         log(f"=== iter {s.iteration} done in {s.wall_seconds:.0f}s: "
             f"L_total {s.total_first:.4f} to {s.total_last:.4f} ===")

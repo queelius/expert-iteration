@@ -14,6 +14,7 @@ testable end to end with a FakeEncoder; the real run uses SharedForwardEncoder.
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -22,6 +23,14 @@ import numpy as np
 
 from .mcts import MCTSConfig, mcts_search, root_q_estimates, visit_count_policy
 from .replay import sample_from_record
+
+
+def _entropy(probs: Any) -> float:
+    """Shannon entropy in bits of a probability vector. Zero-probability
+    entries are skipped (0 log 0 = 0). A delta is 0 bits; a uniform over k is
+    log2(k) bits. Used to quantify how sharp the MCTS visit distribution and
+    the learned prior are (lower entropy = more concentrated = sharper)."""
+    return -sum(p * math.log2(p) for p in probs if p > 0.0)
 
 
 def loss_summary(losses: list[dict[str, float]]) -> dict[str, float]:
@@ -68,6 +77,8 @@ class IterationStats:
     pi_last: float = float("nan")
     total_first: float = float("nan")
     total_last: float = float("nan")
+    visit_entropy: float = float("nan")
+    prior_entropy: float = float("nan")
 
 
 def _flop_counters(encoder: Any) -> dict[str, int]:
@@ -95,7 +106,7 @@ def collect_iteration(
     on_trajectory_end: Callable[[int], None] | None = None,
     start_problem: int = 0,
     iteration_index: int = 0,
-) -> dict[str, int]:
+) -> dict[str, float]:
     """Drive one trajectory per problem, adding one ReplaySample per node.
 
     See module docstring. ``start_problem`` skips the first k problems (for
@@ -107,6 +118,8 @@ def collect_iteration(
 
     n_traj = 0
     n_dec = 0
+    visit_entropy_sum = 0.0
+    prior_entropy_sum = 0.0
     enc = getattr(state_actor, "encoder", None)
     for p_idx, problem in enumerate(problems):
         if p_idx < start_problem:
@@ -139,6 +152,15 @@ def collect_iteration(
             probs = probs / probs.sum()
             chosen = actions[int(rng.choice(len(actions), p=probs))]
 
+            # Sharpening diagnostics (method.tex 3.7 success criterion: the
+            # learned prior sharpens so search visits concentrate). The prior
+            # read reuses the cached state prefill, so it adds only a tiny heads
+            # pass and does not touch the prefill/gen FLOP counters.
+            visit_entropy = _entropy(pi.values())
+            prior_entropy = _entropy(state_actor.prior(state, actions))
+            visit_entropy_sum += visit_entropy
+            prior_entropy_sum += prior_entropy
+
             if on_decision is not None:
                 top = max(pi.items(), key=lambda kv: kv[1])
                 on_decision({
@@ -148,6 +170,8 @@ def collect_iteration(
                     "chosen_verb": chosen.verb.value,
                     "pi_argmax_verb": top[0].verb.value,
                     "pi_argmax_prob": float(top[1]),
+                    "pi_mcts_entropy": float(visit_entropy),
+                    "prior_entropy": float(prior_entropy),
                     "q_chosen": float(q.get(chosen, float("nan"))),
                     "prefill_calls": int(getattr(enc, "prefill_calls", 0)),
                     "prefill_tokens": int(getattr(enc, "prefill_tokens", 0)),
@@ -160,10 +184,13 @@ def collect_iteration(
         if on_trajectory_end is not None:
             on_trajectory_end(p_idx + 1)
 
+    nan = float("nan")
     return {
         "n_trajectories": n_traj,
         "n_decisions": n_dec,
         "n_simulations": n_dec * config.num_simulations,
+        "mean_visit_entropy": visit_entropy_sum / n_dec if n_dec else nan,
+        "mean_prior_entropy": prior_entropy_sum / n_dec if n_dec else nan,
     }
 
 
@@ -257,14 +284,16 @@ def run_outer_loop(
             prefill_tokens=after["prefill_tokens"] - before["prefill_tokens"],
             gen_calls=after["gen_calls"] - before["gen_calls"],
             gen_tokens=after["gen_tokens"] - before["gen_tokens"],
-            n_trajectories=counts["n_trajectories"],
-            n_decisions=counts["n_decisions"],
-            n_simulations=counts["n_simulations"],
+            n_trajectories=int(counts["n_trajectories"]),
+            n_decisions=int(counts["n_decisions"]),
+            n_simulations=int(counts["n_simulations"]),
             buffer_size=len(buffer),
             wall_seconds=time.monotonic() - t0,
             q_first=summary["q_first"], q_last=summary["q_last"],
             pi_first=summary["pi_first"], pi_last=summary["pi_last"],
             total_first=summary["total_first"], total_last=summary["total_last"],
+            visit_entropy=counts["mean_visit_entropy"],
+            prior_entropy=counts["mean_prior_entropy"],
         )
         stats.append(s)
         if on_iteration_end is not None:
