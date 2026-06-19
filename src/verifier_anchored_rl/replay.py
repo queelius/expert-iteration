@@ -114,6 +114,35 @@ class ReplayBuffer:
         for i, p in zip(indices, priorities):
             self._priorities[int(i)] = max(float(p), self.eps)
 
+    def state_dict(self) -> dict[str, Any]:
+        """Serializable snapshot of the buffer (samples, priorities, ring
+        position, size). Tensors are kept as-is so ``torch.save`` handles
+        them; the priority array is a numpy array."""
+        return {
+            "samples": [vars(s) for s in self._samples],
+            "priorities": self._priorities.copy(),
+            "pos": self._pos,
+            "size": self._size,
+            "capacity": self.capacity,
+            "alpha": self.alpha,
+            "eps": self.eps,
+        }
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        """Restore a snapshot produced by ``state_dict``. Capacity must
+        match the buffer this is loaded into."""
+        if state["capacity"] != self.capacity:
+            raise ValueError(
+                f"capacity mismatch: checkpoint {state['capacity']} "
+                f"vs buffer {self.capacity}"
+            )
+        self.alpha = state["alpha"]
+        self.eps = state["eps"]
+        self._samples = [ReplaySample(**d) for d in state["samples"]]
+        self._priorities = np.asarray(state["priorities"], dtype=np.float64).copy()
+        self._pos = int(state["pos"])
+        self._size = int(state["size"])
+
 
 def sample_from_record(record: dict[str, Any]) -> ReplaySample:
     """Build a ``ReplaySample`` from a distillation JSONL record (the schema
