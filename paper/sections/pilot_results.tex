@@ -560,6 +560,113 @@ diagnostic \emph{stratified by problem family} rather than pooled, and
 set the heavy-search budget by the slowest-converging family rather than
 the average.
 
+\subsection{Closing the Loop End-to-End (Run In Progress)}
+\label{sec:pilot-closedloop}
+
+The experiments above isolate one step of the framework: they collect MCTS
+targets once and distill them into the heads in a single offline pass per
+round. The full method of Section~\ref{sec:method-training} is an online loop.
+Search with the current heads as the PUCT prior and the target-$Q$ head as the
+bootstrap leaf value, distill the resulting $\pimcts$ and $\Qmcts$ into the
+heads, then re-prior the next round of search with the updated heads. We have
+now implemented that loop and begun running it. This subsection reports the
+implementation and the infrastructure-level results that are already in, and is
+explicit that the central learning-signal result is pending a run that is
+executing as we write.
+
+\paragraph{In-process frozen model and a faithful state embedding.}
+The pilot ran against an Ollama HTTP server and read its embedding endpoint for
+the $2048$-dimensional state vector. That endpoint regressed after a server
+upgrade (Section~\ref{sec:pilot-reproducibility}), and an HTTP endpoint can in
+any case neither expose the base model's hidden state, which the adapter
+architecture of Section~\ref{sec:method-architecture} requires, nor make the
+decoder forwards countable for compute accounting. We therefore moved the
+frozen model in process. The state embedding is now $\mathrm{embed}(s) = h_T$,
+the last-layer hidden state at the sentinel position
+(Section~\ref{sec:method-architecture}), taken from the same weights that
+generate verb content rather than from a separate endpoint. On a $1.5$B
+substrate this was verified to give seeded-generation reproducibility, a
+deterministic masked-mean hidden-state pooling, countable per-decision decoder
+forwards, and a single frozen copy in memory serving both the encoder and the
+generator roles.
+
+\paragraph{One forward per decision.}
+Section~\ref{sec:method-architecture} specifies that a single state prefill
+should serve both the heads and verb generation (``one forward, not two''). We
+implemented this as a shared encoder that prefills the verb-independent state
+prefix once, returning both $h_T$ and the key-value cache that seeds every
+verb's generation. Against a real $1.5$B model the shared prefill reproduces a
+standalone forward's $h_T$ to bit identity and produces token-identical greedy
+generation under single precision; under \texttt{bfloat16} an occasional final
+token differs, which is the reduction-order compute floor that the budget sweep
+of Section~\ref{sec:pilot-bsweep} already identified rather than a logic error.
+For a four-verb node the shared prefill cuts prefilled tokens by about $53\%$
+relative to re-encoding the full state once per verb, and the saving grows with
+state length and branching factor.
+
+\paragraph{The training loop of Section~\ref{sec:method-training}.}
+We implemented the combined objective
+$L_{\mathrm{total}} = L_Q + \lambda L_{\pi}$, in which $L_Q$ is a masked
+mean-squared error of $\Qpsi$ against the MCTS chance-node estimate $\Qmcts$
+(the framework's stated target, not a single-sample bootstrapped Bellman
+target) and $L_{\pi}$ is the masked cross-entropy of the policy head against
+the visit-count distribution $\pimcts$, together with the prioritized replay
+buffer and the periodically-synced target-$Q$ network. On the pilot's own
+\texttt{v2} records this objective drives $L_Q$ down by about an order of
+magnitude (from $0.111$ to $0.012$ over $400$ steps) while $L_{\pi}$ settles at
+about $1.46$, matching the pilot's \texttt{v2} final policy cross-entropy of
+$1.4512$ (Section~\ref{sec:pilot-v2-v3}). The new architecture and loop thus
+reproduce the pilot's distillation behavior on identical data while adding the
+replay and target-network machinery that the pilot performed by hand across
+sessions or not at all.
+
+\paragraph{A first closed-loop run and its compute cost.}
+We then ran the full online loop on a GPU for three iterations over the four
+training families, $200$ training steps per iteration. The substrate was a
+$1.5$B model at the parameter scale of the pre-registered plan, though an
+instruct-and-math-specialized variant chosen for feasibility rather than the
+base-only substrate the pre-registered study mandates for clean attribution
+(Section~\ref{sec:exp-models}); the closed-loop observations here are therefore
+feasibility evidence, not a substrate-faithful result. The run's headline
+number is the honest per-decision compute cost. Averaged over the $96$
+decisions, each decision cost about $27$ verb generations and roughly $9000$
+generated tokens against a single state prefill of about $114$ tokens.
+Generation dominates the decision's compute by about $79$ to $1$ in tokens, and
+the prefill count of about one per decision confirms that the
+one-forward-per-decision property of Section~\ref{sec:method-architecture}
+holds in practice and not only by construction. This is the per-decision
+measurement on which the FLOP-accounted compute axis of the pre-registered plan
+(Section~\ref{sec:exp-compute}) is built.
+
+\paragraph{Observability is load-bearing, and the pending result.}
+The first run persisted only a per-iteration loss summary, and in that summary
+$L_{\mathrm{total}}$ is dominated by $L_{\pi}$ sitting near its target-entropy
+floor of about $1.4$ (the same floor as the pilot's $1.4512$), so the small
+$L_Q$ term and the prior-sharpening dynamic were not separately visible: the
+two signals that Section~\ref{sec:method-training} predicts could not be read
+off a fourteen-hour run. We rebuilt the run harness so that a long run is both
+observable and recoverable. It records, per iteration, the separated $L_Q$ and
+$L_{\pi}$, the Shannon entropy of the visit distribution $\pimcts$ and of the
+learned prior $\ptheta$ over the iteration's decisions (the sharpening
+diagnostic, where lower entropy means more concentrated search), and the
+per-decision FLOP counters, and it checkpoints after every trajectory so an
+interrupted run resumes from its last checkpoint rather than restarting. The
+prior-entropy read reuses the cached state prefill and so does not perturb the
+compute accounting.
+
+The first end-to-end run of this fully instrumented loop is executing as we
+write, five iterations over the toy families. Its learning-signal results, the
+across-iteration $L_Q$ trend predicted by approximate $Q$-learning and the
+sharpening of $\ptheta$ and of the search visits predicted by expert iteration
+(Section~\ref{sec:method-training}), are pending and will be reported when the
+run completes. The order-of-magnitude $L_Q$ decrease on the pilot's data above,
+and the single-round generalization gain of Section~\ref{sec:pilot-v2-v3}, are
+existing evidence that the objective and the distillation step each work in
+isolation; the in-progress run is the first test of whether those signals
+persist across iterations of the closed online loop. It is the most important
+experiment we have conducted for the framework's central dynamic, and we state
+plainly that its result is not yet in.
+
 \subsection{Lessons for the Pre-Registered Study}
 \label{sec:pilot-lessons}
 
@@ -610,7 +717,10 @@ sample of training states per benchmark and \emph{stratified by
 problem family} rather than pooled. Agreement below a pre-committed
 threshold at the chosen budget is a precondition for trusting any
 round-over-round improvement claim, and the budget is set by the
-slowest-converging family rather than the average.
+slowest-converging family rather than the average. The closed-loop harness of
+Section~\ref{sec:pilot-closedloop} already records this diagnostic, the entropy
+of $\pimcts$ and of $\ptheta$ per iteration, so the benchmark study inherits the
+monitoring by construction rather than retrofitting it onto a long run.
 
 \subsection{Caveats}
 \label{sec:pilot-caveats}
@@ -630,7 +740,13 @@ clears the pre-registered falsification bar. What the pilot establishes
 is feasibility: every component of Section~\ref{sec:method} can be
 implemented and the loop, when implemented, behaves the way
 Section~\ref{sec:method-training} predicts on the families where the
-prediction is sharp.
+prediction is sharp. The closed-loop run of
+Section~\ref{sec:pilot-closedloop} carries its own caveats: it uses an
+instruct-and-math-specialized $1.5$B variant rather than the base-only
+substrate of Section~\ref{sec:exp-models}, and its across-iteration learning
+signals are pending a run still in progress, so its present contribution is the
+implemented loop and the per-decision compute accounting, not a closed-loop
+accuracy claim.
 
 \subsection{Reproducibility}
 \label{sec:pilot-reproducibility}
@@ -663,3 +779,18 @@ companion repository's \texttt{experiments/results/} directory contains
 the full metric dumps. The pilot is reproducible end-to-end on a single
 machine with the Qwen2.5-3B model available through any
 OpenAI-compatible inference endpoint (the release defaults to Ollama).
+
+The closed-loop extension of Section~\ref{sec:pilot-closedloop} is released
+alongside it: the in-process model backend
+(\texttt{src/verifier\_anchored\_rl/transformers\_client.py}), the shared
+single-forward encoder (\texttt{shared\_forward.py}), the training loop with
+its prioritized replay buffer and target-network sync (\texttt{train.py},
+\texttt{replay.py}, \texttt{architecture.py}), the outer-loop orchestration
+(\texttt{outer\_loop.py}), and the run harness
+(\texttt{experiments/run\_outer\_loop.py}), which writes each run to a
+self-contained directory carrying full provenance metadata, the per-iteration
+metrics above (the separated $L_Q$ and $L_{\pi}$, the visit- and
+prior-distribution entropies, and the FLOP counters), the streamed collection
+records, and a checkpoint from which an interrupted run resumes. Unlike the
+pilot, the closed loop runs the frozen model in process and depends on no
+external inference endpoint.

@@ -31,7 +31,14 @@ mean $L_1$ to the MCTS targets by $42\%$, while a second round with
 naively-expanded training data produces a structurally informative regression;
 a controlled rebalancing experiment rules out class imbalance as the dominant
 regression mechanism, isolating distillation-target instability and
-shortcut-pattern dependence instead. The pilot is feasibility evidence for the framework; the large-scale
+shortcut-pattern dependence instead. Beyond the offline pilot, we implement the
+full online expert-iteration loop on an in-process $1.5$B substrate, with
+prioritized replay, the combined $Q$-and-policy objective, and a
+periodically-updated target network; a first closed-loop run establishes the
+honest per-decision compute accounting, and a fully instrumented run that
+captures the across-iteration $Q$-loss trend and the prior-sharpening signal is
+currently executing, with those learning-signal results pending. The pilot is
+feasibility evidence for the framework; the large-scale
 empirical claim against the pre-registered benchmark grid is deferred to a
 follow-up study.
 \end{abstract}
