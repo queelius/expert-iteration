@@ -115,6 +115,8 @@ def main(argv=None) -> int:
     p.add_argument("--problems", nargs="+", default=["train"])
     p.add_argument("--run-root", default="experiments/results/runs")
     p.add_argument("--tag", default=None)
+    p.add_argument("--notes", default="",
+                   help="motivation/notes for this run, recorded in metadata.json")
     p.add_argument("--resume", default=None,
                    help="path to an existing run dir to resume")
     args = p.parse_args(argv)
@@ -161,6 +163,7 @@ def main(argv=None) -> int:
         meta_path.write_text(json.dumps(meta, indent=2, default=str))
     else:
         meta = {
+            "notes": args.notes,
             "args": vars(args), "hostname": socket.gethostname(),
             "python": platform.python_version(), **_gpu_info(),
             "model": args.model, "seed": args.seed,
