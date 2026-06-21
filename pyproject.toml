@@ -17,7 +17,9 @@ llm = ["httpx>=0.27", "sympy>=1.12"]
 # In-process HuggingFace backend (TransformersLLMClient /
 # TransformersEmbeddingClient): direct hidden-state access, seeded
 # sampling, countable forwards. Runs on the GPU box, not locally.
-hf = ["torch>=2.2", "transformers>=4.45"]
+# lm-format-enforcer constrains verb generation to the JSON schema so a
+# small model cannot emit unparseable output (see constrained_json.py).
+hf = ["torch>=2.2", "transformers>=4.45", "lm-format-enforcer>=0.10"]
 
 [build-system]
 requires = ["setuptools>=61"]
