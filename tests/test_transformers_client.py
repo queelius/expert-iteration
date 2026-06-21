@@ -95,6 +95,10 @@ class FakeModel:
 
 
 def make_llm(scripted, **kwargs):
+    # Fakes cannot build a real schema constraint (no vocab to walk), so the
+    # test helper defaults constraint off; the constraint-wiring tests opt in
+    # explicitly with a stubbed builder.
+    kwargs.setdefault("constrain_json", False)
     return TransformersLLMClient(
         model=FakeModel(), tokenizer=FakeTokenizer(scripted), **kwargs
     )
@@ -106,6 +110,23 @@ def make_llm(scripted, **kwargs):
 
 SCHEMA = {"type": "object", "properties": {"answer": {"type": "string"}},
           "required": ["answer"]}
+
+
+def test_complete_json_passes_schema_constraint_when_enabled(monkeypatch):
+    import verifier_anchored_rl.transformers_client as tc
+
+    sentinel = object()
+    monkeypatch.setattr(tc, "build_prefix_allowed_tokens_fn",
+                        lambda tokenizer, schema: sentinel)
+    client = make_llm(['{"answer": "42"}'], constrain_json=True)
+    client.complete_json(system="s", user="u", schema=SCHEMA)
+    assert client.model.generate_kwargs[0].get("prefix_allowed_tokens_fn") is sentinel
+
+
+def test_complete_json_unconstrained_when_disabled():
+    client = make_llm(['{"answer": "42"}'], constrain_json=False)
+    client.complete_json(system="s", user="u", schema=SCHEMA)
+    assert "prefix_allowed_tokens_fn" not in client.model.generate_kwargs[0]
 
 
 def test_satisfies_llm_protocol():

@@ -43,6 +43,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from .constrained_json import build_prefix_allowed_tokens_fn
 from .llm_client import (
     LLMResponseError,
     _parse_json_lenient,
@@ -91,7 +92,9 @@ class TransformersLLMClient:
         device: str | None = None,
         dtype: str | None = None,
         max_retries: int = 1,
+        constrain_json: bool = True,
     ):
+        self.constrain_json = constrain_json
         if model is not None and tokenizer is not None:
             self.model, self.tokenizer = model, tokenizer
             self.device = device or str(getattr(model, "device", "cpu"))
@@ -132,6 +135,16 @@ class TransformersLLMClient:
             {"role": "user", "content": user},
         ]
 
+        # Constrain decoding to the JSON schema so the model cannot emit
+        # unparseable output (the masked-no-op failure mode). Built once and
+        # reused across retry attempts; depends only on the tokenizer and the
+        # schema, not the prompt.
+        constraint_fn = (
+            build_prefix_allowed_tokens_fn(self.tokenizer, schema)
+            if self.constrain_json
+            else None
+        )
+
         last_err: Exception | None = None
         for attempt in range(self.max_retries + 1):
             # transformers 5.x returns a BatchEncoding (input_ids +
@@ -153,16 +166,18 @@ class TransformersLLMClient:
                 torch.manual_seed(seed + attempt)
 
             do_sample = temperature > 0
+            gen_kwargs: dict[str, Any] = dict(
+                max_new_tokens=max_tokens,
+                do_sample=do_sample,
+                temperature=temperature if do_sample else None,
+                top_p=None,
+                top_k=None,
+                pad_token_id=self.tokenizer.eos_token_id,
+            )
+            if constraint_fn is not None:
+                gen_kwargs["prefix_allowed_tokens_fn"] = constraint_fn
             with torch.no_grad():
-                output = self.model.generate(
-                    **encoded,
-                    max_new_tokens=max_tokens,
-                    do_sample=do_sample,
-                    temperature=temperature if do_sample else None,
-                    top_p=None,
-                    top_k=None,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                )
+                output = self.model.generate(**encoded, **gen_kwargs)
             new_tokens = output[0][prompt_len:]
             self.generate_calls += 1
             self.generated_tokens += int(new_tokens.shape[0])
