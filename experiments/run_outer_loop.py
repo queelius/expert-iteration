@@ -200,9 +200,16 @@ def main(argv=None) -> int:
 
     def mdp_factory(problem):
         from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
+        # Generate verbs via the constrained chat path (llm_client.complete_json
+        # with schema-constrained decoding), NOT the encoder's raw-completion
+        # path, which a small instruct model cannot drive (it masked every verb,
+        # collapsing transitions to no-ops). The encoder is still used by the
+        # StateActor for embed(s) = h_T. This is two forwards per decision-node
+        # (embed + generate); folding generation back into the encoder's shared
+        # prefill (one-forward) is a tracked follow-up.
         return LLMContextMDP(
             problem_statement=problem[0], expected_answer=problem[1],
-            llm_client=llm, encoder=encoder, prefill_cache=state_actor.cache,
+            llm_client=llm,
             depth_limit=args.depth_limit, max_turns=args.max_turns)
 
     def on_decision(info):
@@ -256,7 +263,7 @@ def main(argv=None) -> int:
             batch_size=args.batch_size, min_buffer_size=args.min_buffer,
             num_simulations=args.num_simulations, c_puct=args.c_puct,
             discount=args.discount, tau=args.tau, max_turns=args.max_turns,
-            rng=rng, encoder=encoder,
+            rng=rng, encoder=encoder, gen_source=llm,
             record_sink=lambda rec: append_jsonl(records_path, rec),
             on_decision=on_decision, on_train_step=on_train_step,
             on_iteration_end=on_iteration_end, save_checkpoint=save_ckpt,

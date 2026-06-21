@@ -169,6 +169,24 @@ def test_run_outer_loop_stats_carry_entropy_metrics():
     assert math.isfinite(stats[-1].prior_entropy)
 
 
+def test_flop_counters_reads_gen_from_gen_source():
+    from verifier_anchored_rl.outer_loop import _flop_counters
+
+    class Enc:
+        prefill_calls, prefill_tokens, gen_calls, gen_tokens = 2, 20, 99, 990
+
+    class Gen:  # an llm_client: generate_calls / generated_tokens
+        generate_calls, generated_tokens = 5, 500
+
+    c = _flop_counters(Enc(), Gen())
+    assert c["prefill_calls"] == 2 and c["prefill_tokens"] == 20
+    # gen counts come from the gen_source (the client), not the encoder
+    assert c["gen_calls"] == 5 and c["gen_tokens"] == 500
+    # default: gen_source falls back to the encoder
+    d = _flop_counters(Enc())
+    assert d["gen_calls"] == 99 and d["gen_tokens"] == 990
+
+
 def test_loss_summary_extracts_q_pi_total_split():
     from verifier_anchored_rl.outer_loop import loss_summary
 

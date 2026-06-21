@@ -81,13 +81,20 @@ class IterationStats:
     prior_entropy: float = float("nan")
 
 
-def _flop_counters(encoder: Any) -> dict[str, int]:
-    """Read the encoder's token/call counters (zeros if absent)."""
+def _flop_counters(encoder: Any, gen_source: Any = None) -> dict[str, int]:
+    """Read prefill counters from the encoder and generation counters from
+    ``gen_source`` (zeros if absent). When generation runs on a separate
+    backend from the embedding encoder (the constrained chat path generates via
+    the llm_client while the encoder only embeds), pass that backend as
+    ``gen_source``; it exposes ``generate_calls``/``generated_tokens`` (the
+    llm_client) or ``gen_calls``/``gen_tokens`` (the encoder). Defaults to the
+    encoder, so the one-forward path is unchanged."""
+    gen = gen_source if gen_source is not None else encoder
     return {
         "prefill_calls": int(getattr(encoder, "prefill_calls", 0)),
         "prefill_tokens": int(getattr(encoder, "prefill_tokens", 0)),
-        "gen_calls": int(getattr(encoder, "gen_calls", 0)),
-        "gen_tokens": int(getattr(encoder, "gen_tokens", 0)),
+        "gen_calls": int(getattr(gen, "generate_calls", getattr(gen, "gen_calls", 0))),
+        "gen_tokens": int(getattr(gen, "generated_tokens", getattr(gen, "gen_tokens", 0))),
     }
 
 
@@ -212,6 +219,7 @@ def run_outer_loop(
     max_turns: int,
     rng: np.random.Generator,
     encoder: Any = None,
+    gen_source: Any = None,
     record_sink: Callable[[dict[str, Any]], None] | None = None,
     on_decision: Callable[[dict[str, Any]], None] | None = None,
     on_train_step: Callable[[dict[str, Any]], None] | None = None,
@@ -238,7 +246,7 @@ def run_outer_loop(
             prior_fn=state_actor.prior,
             value_fn=state_actor.leaf_value,
         )
-        before = _flop_counters(encoder)
+        before = _flop_counters(encoder, gen_source)
         state_actor.cache.clear()
 
         def _on_trajectory_end(done: int) -> None:
@@ -256,7 +264,7 @@ def run_outer_loop(
             start_problem=(start_problem if it == start_iteration else 0),
             iteration_index=it,
         )
-        after = _flop_counters(encoder)
+        after = _flop_counters(encoder, gen_source)
 
         losses: list[dict[str, float]] = []
         if len(buffer) >= min_buffer_size:
