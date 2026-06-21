@@ -234,20 +234,23 @@ def main(argv=None) -> int:
             "L_pi_first": s.pi_first, "L_pi_last": s.pi_last,
             "L_total_first": s.total_first, "L_total_last": s.total_last,
             "visit_entropy": s.visit_entropy, "prior_entropy": s.prior_entropy,
+            "visit_concentration": s.visit_concentration,
+            "prior_concentration": s.prior_concentration,
             "wall_seconds": s.wall_seconds,
         }
         append_jsonl(metrics_path, row)
         summaries.append(row)
         lines = ["# Run summary", "",
                  "| iter | decisions | buffer | gen tok | L_Q first to last "
-                 "| visit H (bits) | prior H (bits) |",
-                 "|---|---:|---:|---:|---|---:|---:|"]
+                 "| L_pi last | visit conc | prior conc |",
+                 "|---|---:|---:|---:|---|---:|---:|---:|"]
         for r in summaries:
             lines.append(
                 f"| {r['iteration']} | {r['decisions']} | {r['buffer']} | "
                 f"{r['gen_tokens']} | {r['L_Q_first']:.4f} to {r['L_Q_last']:.4f} | "
-                f"{r.get('visit_entropy', float('nan')):.3f} | "
-                f"{r.get('prior_entropy', float('nan')):.3f} |")
+                f"{r.get('L_pi_last', float('nan')):.4f} | "
+                f"{r.get('visit_concentration', float('nan')):.3f} | "
+                f"{r.get('prior_concentration', float('nan')):.3f} |")
         summary_path.write_text("\n".join(lines) + "\n")
         log(f"=== iter {s.iteration} done in {s.wall_seconds:.0f}s: "
             f"L_total {s.total_first:.4f} to {s.total_last:.4f} ===")

@@ -150,6 +150,29 @@ def test_collect_iteration_reports_visit_and_prior_entropy():
     assert "prior_entropy" in decisions[0]
 
 
+def test_collect_iteration_reports_normalized_concentration():
+    import math
+
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+    counts = collect_iteration(
+        [("2+2", "4")], mdp_factory, sa, config, buf,
+        np.random.default_rng(0), tau=1.0, max_turns=4)
+
+    # 1 - H/log2(k): confound-free sharpness in [0, 1], higher = more concentrated.
+    cv = counts["mean_visit_concentration"]
+    cp = counts["mean_prior_concentration"]
+    assert math.isfinite(cv) and 0.0 <= cv <= 1.0
+    assert math.isfinite(cp) and 0.0 <= cp <= 1.0
+
+
 def test_run_outer_loop_stats_carry_entropy_metrics():
     import math
 

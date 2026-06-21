@@ -79,6 +79,8 @@ class IterationStats:
     total_last: float = float("nan")
     visit_entropy: float = float("nan")
     prior_entropy: float = float("nan")
+    visit_concentration: float = float("nan")
+    prior_concentration: float = float("nan")
 
 
 def _flop_counters(encoder: Any, gen_source: Any = None) -> dict[str, int]:
@@ -127,6 +129,9 @@ def collect_iteration(
     n_dec = 0
     visit_entropy_sum = 0.0
     prior_entropy_sum = 0.0
+    visit_conc_sum = 0.0
+    prior_conc_sum = 0.0
+    conc_count = 0
     enc = getattr(state_actor, "encoder", None)
     for p_idx, problem in enumerate(problems):
         if p_idx < start_problem:
@@ -163,10 +168,20 @@ def collect_iteration(
             # learned prior sharpens so search visits concentrate). The prior
             # read reuses the cached state prefill, so it adds only a tiny heads
             # pass and does not touch the prefill/gen FLOP counters.
+            prior_probs = state_actor.prior(state, actions)
             visit_entropy = _entropy(pi.values())
-            prior_entropy = _entropy(state_actor.prior(state, actions))
+            prior_entropy = _entropy(prior_probs)
             visit_entropy_sum += visit_entropy
             prior_entropy_sum += prior_entropy
+            # Normalized concentration 1 - H/log2(k) (confound-free across the
+            # variable available-verb count k); higher = sharper. Undefined for
+            # k=1, so those decisions are excluded from the mean.
+            k = len(actions)
+            if k > 1:
+                lk = math.log2(k)
+                visit_conc_sum += 1.0 - visit_entropy / lk
+                prior_conc_sum += 1.0 - prior_entropy / lk
+                conc_count += 1
 
             if on_decision is not None:
                 top = max(pi.items(), key=lambda kv: kv[1])
@@ -198,6 +213,8 @@ def collect_iteration(
         "n_simulations": n_dec * config.num_simulations,
         "mean_visit_entropy": visit_entropy_sum / n_dec if n_dec else nan,
         "mean_prior_entropy": prior_entropy_sum / n_dec if n_dec else nan,
+        "mean_visit_concentration": visit_conc_sum / conc_count if conc_count else nan,
+        "mean_prior_concentration": prior_conc_sum / conc_count if conc_count else nan,
     }
 
 
@@ -302,6 +319,8 @@ def run_outer_loop(
             total_first=summary["total_first"], total_last=summary["total_last"],
             visit_entropy=counts["mean_visit_entropy"],
             prior_entropy=counts["mean_prior_entropy"],
+            visit_concentration=counts["mean_visit_concentration"],
+            prior_concentration=counts["mean_prior_concentration"],
         )
         stats.append(s)
         if on_iteration_end is not None:
