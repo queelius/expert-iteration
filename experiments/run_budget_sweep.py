@@ -51,6 +51,10 @@ def _commands_for(args, run_root: Path) -> list[list[str]]:
             "--iterations", str(args.iterations),
             "--num-simulations", str(B),
             "--train-steps", str(args.train_steps),
+            # Sync the target-Q net once per iteration (Algorithm 1 cadence at
+            # toy scale): the next iteration's MCTS leaf value is the online Q
+            # from the end of this iteration.
+            "--sync-interval", str(args.train_steps),
             "--problems", *args.problems,
             "--seed", str(args.seed),
             "--run-root", str(run_root),
