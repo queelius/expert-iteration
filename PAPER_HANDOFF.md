@@ -156,3 +156,48 @@ leave the two pending spots untouched.
 - The running experiment's outputs live on frodo under
   `experiments/results/runs/20260619T193634Z-headline/` (gitignored, not
   visible from bilbo; numbers arrive via the journal).
+
+
+## UPDATE (2026-06-21): the pending experiment completed (and a fix landed first)
+
+The "currently executing, results pending" framing in section 5.6 and the
+abstract is now superseded. Two things happened:
+
+1. The first closed-loop runs were found to be running on masked no-op
+   transitions (verb instantiation failed schema validation on the small
+   model), so they could not sharpen by construction. A fix landed:
+   chat-template plus JSON-schema-constrained decoding (lm-format-enforcer),
+   plus a FORM_HYPOTHESIS schema fix. See the journal section "Verb
+   instantiation was masking out" (2026-06-21) for the full diagnosis, the fix,
+   and the GPU validation (0 of 4 to 4 of 4 non-masked; verifier reward firing).
+
+2. A 5-iteration closed-loop run on the fixed path completed (73 minutes, B=8,
+   Qwen2.5-Math-1.5B-Instruct, git 0dbf75a). Honest result, with numbers in the
+   journal:
+   * the loop is now functional (non-degenerate signals throughout);
+   * one round of sharpening is clear (iteration 1 to 2: prior entropy 2.628 to
+     2.163 bits, visit concentration 0.024 to 0.060, L_pi floor 1.798 to 1.532);
+   * sustained monotone sharpening does NOT occur at B=8 (the prior oscillates
+     and partly de-sharpens after iteration 2; net change is in the sharpening
+     direction but noisy and non-monotone), reproducing the pilot's
+     target-instability finding and the B-sweep "budget is the lever" conclusion
+     in the closed online loop.
+
+Paper actions for the bilbo session (replace the pending framing honestly):
+* Section 5.6 last paragraph: replace "is executing as we write ... result is
+  not yet in" with the completed result above. Frame it as: the fix made the
+  loop functional and it demonstrably closes for one round, while sustained
+  round-over-round sharpening is budget-limited at B=8, reinforcing (not
+  contradicting) the pilot's target-instability story and the budget-as-lever
+  argument. Keep RL-first framing. Consider a small per-iteration table.
+* Section 5.6 should also gain a short note on the verb-instantiation failure
+  and the constrained-decoding fix: it is a substantive, honest engineering
+  finding (a small instruct model cannot emit schema-valid verb JSON without
+  constrained decoding) that the benchmark study inherits as a requirement.
+* Abstract: replace "currently executing, with those results pending" with the
+  one-round-sharpening-but-budget-limited result, keeping the substrate caveat
+  (instruct/math 1.5B, not the base-only pre-registered substrate).
+
+The journal (experiments/results/expert_iteration_rounds.md) is the numbers
+authority. Pull before editing (frodo pushed through git 0dbf75a plus the
+journal update).

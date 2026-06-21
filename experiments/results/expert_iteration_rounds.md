@@ -959,3 +959,93 @@ per-iteration loss split) are now persisted and were read directly off a real
 GPU run, and a crashed run is recoverable from its last checkpoint. Run outputs
 under experiments/results/runs/ are gitignored (checkpoints are large and are
 run artifacts, not source).
+
+
+## Verb instantiation was masking out: diagnosis and constrained-decoding fix (2026-06-21)
+
+The first two closed-loop GPU runs (the 14.7 hour B=16 run and a 5-iteration
+B=8 run) produced no prior sharpening. Investigation of the B=8 run's own
+records found the cause was not the search budget. Every decision had
+byte-identical Q across all four available actions and a frozen available-verb
+set (always the same four, never COMMIT_ANSWER), the signature of
+LLMContextMDP.sample_transition falling into _masked_action (increment turn,
+reward -0.01, state unchanged) on essentially every verb. A direct probe
+confirmed it: the encoder's raw-completion path masked 4 of 4 verbs (output was
+not JSON at all, just instruction echo, an invented bracket DSL, and repeated
+special tokens), and the plain chat-template path masked 3 of 4, on
+Qwen2.5-Math-1.5B-Instruct. The closed loop had been running on no-op
+transitions, so Q and pi were uniform by construction and the prior could never
+sharpen. Because verbs never succeeded, no hypothesis ever formed, so
+COMMIT_ANSWER never became available and the verifier reward never fired: verb
+instantiation is upstream of the entire learning signal.
+
+Fix (spec: docs/superpowers/specs/2026-06-21-constrained-verb-instantiation-design.md):
+generate verb content under the chat template with JSON-schema-constrained
+decoding (lm-format-enforcer), and make the schemas constraint-parseable.
+
+* New constrained_json.py builds a transformers prefix_allowed_tokens_fn from a
+  verb's JSON schema, using lm-format-enforcer's core API and deliberately not
+  its transformers-integration module (which breaks on transformers 5.x).
+* FORM_HYPOTHESIS's parent_subgoal_id used a string-or-null enum, which
+  lm-format-enforcer cannot parse (it raised "Unsupported enum type"); replaced
+  with a string enum plus a "none" sentinel that the handler already maps back
+  to None. A per-verb parseability test confirmed this was the only offending
+  schema (INVOKE_VERIFIER's string-or-null union type, without an enum, parses).
+* TransformersLLMClient.complete_json now constrains decoding to the schema
+  (chat template plus prefix_allowed_tokens_fn). The harness routes verb
+  generation through this constrained chat path; the encoder is still used by
+  the StateActor for embed(s)=h_T (two forwards per decision-node; folding
+  generation back into the encoder's shared prefill, one-forward, is a tracked
+  follow-up). FLOP accounting reads generation counts from the client.
+
+GPU validation (Qwen2.5-Math-1.5B-Instruct): at the initial state 4 of 4 verbs
+are non-masked (was 0 of 4); after a FORM_HYPOTHESIS the verb set expands and 7
+of 7 are non-masked, with INVOKE_VERIFIER (+0.05) and a correct COMMIT_ANSWER
+(+1.0 from the SymPy verifier) both firing. Real transitions and a real reward,
+both previously absent.
+
+### First closed-loop run on the fixed path (frodo, B=8, 5 iterations)
+
+Same config as the broken run (5 iterations, num_simulations 8, 200 train steps
+per iteration, the 4 toy training families, Qwen2.5-Math-1.5B-Instruct,
+git 0dbf75a), now on the constrained chat path. 73 minutes total (about 15
+minutes per iteration, 7.6x faster than the broken run because constrained
+decoding stops at a valid JSON object and trajectories terminate early on
+COMMIT_ANSWER). Per-iteration sharpening signals (visit concentration is the
+confound-free 1 - H/log2(k), averaged over the iteration's decisions, since the
+available-verb count varies 4 to 7 and inflates raw entropy):
+
+| iter | L_Q first to last | L_pi last | raw prior_H (bits) | norm. visit concentration |
+|---|---|---:|---:|---:|
+| 1 | 0.123 to 0.000 | 1.798 | 2.628 | 0.024 |
+| 2 | 0.115 to 0.004 | 1.532 | 2.163 | 0.060 |
+| 3 | 0.069 to 0.009 | 1.593 | 2.381 | 0.034 |
+| 4 | 0.045 to 0.016 | 1.484 | 2.468 | 0.042 |
+| 5 | 0.048 to 0.032 | 1.605 | 2.337 | 0.050 |
+
+Reading, stated honestly:
+
+1. The loop is now functional. All signals are non-degenerate (contrast the
+   broken run's flat 2.0-bit entropy, exactly-uniform pi, and identical Q across
+   actions). L_Q carries a real signal at the scale of the verifier rewards.
+2. One round of sharpening is clear and unambiguous (iteration 1 to 2):
+   prior_H 2.628 to 2.163, visit concentration 0.024 to 0.060, L_pi floor 1.798
+   to 1.532. The closed loop CAN close.
+3. Sustained, monotone round-over-round sharpening does NOT occur at B=8. After
+   iteration 2 the prior oscillates and partly de-sharpens (2.163, 2.381, 2.468,
+   2.337); concentration settles around 0.04 to 0.05. The net change from
+   iteration 1 to 5 is in the sharpening direction (prior_H 2.628 to 2.337,
+   concentration 0.024 to 0.050) but is noisy and non-monotone. The likely
+   mechanism: the replay buffer accumulates targets that are unstable across
+   rounds under stochastic transitions at low budget, so continued training
+   fits an increasingly averaged, flatter target.
+4. This reproduces, in the closed online loop, the pilot's central
+   target-instability finding and the B-sweep conclusion that the search budget
+   is the lever for stable distillation targets. The fix made the loop work; the
+   budget remains the gate on sustained sharpening. A higher-B run (infeasible
+   for many iterations on the 3060) is the test of whether sharpening persists.
+
+Caveat: the substrate is Qwen2.5-Math-1.5B-Instruct, an instruct-and-math
+variant chosen for feasibility, not the base-only substrate the pre-registered
+study mandates. The result is feasibility evidence for the closed loop, not a
+substrate-faithful claim.
