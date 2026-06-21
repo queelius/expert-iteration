@@ -672,12 +672,18 @@ def _schema_for(verb: Verb, state: MathState) -> dict[str, Any]:
             "required": ["expression", "result"],
         }
     if verb is Verb.FORM_HYPOTHESIS:
+        # The optional parent link uses a "none" sentinel string rather than a
+        # string-or-null enum: lm-format-enforcer (the constrained-decoding
+        # backend) cannot parse an enum that mixes strings with null, and that
+        # masked every FORM_HYPOTHESIS in the first closed-loop run. The handler
+        # maps any value that is not a current id (including "none") back to
+        # None, so the semantics are unchanged.
         return {
             "type": "object",
             "properties": {
                 "parent_subgoal_id": {
-                    "type": ["string", "null"],
-                    "enum": [*sg_ids, None] if sg_ids else [None],
+                    "type": "string",
+                    "enum": [*sg_ids, "none"],
                 },
                 "statement": {"type": "string"},
             },
