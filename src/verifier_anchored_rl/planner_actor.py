@@ -82,7 +82,23 @@ class StateActor:
     def embed(self, state: Any) -> Any:
         from .llm_context_mdp import _state_prefix
 
-        return self.cache.get_or_encode(_state_prefix(state), self.encoder).hidden
+        prefill = self.cache.get_or_encode(_state_prefix(state), self.encoder)
+        # The heads need only h_T. The encoder's StatePrefill also pins the KV
+        # cache (and the hidden) on the GPU; retaining one per embedded state
+        # exhausts VRAM at high search budgets (CUDA OOM observed at B=64, where
+        # the search embeds thousands of states per iteration). The KV cache is
+        # not reused for generation on this (two-forward) path, so drop it and
+        # keep the cached embedding on CPU. Done once per state; cache hits
+        # short-circuit. (When the one-forward path reuses the cache for
+        # generation, this offload moves to after that reuse.)
+        if prefill.cache is not None or getattr(prefill.hidden, "is_cuda", False):
+            h = prefill.hidden.detach()
+            if getattr(h, "is_cuda", False):
+                h = h.to("cpu")
+            prefill.hidden = h
+            prefill.cache = None
+            prefill.prefix_ids = None
+        return prefill.hidden
 
     def _head_input(self, state: Any) -> Any:
         """``embed(s)`` reconciled to the heads' device and dtype.

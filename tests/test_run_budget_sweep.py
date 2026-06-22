@@ -19,18 +19,20 @@ def _args(run_root, budgets=(8, 16, 32)):
     )
 
 
-def _make_run(run_root, tag, status):
+def _make_run(run_root, tag, status, *, checkpoint=False):
     d = run_root / f"20260621T000000Z-{tag}"
     d.mkdir(parents=True)
     (d / "metadata.json").write_text(json.dumps({"status": status}))
+    if checkpoint:
+        (d / "checkpoint.pt").write_bytes(b"x")
     return d
 
 
 def test_sweep_skips_completed_resumes_interrupted_starts_fresh(tmp_path):
     from experiments.run_budget_sweep import _commands_for
 
-    _make_run(tmp_path, "sweep-budget-B8", "completed")     # done -> skip
-    rd16 = _make_run(tmp_path, "sweep-budget-B16", "failed")  # interrupted -> resume
+    _make_run(tmp_path, "sweep-budget-B8", "completed")  # done -> skip
+    rd16 = _make_run(tmp_path, "sweep-budget-B16", "failed", checkpoint=True)  # resume
     # B32 has no run dir -> fresh
 
     cmds = _commands_for(_args(tmp_path), tmp_path)
@@ -40,6 +42,15 @@ def test_sweep_skips_completed_resumes_interrupted_starts_fresh(tmp_path):
     assert b8[0] == "SKIP" and b8[1] == "B=8"
     assert "--resume" in b16 and str(rd16) in b16
     assert "--resume" not in b32 and "--tag" in b32
+
+
+def test_sweep_starts_fresh_when_failed_run_has_no_checkpoint(tmp_path):
+    # A run that died before its first checkpoint cannot be resumed; start fresh.
+    from experiments.run_budget_sweep import _commands_for
+
+    _make_run(tmp_path, "sweep-budget-B8", "failed", checkpoint=False)
+    cmds = _commands_for(_args(tmp_path, budgets=(8,)), tmp_path)
+    assert "--resume" not in cmds[0] and "--tag" in cmds[0]
     # fresh run records a motivation via --notes
     assert "--notes" in b32 and "budget sweep" in b32[b32.index("--notes") + 1]
     # the budget is wired through as num-simulations

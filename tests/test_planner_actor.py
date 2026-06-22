@@ -192,3 +192,42 @@ def test_state_actor_prior_is_aligned_to_action_order():
     # The masked softmax is over the same verb set either way, so reversing
     # the action list must reverse the returned probabilities exactly.
     assert prior_rev == list(reversed(prior_fwd))
+
+
+def test_embed_drops_kv_cache_and_offloads_hidden_to_cpu():
+    """The heads need only h_T, not the encoder's KV cache. Retaining one KV
+    cache per embedded state exhausts VRAM at high search budgets (CUDA OOM at
+    B=64). embed must drop the KV cache and keep the cached embedding small."""
+    pytest.importorskip("torch")
+    import torch
+    from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.llm_client import EchoLLMClient
+    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP, _state_prefix
+    from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
+    from verifier_anchored_rl.shared_forward import StatePrefill
+
+    class KVHoldingEncoder:
+        embed_dim = 8
+
+        def __init__(self):
+            self.calls = 0
+
+        def encode(self, prefix_text):
+            self.calls += 1
+            return StatePrefill(
+                hidden=torch.zeros(8), cache=["BIG_KV_CACHE"],
+                n_prefix_tokens=3, prefix_ids=torch.zeros(1, 3))
+
+    enc = KVHoldingEncoder()
+    cache = PrefillCache()
+    sa = StateActor(enc, HiddenStateActor(embed_dim=8), cache, depth_limit=3)
+    mdp = LLMContextMDP(problem_statement="2+2", expected_answer="4",
+                        llm_client=EchoLLMClient(), depth_limit=3, max_turns=4)
+    state = mdp.initial_state()
+
+    h = sa.embed(state)
+    assert tuple(h.shape) == (8,)
+    # The cached StatePrefill must no longer pin the KV cache or prefix ids.
+    stored = cache.get_or_encode(_state_prefix(state), enc)  # cache hit
+    assert stored.cache is None and stored.prefix_ids is None
+    assert enc.calls == 1  # the hit did not re-encode

@@ -61,7 +61,7 @@ def _commands_for(args, run_root: Path) -> list[list[str]]:
         ]
         if st == "completed":
             cmds.append(["SKIP", f"B={B}", str(rd)])
-        elif rd is not None:
+        elif rd is not None and (rd / "checkpoint.pt").exists():
             cmds.append([sys.executable, "-u", str(HARNESS), "--resume", str(rd)] + common)
         else:
             notes = (
