@@ -42,6 +42,10 @@ def test_sweep_skips_completed_resumes_interrupted_starts_fresh(tmp_path):
     assert b8[0] == "SKIP" and b8[1] == "B=8"
     assert "--resume" in b16 and str(rd16) in b16
     assert "--resume" not in b32 and "--tag" in b32
+    # fresh run records a motivation via --notes
+    assert "--notes" in b32 and "budget sweep" in b32[b32.index("--notes") + 1]
+    # the budget is wired through as num-simulations
+    assert b32[b32.index("--num-simulations") + 1] == "32"
 
 
 def test_sweep_starts_fresh_when_failed_run_has_no_checkpoint(tmp_path):
@@ -51,7 +55,3 @@ def test_sweep_starts_fresh_when_failed_run_has_no_checkpoint(tmp_path):
     _make_run(tmp_path, "sweep-budget-B8", "failed", checkpoint=False)
     cmds = _commands_for(_args(tmp_path, budgets=(8,)), tmp_path)
     assert "--resume" not in cmds[0] and "--tag" in cmds[0]
-    # fresh run records a motivation via --notes
-    assert "--notes" in b32 and "budget sweep" in b32[b32.index("--notes") + 1]
-    # the budget is wired through as num-simulations
-    assert b32[b32.index("--num-simulations") + 1] == "32"
