@@ -1098,13 +1098,22 @@ class LLMContextMDP:
                     seed=sampling_seed,
                 )
         except LLMResponseError:
-            return self._masked_action(state)
+            next_state, reward = self._masked_action(state)
+        else:
+            handler = _VERB_HANDLERS[verb]
+            try:
+                next_state, reward = handler(self, state, response)
+            except (KeyError, ValueError, TypeError):
+                next_state, reward = self._masked_action(state)
 
-        handler = _VERB_HANDLERS[verb]
-        try:
-            return handler(self, state, response)
-        except (KeyError, ValueError, TypeError):
-            return self._masked_action(state)
+        # Budget exhaustion without a committed answer is a terminal failure
+        # (the agent did not answer within max_turns), not a free ~0 outcome.
+        # Attaching the terminal failure reward to the transition that crosses
+        # the cap means MCTS backs it up and training sees stalling as failure,
+        # so "never commit" no longer beats a wrong commit (both are -1).
+        if next_state.committed_answer is None and next_state.turn >= self.max_turns:
+            reward = _TERMINAL_FAILURE_REWARD
+        return next_state, reward
 
     def _masked_action(self, state: MathState) -> tuple[MathState, float]:
         """Bump the turn counter and return a small negative reward."""
@@ -1226,9 +1235,18 @@ class LLMContextMDP:
             turn=state.turn + 1,
         )
 
-        if result.success:
+        # Only a CHECKED claim (expected provided and confirmed) earns the
+        # verifier reward and a source="verified" fact. "evaluate" with no
+        # expected is a value report, not a confirmation: returning success but
+        # rewarding/promoting it would grant the verifier-anchored +0.05 and a
+        # "verified" fact for an unchecked self-claim (which also falsely
+        # unlocks COMMIT_ANSWER). Keep it neutral and unpromoted. A genuine
+        # failed check is still mildly penalized.
+        if result.success and expected is not None:
             promoted = _promote_to_fact(new_state, target_id, input_expression, result.observed)
             return promoted, _INTERMEDIATE_VERIFIER_REWARD
+        if result.success:
+            return new_state, 0.0
         return new_state, -_INTERMEDIATE_VERIFIER_REWARD
 
     def _handle_backtrack(

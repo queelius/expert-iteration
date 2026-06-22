@@ -389,3 +389,29 @@ def test_run_outer_loop_invokes_train_and_checkpoint_callbacks():
     # loss split landed on the stats
     assert stats[-1].q_first == stats[-1].q_first   # not NaN: training ran
     assert stats[-1].wall_seconds >= 0.0
+
+
+def test_collect_iteration_on_decision_reads_gen_from_gen_source():
+    """on_decision must read generation counts from gen_source (the llm_client
+    on the two-forward path), not the encoder (which never generates there and
+    would always log gen=0). 2026-06-22 review, minor finding."""
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=4, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    class GenSrc:
+        generate_calls = 7
+        generated_tokens = 700
+
+    decisions = []
+    collect_iteration(
+        [("2+2", "4")], mdp_factory, sa, config, buf, np.random.default_rng(0),
+        tau=1.0, max_turns=4, on_decision=lambda i: decisions.append(i),
+        gen_source=GenSrc())
+    assert decisions[0]["gen_calls"] == 7 and decisions[0]["gen_tokens"] == 700

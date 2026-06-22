@@ -727,3 +727,57 @@ def test_sample_transition_uses_llm_client_when_no_encoder():
     next_state, _ = mdp.sample_transition(
         state, MathAction(verb=Verb.COMMIT_ANSWER), np.random.default_rng(0))
     assert next_state.turn == state.turn + 1
+
+
+# -----------------------------------------------------------------------------
+# Reward-correctness fixes (2026-06-22 review)
+# -----------------------------------------------------------------------------
+
+
+def test_invoke_verifier_evaluate_without_expected_is_neutral_not_promoted():
+    """evaluate with no `expected` is a value report, not a confirmation: it
+    must not grant the +0.05 verifier reward nor promote a source="verified"
+    fact (which would falsely unlock COMMIT_ANSWER). Found by the 2026-06-22
+    correctness review."""
+    base = MathState(problem="P", hypotheses=(Hypothesis(id="hyp_1", statement="x"),))
+    client = MockLLMClient(script={
+        ("INVOKE_VERIFIER",): {
+            "target_id": "hyp_1",
+            "verifier_verb": "evaluate",
+            "input_expression": "7 * 6",
+            # no "expected": an unchecked value report
+        }
+    })
+    mdp = LLMContextMDP(problem_statement="P", llm_client=client)
+    next_state, reward = mdp.sample_transition(base, MathAction(verb=Verb.INVOKE_VERIFIER))
+    assert reward == 0.0  # neither rewarded nor penalized
+    assert not any(f.source == "verified" for f in next_state.facts)
+    assert len(next_state.verifier_log) == 1  # the call is still recorded
+
+
+def test_timeout_without_commit_yields_terminal_failure_reward():
+    """Reaching max_turns without committing is a terminal failure (-1), not a
+    free ~0 outcome. Found by the 2026-06-22 correctness review."""
+    from verifier_anchored_rl import TERMINAL_FAILURE_REWARD
+
+    client = MockLLMClient(script={
+        ("DECOMPOSE",): {"target_id": "sg_root", "children": ["a", "b"]}
+    })
+    mdp = LLMContextMDP(problem_statement="P", llm_client=client, max_turns=1)
+    state = mdp.initial_state()  # turn 0
+    next_state, reward = mdp.sample_transition(state, MathAction(verb=Verb.DECOMPOSE))
+    assert next_state.turn == 1 and next_state.committed_answer is None
+    assert mdp.is_terminal(next_state)
+    assert reward == TERMINAL_FAILURE_REWARD
+
+
+def test_commit_at_cap_keeps_verifier_reward_not_timeout_penalty():
+    """A correct commit on the last allowed turn keeps the +1 verifier reward;
+    the timeout penalty applies only to non-committing budget exhaustion."""
+    client = MockLLMClient(script={("COMMIT_ANSWER",): {"answer": "42"}})
+    mdp = LLMContextMDP(problem_statement="P", expected_answer="42",
+                        llm_client=client, max_turns=1)
+    state = mdp.initial_state()
+    next_state, reward = mdp.sample_transition(state, MathAction(verb=Verb.COMMIT_ANSWER))
+    assert next_state.committed_answer == "42"
+    assert reward == 1.0

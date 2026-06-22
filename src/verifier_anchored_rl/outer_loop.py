@@ -115,6 +115,7 @@ def collect_iteration(
     on_trajectory_end: Callable[[int], None] | None = None,
     start_problem: int = 0,
     iteration_index: int = 0,
+    gen_source: Any = None,
 ) -> dict[str, float]:
     """Drive one trajectory per problem, adding one ReplaySample per node.
 
@@ -133,6 +134,10 @@ def collect_iteration(
     prior_conc_sum = 0.0
     conc_count = 0
     enc = getattr(state_actor, "encoder", None)
+    # Generation runs on gen_source (the llm_client) on the two-forward path;
+    # fall back to the encoder for the one-forward path. Read prefill counts
+    # from the encoder, gen counts from gen_source (matching _flop_counters).
+    gen_src = gen_source if gen_source is not None else enc
     for p_idx, problem in enumerate(problems):
         if p_idx < start_problem:
             continue
@@ -197,8 +202,10 @@ def collect_iteration(
                     "q_chosen": float(q.get(chosen, float("nan"))),
                     "prefill_calls": int(getattr(enc, "prefill_calls", 0)),
                     "prefill_tokens": int(getattr(enc, "prefill_tokens", 0)),
-                    "gen_calls": int(getattr(enc, "gen_calls", 0)),
-                    "gen_tokens": int(getattr(enc, "gen_tokens", 0)),
+                    "gen_calls": int(getattr(gen_src, "generate_calls",
+                                             getattr(gen_src, "gen_calls", 0))),
+                    "gen_tokens": int(getattr(gen_src, "generated_tokens",
+                                              getattr(gen_src, "gen_tokens", 0))),
                 })
 
             state, _reward = mdp.sample_transition(state, chosen, rng)
@@ -279,7 +286,7 @@ def run_outer_loop(
             tau=tau, max_turns=max_turns, record_sink=record_sink,
             on_decision=on_decision, on_trajectory_end=_on_trajectory_end,
             start_problem=(start_problem if it == start_iteration else 0),
-            iteration_index=it,
+            iteration_index=it, gen_source=gen_source,
         )
         after = _flop_counters(encoder, gen_source)
 
