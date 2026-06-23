@@ -225,6 +225,87 @@ def collect_iteration(
     }
 
 
+def collect_iteration_concurrent(
+    problems, mdp_factory, state_actor, config, buffer, *,
+    base_seed, tau, max_turns, max_workers=8,
+    record_sink=None, on_decision=None, gen_source=None, iteration_index=0,
+):
+    """Run one trajectory per problem CONCURRENTLY (thread pool). Each worker
+    drives a normal sequential MCTS trajectory with its OWN rng (sub-seeded from
+    base_seed plus the problem index) and returns its ReplaySamples; the shared
+    llm_client (vLLM) batches the concurrent generation requests. The buffer is
+    populated single-threaded after the workers finish, so it is thread-safe and
+    deterministic regardless of max_workers."""
+    import concurrent.futures as cf
+    import threading
+
+    import numpy as np
+
+    from .llm_context_mdp import available_actions
+    from .mcts import mcts_search, root_q_estimates, visit_count_policy
+
+    log_lock = threading.Lock()
+
+    def run_one(p_idx, problem):
+        rng = np.random.default_rng(base_seed + 1 + p_idx)
+        mdp = mdp_factory(problem)
+        state = mdp.initial_state()
+        records = []
+        while not mdp.is_terminal(state) and state.turn < max_turns:
+            avail = list(available_actions(state, depth_limit=mdp.depth_limit))
+            if not avail:
+                break
+            root = mcts_search(mdp, state, config, rng)
+            if not root.children:
+                break
+            pi = visit_count_policy(root, temperature=tau)
+            q = root_q_estimates(root)
+            rec = {
+                "embedding": state_actor.embed(state).detach().cpu().tolist(),
+                "available_verbs": [a.value for a in avail],
+                "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
+                "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
+            }
+            records.append(rec)
+            actions = list(pi.keys())
+            probs = np.array([pi[a] for a in actions], dtype=float)
+            probs = probs / probs.sum()
+            chosen = actions[int(rng.choice(len(actions), p=probs))]
+            if on_decision is not None:
+                top = max(pi.items(), key=lambda kv: kv[1])
+                with log_lock:
+                    on_decision({
+                        "iteration": iteration_index,
+                        "iteration_problem_index": p_idx,
+                        "turn": int(state.turn),
+                        "chosen_verb": chosen.verb.value,
+                        "pi_argmax_verb": top[0].verb.value,
+                        "pi_argmax_prob": float(top[1]),
+                        "gen_calls": int(getattr(gen_source, "generate_calls",
+                                                 getattr(gen_source, "gen_calls", 0))),
+                        "gen_tokens": int(getattr(gen_source, "generated_tokens",
+                                                  getattr(gen_source, "gen_tokens", 0))),
+                    })
+            state, _r = mdp.sample_transition(state, chosen, rng)
+        return records
+
+    with cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
+        results = list(ex.map(lambda ip: run_one(*ip), list(enumerate(problems))))
+
+    n_dec = 0
+    for recs in results:
+        for rec in recs:
+            buffer.add(sample_from_record(rec))
+            if record_sink is not None:
+                record_sink(rec)
+            n_dec += 1
+    return {
+        "n_trajectories": len(problems),
+        "n_decisions": n_dec,
+        "n_simulations": n_dec * config.num_simulations,
+    }
+
+
 def run_outer_loop(
     problems: list[Any],
     mdp_factory: Callable[[Any], Any],
@@ -335,4 +416,10 @@ def run_outer_loop(
     return stats
 
 
-__all__ = ["IterationStats", "collect_iteration", "loss_summary", "run_outer_loop"]
+__all__ = [
+    "IterationStats",
+    "collect_iteration",
+    "collect_iteration_concurrent",
+    "loss_summary",
+    "run_outer_loop",
+]

@@ -391,6 +391,68 @@ def test_run_outer_loop_invokes_train_and_checkpoint_callbacks():
     assert stats[-1].wall_seconds >= 0.0
 
 
+def test_collect_iteration_concurrent_matches_sequential_record_count():
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import (
+        collect_iteration, collect_iteration_concurrent,
+    )
+
+    problems = [("2+2", "4"), ("3+3", "6"), ("4+4", "8")]
+
+    # Sequential reference.
+    enc1, actor1, sa1, buf1, tr1, mf1 = _build()
+    cfg1 = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                      prior_fn=sa1.prior, value_fn=sa1.leaf_value)
+    collect_iteration(problems, mf1, sa1, cfg1, buf1, np.random.default_rng(1),
+                      tau=1.0, max_turns=4)
+
+    # Concurrent: per-trajectory seeds, thread pool.
+    enc2, actor2, sa2, buf2, tr2, mf2 = _build()
+    cfg2 = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                      prior_fn=sa2.prior, value_fn=sa2.leaf_value)
+    counts = collect_iteration_concurrent(
+        problems, mf2, sa2, cfg2, buf2, base_seed=0,
+        tau=1.0, max_turns=4, max_workers=3)
+
+    assert counts["n_trajectories"] == 3
+    assert counts["n_decisions"] == len(buf2)
+    assert len(buf2) > 0
+    # Determinism across pool sizes: same base_seed + workers=1 gives same count.
+    enc3, actor3, sa3, buf3, tr3, mf3 = _build()
+    cfg3 = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
+                      prior_fn=sa3.prior, value_fn=sa3.leaf_value)
+    counts1 = collect_iteration_concurrent(
+        problems, mf3, sa3, cfg3, buf3, base_seed=0,
+        tau=1.0, max_turns=4, max_workers=1)
+    assert counts1["n_decisions"] == counts["n_decisions"]
+
+
+def test_collect_iteration_concurrent_fires_on_decision_with_gen_source():
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration_concurrent
+
+    enc, actor, sa, buf, tr, mf = _build()
+    cfg = MCTSConfig(num_simulations=4, c_puct=1.5, discount=1.0,
+                     prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    class GenSrc:
+        generate_calls = 5
+        generated_tokens = 500
+
+    seen = []
+    collect_iteration_concurrent(
+        [("2+2", "4")], mf, sa, cfg, buf, base_seed=0, tau=1.0, max_turns=4,
+        max_workers=2, on_decision=lambda i: seen.append(i), gen_source=GenSrc())
+    assert seen and seen[0]["iteration_problem_index"] == 0
+    assert "chosen_verb" in seen[0]
+
+
 def test_collect_iteration_on_decision_reads_gen_from_gen_source():
     """on_decision must read generation counts from gen_source (the llm_client
     on the two-forward path), not the encoder (which never generates there and
