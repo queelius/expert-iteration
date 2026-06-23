@@ -1049,3 +1049,44 @@ Caveat: the substrate is Qwen2.5-Math-1.5B-Instruct, an instruct-and-math
 variant chosen for feasibility, not the base-only substrate the pre-registered
 study mandates. The result is feasibility evidence for the closed loop, not a
 substrate-faithful claim.
+
+## 2026-06-23 - Task 0 vLLM throughput spike (3B, isolated env)
+
+Server: Qwen/Qwen2.5-3B-Instruct via vLLM 0.23.0 (conda env `vllm-server`, torch 2.11+cu130),
+launched with `VLLM_USE_FLASHINFER_SAMPLER=0` (no nvcc on box, so FlashInfer's JIT sampler
+kernel is unavailable; native Torch top-k/top-p used instead). `--max-model-len 4096`.
+
+Findings (experiments/vllm_setup/spike_findings.log):
+- Guided-JSON field CONFIRMED: top-level `guided_json` (matches the wired OpenAICompatibleLLMClient).
+  response_format json_schema and extra_body guided_json also work; top-level is canonical.
+- Throughput: 2.12 -> 10.06 req/s (4.7x) from sequential (c=1) to concurrent (c=64).
+- Valid JSON fraction: 1.0 sequential and concurrent (guided decoding removes the verb-masking failure).
+- GPU peak util 100% both; KV cache 3.8 GiB / 110,768 tokens / 27x max concurrency at 4096 tok/req.
+Conclusion: the vLLM + guided_json + concurrent path delivers the batching win and eliminates masking.
+Caveat: FlashInfer sampler disabled (conservative); a CUDA toolkit would re-enable its faster kernels.
+
+## 2026-06-23 - Task 5 GPU smoke (vLLM fast pipeline, corrected reward)
+
+Run: experiments/results/runs/20260623T171814Z-vllm-smoke-3b. Path:
+--gen-backend vllm (Qwen/Qwen2.5-3B-Instruct served by vllm-server env, guided_json,
+VLLM_USE_FLASHINFER_SAMPLER=0, default 0.9 gpu-mem) + --embedder text
+(Qwen2.5-0.5B-Instruct) + concurrent collection (--collect-workers 16). The smoke
+process ran with CUDA_VISIBLE_DEVICES="" so the in-process embedder/heads used CPU
+(3B + embedder do not comfortably coexist in 12GB; gen stays on the GPU via vLLM HTTP).
+
+Validated end to end (iter 1, B=8, 28 decisions, 224 sims):
+- Generation flows: gen_calls=309, gen_tokens=8753, all POST /v1/chat/completions -> 200.
+  The vLLM gen-FLOP counters (the audit HIGH fix) are live and nonzero on this backend.
+- Verbs valid/non-masked: full action space exercised; available verbs grow 4 -> 7 as
+  hypotheses/facts are created, i.e. real verb instantiation (no masking collapse).
+- GPU utilization peaks at 100% (16 of the sampled points >= 90%) vs the ~10% in-process
+  lm-format-enforcer baseline. The throughput premise holds.
+- Training non-degenerate: L_pi ~1.64 (NOT pinned at ln(4)=1.386, the all-masked signature),
+  L_Q learns 0.128 -> 0.026. Corrected reward (cap+value-tie) ran without issue.
+- Wall: 1036s/iter, dominated by the CPU embedder (207 embed calls) and real generation.
+
+GOTCHA fixed: the first attempt used the harness default --model (Qwen2.5-Math-1.5B-Instruct),
+which the 3B server rejects with 404 on every chat/completions; the harness then silently
+masked all generations and "completed" with uniform (ln4) data. Always pass --model matching
+the running vLLM server. Follow-ups: (1) run the embedder on GPU for real runs (it was the
+bottleneck here); (2) make the harness fail loud on a high failed-generation/mask rate.
