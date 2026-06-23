@@ -246,6 +246,7 @@ class OpenAICompatibleLLMClient:
     timeout_s: float = 60.0
     max_retries: int = 1
     extra_headers: dict[str, str] = field(default_factory=dict)
+    guided_json: bool = False
 
     def complete_json(
         self,
@@ -289,6 +290,9 @@ class OpenAICompatibleLLMClient:
             "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
         }
+
+        if self.guided_json:
+            body["guided_json"] = dict(schema)
 
         last_err: Exception | None = None
         for attempt in range(self.max_retries + 1):
