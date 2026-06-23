@@ -32,3 +32,21 @@ def test_provenance_from_metadata_maps_existing_run():
     assert prov["embedder"]["kind"] == "text"
     assert prov["embedder"]["id"] == "Qwen/Qwen2.5-0.5B-Instruct"
     assert prov["env"]["torch"] == "2.9.1"
+
+
+def test_validate_raw_row_accepts_valid_and_rejects_bad():
+    import pytest
+    from verifier_anchored_rl.experiment import validate_raw_row
+    good = dict(dataset="gsm8k", dataset_version="main", split="test",
+                problem_id="gsm8k-test-0", seed=0, budget_B=8, correct=True,
+                pred="72", gold="72", verifier_verdict="pass", n_turns=4,
+                gen_calls=31, gen_tokens=980, prefill_calls=12,
+                prefill_tokens=3120, flops_est=None, wall_s=3.4,
+                run_id="20260623T0-gsm8k")
+    validate_raw_row(good)  # no raise
+    missing = {k: v for k, v in good.items() if k != "gold"}
+    with pytest.raises(ValueError):
+        validate_raw_row(missing)
+    bad_type = dict(good, budget_B="eight")
+    with pytest.raises(ValueError):
+        validate_raw_row(bad_type)

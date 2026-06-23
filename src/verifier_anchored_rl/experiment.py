@@ -100,4 +100,30 @@ def provenance_from_metadata(meta: dict) -> dict:
     }
 
 
-__all__ = ["capture_provenance", "provenance_from_metadata"]
+# one JSONL row per evaluated (dataset, problem, seed, budget) cell.
+RAW_SCHEMA: dict[str, Any] = {
+    "dataset": str, "dataset_version": str, "split": str, "problem_id": str,
+    "seed": int, "budget_B": int, "correct": bool, "pred": str, "gold": str,
+    "verifier_verdict": str, "n_turns": int, "gen_calls": int,
+    "gen_tokens": int, "prefill_calls": int, "prefill_tokens": int,
+    "flops_est": (int, float, type(None)), "wall_s": (int, float),
+    "run_id": str,
+}
+
+
+def validate_raw_row(row: dict) -> None:
+    """Raise ValueError if ``row`` is missing a required key or has a wrong
+    type. Bools are excluded from the int check (bool is a subclass of int)."""
+    for key, typ in RAW_SCHEMA.items():
+        if key not in row:
+            raise ValueError(f"raw row missing required key {key!r}")
+        val = row[key]
+        if typ is int and isinstance(val, bool):
+            raise ValueError(f"raw row {key!r} must be int, got bool")
+        if not isinstance(val, typ):
+            raise ValueError(
+                f"raw row {key!r} must be {typ}, got {type(val).__name__}")
+
+
+__all__ = ["capture_provenance", "provenance_from_metadata",
+           "RAW_SCHEMA", "validate_raw_row"]
