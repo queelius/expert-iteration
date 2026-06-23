@@ -14,10 +14,10 @@ the default matplotlib output suitable for arXiv).
 
 from __future__ import annotations
 
-import json
-import math
 import sys
 from pathlib import Path
+
+from experiments.analysis_lib import load_jsonl, entropy_bits
 
 import matplotlib
 matplotlib.use("Agg")
@@ -78,7 +78,7 @@ PROBLEM_ORDER = ["multiply_small_ho", "factor_ho", "gsm8k_toy_ho", "algebra_toy_
 
 
 def load_sharpness(path: str):
-    recs = [json.loads(l) for l in open(path) if l.strip()]
+    recs = load_jsonl(path)
     max_probs = [max(r["pi_mcts"].values()) for r in recs if r.get("pi_mcts")]
     if not max_probs:
         raise SystemExit(
@@ -89,7 +89,7 @@ def load_sharpness(path: str):
     for r in recs:
         if not r.get("pi_mcts"):
             continue
-        ent = -sum(p * math.log2(p) for p in r["pi_mcts"].values() if p > 0)
+        ent = entropy_bits(list(r["pi_mcts"].values()))
         entropies.append(ent)
     # Use the same median convention as analyze_distillation_rounds.py:
     # sorted(values)[N // 2] (a single observed record's value), not the
