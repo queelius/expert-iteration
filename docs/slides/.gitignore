@@ -1,0 +1,14 @@
+# LaTeX build artifacts: the decks are rebuilt with `make` (or latexmk).
+*.pdf
+*.aux
+*.log
+*.nav
+*.snm
+*.vrb
+*.toc
+*.out
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+build.log
+make.log
