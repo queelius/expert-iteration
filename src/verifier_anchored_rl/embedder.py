@@ -9,6 +9,7 @@ the same protocol.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 
@@ -25,6 +26,7 @@ class TextEmbedder:
         self.prefill_tokens = 0
         self.gen_calls = 0
         self.gen_tokens = 0
+        self._counter_lock = threading.Lock()
 
     @property
     def embed_dim(self) -> int:
@@ -41,8 +43,21 @@ class TextEmbedder:
                 f"TextEmbedder: embedding dim {len(vec)} != configured "
                 f"{self._embed_dim} (embedder/heads mismatch)"
             )
-        self.prefill_calls += 1
-        self.prefill_tokens += max(1, len(prefix_text.split()))
+        # Use true token count when the client exposes a tokenizer, so this
+        # counter has the same unit as SharedForwardEncoder.prefill_tokens (both
+        # feed IterationStats.prefill_tokens). Fall back to whitespace word count
+        # when no tokenizer is available (e.g. HTTP-only embedding clients).
+        tokenizer = getattr(self._client, "tokenizer", None)
+        if tokenizer is not None:
+            try:
+                n_tok = len(tokenizer(prefix_text)["input_ids"])
+            except Exception:  # noqa: BLE001
+                n_tok = max(1, len(prefix_text.split()))
+        else:
+            n_tok = max(1, len(prefix_text.split()))
+        with self._counter_lock:
+            self.prefill_calls += 1
+            self.prefill_tokens += n_tok
         return StatePrefill(
             hidden=torch.tensor(vec, dtype=torch.float32),
             cache=None, n_prefix_tokens=0, prefix_ids=None,

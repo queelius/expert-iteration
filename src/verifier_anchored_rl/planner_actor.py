@@ -17,6 +17,7 @@ encoder generation path) by every verb generation at that node. This is the
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
 from typing import Any, Protocol
 
@@ -43,18 +44,32 @@ class PrefillCache:
             raise ValueError("capacity must be >= 1")
         self.capacity = capacity
         self._store: "OrderedDict[str, Any]" = OrderedDict()
+        self._lock = threading.Lock()
 
     def __len__(self) -> int:
         return len(self._store)
 
     def get_or_encode(self, prefix_text: str, encoder: Encoder) -> Any:
-        if prefix_text in self._store:
-            self._store.move_to_end(prefix_text)
-            return self._store[prefix_text]
+        # Locking strategy: double-checked. Check for a cache hit under the lock
+        # and return immediately if found. On a miss, release the lock before
+        # calling encode() (which may invoke a slow model/HTTP forward), then
+        # re-acquire to insert and evict. If another thread encoded the same key
+        # concurrently, both produce equal values; we keep whichever arrived
+        # first (the existing entry is not overwritten on re-acquire).
+        with self._lock:
+            if prefix_text in self._store:
+                self._store.move_to_end(prefix_text)
+                return self._store[prefix_text]
+        # Lock released: compute the embedding outside the critical section.
         prefill = encoder.encode(prefix_text)
-        self._store[prefix_text] = prefill
-        if len(self._store) > self.capacity:
-            self._store.popitem(last=False)  # FIFO/LRU eviction of the oldest
+        with self._lock:
+            # Double-check: another thread may have inserted while we encoded.
+            if prefix_text in self._store:
+                self._store.move_to_end(prefix_text)
+                return self._store[prefix_text]
+            self._store[prefix_text] = prefill
+            if len(self._store) > self.capacity:
+                self._store.popitem(last=False)  # LRU eviction of the oldest
         return prefill
 
     def clear(self) -> None:
@@ -140,6 +155,10 @@ class StateActor:
             return 0.0  # defensive: MCTS only calls value_fn at non-terminal leaves
         with torch.no_grad():
             h = self._head_input(state)
+            # Intentional DQN-style stabilization: the leaf bootstrap uses the
+            # TARGET-Q net, not the online Q-head. This diverges from the
+            # online-Q wording in method.tex Section 3.7; to be reconciled in
+            # the paper. train.py docstring documents the same design decision.
             qt = self.actor.target_q(h)[0]
         return max(float(qt[VERB_NAME_TO_INDEX[v.value]]) for v in avail)
 

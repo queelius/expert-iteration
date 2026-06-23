@@ -57,3 +57,54 @@ def test_text_embedder_raises_on_dim_mismatch():
     emb = TextEmbedder(_FakeEmbeddingClient(dim=8), embed_dim=16)  # client gives 8, configured 16
     with pytest.raises(ValueError):
         emb.encode("x")
+
+
+# ---------------------------------------------------------------------------
+# Bug 2: prefill_tokens must use true token count when client has a tokenizer
+# ---------------------------------------------------------------------------
+
+class _TokenizerFakeClient:
+    """EmbeddingClient that exposes a .tokenizer callable returning a known
+    number of token ids regardless of the text, so the test can be exact."""
+
+    def __init__(self, dim: int, n_tokens: int):
+        self.dim = dim
+        self._n_tokens = n_tokens
+
+    def tokenizer(self, text, **kwargs):
+        return {"input_ids": list(range(self._n_tokens))}
+
+    def embed(self, text):
+        return [0.0] * self.dim
+
+
+class _NoTokenizerClient:
+    """EmbeddingClient without a tokenizer attribute."""
+
+    def __init__(self, dim: int):
+        self.dim = dim
+
+    def embed(self, text):
+        return [0.0] * self.dim
+
+
+def test_text_embedder_prefill_tokens_uses_tokenizer_when_available():
+    pytest.importorskip("torch")
+    from verifier_anchored_rl.embedder import TextEmbedder
+
+    n_tok = 7
+    client = _TokenizerFakeClient(dim=4, n_tokens=n_tok)
+    emb = TextEmbedder(client, embed_dim=4)
+    emb.encode("hello world")
+    assert emb.prefill_tokens == n_tok
+
+
+def test_text_embedder_prefill_tokens_falls_back_to_word_count():
+    pytest.importorskip("torch")
+    from verifier_anchored_rl.embedder import TextEmbedder
+
+    text = "three word phrase"
+    client = _NoTokenizerClient(dim=4)
+    emb = TextEmbedder(client, embed_dim=4)
+    emb.encode(text)
+    assert emb.prefill_tokens == len(text.split())  # 3

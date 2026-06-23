@@ -194,6 +194,74 @@ def test_state_actor_prior_is_aligned_to_action_order():
     assert prior_rev == list(reversed(prior_fwd))
 
 
+# ---------------------------------------------------------------------------
+# Bug 1: PrefillCache.get_or_encode must be thread-safe
+# ---------------------------------------------------------------------------
+
+def test_prefill_cache_get_or_encode_is_thread_safe():
+    """Hammer get_or_encode from several threads on a small-capacity cache
+    with many distinct keys. Asserts no exception and that every returned value
+    matches a direct encode result (no value corruption, no KeyError under
+    concurrent eviction)."""
+    import threading
+
+    from verifier_anchored_rl.planner_actor import PrefillCache
+
+    DIM = 4
+    N_THREADS = 8
+    N_KEYS = 40
+    CAPACITY = 5  # small enough to provoke concurrent eviction
+
+    class _SimpleEncoder:
+        """Fake encoder returning a deterministic list-based 'hidden' (no torch
+        needed) so the test runs without GPU and without importorskip."""
+
+        embed_dim = DIM
+
+        def encode(self, prefix_text: str):
+            # Return an object whose 'hidden' is a tuple derived from the text.
+            class _FakePrefill:
+                pass
+            p = _FakePrefill()
+            p.hidden = tuple(hash(prefix_text + str(i)) % 100 for i in range(DIM))
+            return p
+
+    enc = _SimpleEncoder()
+    keys = [f"key_{i}" for i in range(N_KEYS)]
+
+    # Ground truth: encode each key independently to know the expected value.
+    expected = {k: enc.encode(k).hidden for k in keys}
+
+    cache = PrefillCache(capacity=CAPACITY)
+    errors: list[Exception] = []
+    results: dict[str, tuple] = {}
+    lock = threading.Lock()
+
+    def worker(thread_keys):
+        try:
+            for k in thread_keys:
+                val = cache.get_or_encode(k, enc)
+                with lock:
+                    results[k] = val.hidden
+        except Exception as e:  # noqa: BLE001
+            with lock:
+                errors.append(e)
+
+    chunk = N_KEYS // N_THREADS
+    threads = [
+        threading.Thread(target=worker, args=(keys[i * chunk:(i + 1) * chunk],))
+        for i in range(N_THREADS)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"Thread(s) raised exceptions: {errors}"
+    for k, v in results.items():
+        assert v == expected[k], f"Value mismatch for {k}: got {v}, expected {expected[k]}"
+
+
 def test_embed_drops_kv_cache_and_offloads_hidden_to_cpu():
     """The heads need only h_T, not the encoder's KV cache. Retaining one KV
     cache per embedded state exhausts VRAM at high search budgets (CUDA OOM at
