@@ -39,19 +39,33 @@ if _TORCH_AVAILABLE:
     import torch.nn.functional as F
 
 
-def q_loss(actor: Any, hidden: Any, q_target: Any, q_target_mask: Any) -> Any:
+def q_loss(
+    actor: Any, hidden: Any, q_target: Any, q_target_mask: Any
+) -> tuple[Any, np.ndarray]:
     """Masked MSE of ``Q_psi(s, *)`` against ``Q_MCTS`` (Eq. lossq).
 
     Only verbs MCTS estimated (``q_target_mask`` True) contribute; per
     sample the squared errors are averaged over the contributing verbs so
     states with more visited verbs do not dominate, then averaged over the
     batch.
+
+    Returns ``(loss, per_sample_td)`` where ``per_sample_td`` is the
+    detached per-sample mean ``|Q_psi - Q_MCTS|`` over estimated verbs
+    (the priority signal). Returning it here avoids a second Q forward
+    after the optimizer step: the single forward used for the loss is also
+    used for the priority computation (pre-update network state).
     """
     q_pred = actor.q(hidden)
     mask = q_target_mask.bool().float()
     sq = (q_pred - q_target) ** 2 * mask
     num = mask.sum(dim=-1).clamp(min=1.0)
-    return (sq.sum(dim=-1) / num).mean()
+    loss = (sq.sum(dim=-1) / num).mean()
+    # Per-sample TD magnitude: detached so no autograd graph is retained
+    # for the priority path.
+    with torch.no_grad():
+        abs_err = (q_pred.detach() - q_target).abs() * mask
+        per_sample_td = (abs_err.sum(dim=-1) / num).cpu().numpy()
+    return loss, per_sample_td
 
 
 def policy_loss(
@@ -95,18 +109,22 @@ def train_step(
 
     Returns ``(losses, td)`` where ``losses`` has float ``q``, ``pi``,
     ``total`` and ``td`` is the per-sample TD error for a priority update.
+
+    The per-sample TD magnitudes come from the SAME forward pass used for
+    the Q loss (the pre-update network), so priorities reflect the
+    at-visit TD error method.tex describes (Section 3.7). There is exactly
+    one Q forward per call; no redundant forward after optimizer.step.
     """
     _require_torch()
     actor.train()
     optimizer.zero_grad()
-    q_l = q_loss(actor, batch["hidden"], batch["q_target"], batch["q_target_mask"])
+    q_l, td = q_loss(actor, batch["hidden"], batch["q_target"], batch["q_target_mask"])
     pi_l = policy_loss(
         actor, batch["hidden"], batch["pi_target"], batch["available_mask"]
     )
     total = q_l + lambda_pi * pi_l
     total.backward()
     optimizer.step()
-    td = td_errors(actor, batch["hidden"], batch["q_target"], batch["q_target_mask"])
     return (
         {"q": float(q_l.item()), "pi": float(pi_l.item()), "total": float(total.item())},
         td,

@@ -126,10 +126,14 @@ def test_losses_are_finite_and_nonnegative():
     buf = ReplayBuffer(capacity=16)
     _fill_buffer(buf, 8)
     b = _batch(buf)
-    ql = q_loss(actor, b["hidden"], b["q_target"], b["q_target_mask"])
+    # q_loss returns (loss_tensor, per_sample_td_array); unpack accordingly.
+    ql, td_arr = q_loss(actor, b["hidden"], b["q_target"], b["q_target_mask"])
     pl = policy_loss(actor, b["hidden"], b["pi_target"], b["available_mask"])
     assert torch.isfinite(ql) and ql.item() >= 0
     assert torch.isfinite(pl) and pl.item() >= 0
+    # Also verify the returned TD array has the right shape and is non-negative.
+    assert td_arr.shape == (b["hidden"].shape[0],)
+    assert np.all(td_arr >= 0)
 
 
 def test_train_step_returns_losses_and_td():
@@ -238,3 +242,93 @@ def test_trainer_run_fires_on_step_callback():
     assert len(seen) == 5
     assert seen[0][0] == 1 and seen[-1][0] == 5      # 1-based global step
     assert set(seen[0][1].keys()) == {"q", "pi", "total"}
+
+
+# -----------------------------------------------------------------------------
+# TD priorities use the PRE-update network (one Q forward per step)
+# -----------------------------------------------------------------------------
+
+
+def test_td_priorities_use_preupdate_network():
+    """train_step must set priorities from the PRE-update forward, not a
+    second forward taken after optimizer.step.
+
+    Two assertions:
+    1. The priorities the buffer receives equal the |TD error| computed from
+       the network BEFORE the step (within floating-point tolerance), and
+       differ from the |TD error| computed AFTER the step (unless the two
+       happen to coincide numerically, which is astronomically unlikely with
+       a non-trivial learning rate).
+    2. The Q head is called exactly ONCE per train_step (the redundant
+       post-update forward is gone), verified by a call counter.
+    """
+    torch.manual_seed(42)
+    embed_dim = 16
+    actor = HiddenStateActor(embed_dim=embed_dim)
+    # Use a large learning rate so PRE vs POST differ noticeably.
+    opt = torch.optim.SGD(actor.parameters(), lr=0.5)
+
+    buf = ReplayBuffer(capacity=8)
+    g = torch.Generator().manual_seed(7)
+    for i in range(6):
+        buf.add(ReplaySample(
+            hidden=torch.randn(embed_dim, generator=g),
+            available_mask=torch.ones(NUM_VERBS, dtype=torch.bool),
+            q_target=torch.randn(NUM_VERBS, generator=g),
+            q_target_mask=torch.ones(NUM_VERBS, dtype=torch.bool),
+            pi_target=torch.softmax(torch.randn(NUM_VERBS, generator=g), dim=-1),
+        ))
+
+    rng = np.random.default_rng(99)
+    batch, indices = buf.sample(6, rng)
+
+    # Capture the PRE-update Q output (detached snapshot of the current params).
+    with torch.no_grad():
+        q_pre = actor.q(batch["hidden"]).clone()
+
+    # Count how many times the Q head is called during train_step.
+    q_forward_count = [0]
+    original_q = actor.q
+
+    def counting_q(hidden):
+        q_forward_count[0] += 1
+        return original_q(hidden)
+
+    actor.q = counting_q
+
+    # Run the step (uses the monkeypatched q).
+    losses, td_returned = train_step(actor, opt, batch, lambda_pi=1.0)
+
+    actor.q = original_q  # restore
+
+    # Assertion 2: exactly ONE Q forward per train_step.
+    assert q_forward_count[0] == 1, (
+        f"Expected 1 Q forward per train_step, got {q_forward_count[0]}. "
+        "The redundant post-update forward was not removed."
+    )
+
+    # Compute expected priorities from the PRE-update outputs.
+    mask = batch["q_target_mask"].bool().float()
+    abs_err_pre = (q_pre - batch["q_target"]).abs() * mask
+    num = mask.sum(dim=-1).clamp(min=1.0)
+    td_pre = (abs_err_pre.sum(dim=-1) / num).cpu().numpy()
+
+    # Compute what priorities would look like from the POST-update network.
+    with torch.no_grad():
+        q_post = actor.q(batch["hidden"])
+    abs_err_post = (q_post - batch["q_target"]).abs() * mask
+    td_post = (abs_err_post.sum(dim=-1) / num).cpu().numpy()
+
+    # Assertion 1: returned TD values match PRE-update, not POST-update.
+    assert np.allclose(td_returned, td_pre, atol=1e-5), (
+        "train_step returned TD errors that do NOT match the pre-update "
+        f"network. Max diff vs pre: {np.abs(td_returned - td_pre).max():.6f}, "
+        f"max diff vs post: {np.abs(td_returned - td_post).max():.6f}"
+    )
+    # Sanity: PRE and POST must differ enough to be distinguishable (large lr).
+    # If they are identical the test is vacuous; fail loudly.
+    assert not np.allclose(td_pre, td_post, atol=1e-5), (
+        "PRE and POST TD errors are numerically identical - the learning rate "
+        "may be too small or the test data degenerate; the assertion above is "
+        "vacuous. Increase lr or change seed."
+    )
