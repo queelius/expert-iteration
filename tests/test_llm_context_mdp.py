@@ -553,6 +553,24 @@ def test_invoke_verifier_value_tie_allows_solve_phrasing():
     assert any(f.source == "verified" for f in next_state.facts)
 
 
+def test_id_menu_only_for_target_taking_verbs():
+    # The "Existing identifiers" affordance menu is included only for verbs whose
+    # fields reference an existing entity by id. COMMIT_ANSWER and COMPUTE_SUBEXPR
+    # reference no id, so listing identifiers in their prompt is pure noise and is
+    # omitted (the ids are already present inline in the serialized state).
+    from verifier_anchored_rl.llm_context_mdp import _prompt_for
+    state = MathState(
+        problem="P",
+        open_subgoals=(Subgoal(id="sg_root", statement="root"),),
+        hypotheses=(Hypothesis(id="hyp_1", statement="H", parent_subgoal="sg_root"),),
+    )
+    for v in (Verb.DECOMPOSE, Verb.FORM_HYPOTHESIS, Verb.CHECK_CASE,
+              Verb.INVOKE_VERIFIER, Verb.BACKTRACK):
+        assert "Existing identifiers:" in _prompt_for(v, state)
+    for v in (Verb.COMMIT_ANSWER, Verb.COMPUTE_SUBEXPR):
+        assert "Existing identifiers:" not in _prompt_for(v, state)
+
+
 def test_backtrack_moves_subgoal_to_closed_and_abandoned():
     base = MathState(
         problem="P",

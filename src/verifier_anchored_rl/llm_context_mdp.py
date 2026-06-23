@@ -764,32 +764,50 @@ def _state_prefix(state: MathState) -> str:
     return f"State:\n{serialize_state(state)}"
 
 
+# Verbs whose fields reference an existing entity by id (a target_id, or
+# FORM_HYPOTHESIS's parent_subgoal_id). Only these get the addressable-identifier
+# menu in their prompt; COMPUTE_SUBEXPR and COMMIT_ANSWER reference no id, so
+# listing identifiers in their prompt is pure noise.
+_VERBS_REFERENCING_IDS = frozenset({
+    Verb.DECOMPOSE, Verb.FORM_HYPOTHESIS, Verb.CHECK_CASE,
+    Verb.INVOKE_VERIFIER, Verb.BACKTRACK,
+})
+
+
 def _verb_suffix(verb: Verb, state: MathState) -> str:
-    """The per-verb suffix appended after the shared state prefix:
-    addressable identifiers, the chosen verb, and its field description.
+    """The per-verb suffix appended after the shared state prefix: the chosen
+    verb, its field description, and (only for verbs that reference an existing
+    entity by id) the addressable-identifier menu.
 
-    ``_state_prefix(state) + _verb_suffix(verb, state)`` is byte-identical
-    to the historical ``_prompt_for`` output, so the HTTP and mock paths
-    are unchanged.
+    The identifier menu is included only for verbs in
+    ``_VERBS_REFERENCING_IDS``. COMPUTE_SUBEXPR and COMMIT_ANSWER reference no
+    id, so listing the ids in their prompt is pure noise and is omitted. The ids
+    are in any case already present inline in the serialized state prefix; this
+    menu is a small-model affordance for target selection, not new information.
+
+    ``_state_prefix(state) + _verb_suffix(verb, state)`` equals ``_prompt_for``
+    by construction (``_prompt_for`` is that concatenation).
     """
-    sg_ids = _ids_of_type(state, "sg_")
-    hyp_ids = _ids_of_type(state, "hyp_")
-    fact_ids = _ids_of_type(state, "fact_")
-
-    id_lines = []
-    if fact_ids:
-        id_lines.append(f"Facts: {', '.join(fact_ids)}")
-    if sg_ids:
-        id_lines.append(f"Open subgoals: {', '.join(sg_ids)}")
-    if hyp_ids:
-        id_lines.append(f"Hypotheses: {', '.join(hyp_ids)}")
-    id_block = "\n".join(id_lines) if id_lines else "(no addressable entities yet)"
-
     fields = _verb_fields_description(verb, state)
+
+    id_section = ""
+    if verb in _VERBS_REFERENCING_IDS:
+        sg_ids = _ids_of_type(state, "sg_")
+        hyp_ids = _ids_of_type(state, "hyp_")
+        fact_ids = _ids_of_type(state, "fact_")
+        id_lines = []
+        if fact_ids:
+            id_lines.append(f"Facts: {', '.join(fact_ids)}")
+        if sg_ids:
+            id_lines.append(f"Open subgoals: {', '.join(sg_ids)}")
+        if hyp_ids:
+            id_lines.append(f"Hypotheses: {', '.join(hyp_ids)}")
+        id_block = "\n".join(id_lines) if id_lines else "(no addressable entities yet)"
+        id_section = f"Existing identifiers:\n{id_block}\n\n"
 
     return (
         f"\n\n"
-        f"Existing identifiers:\n{id_block}\n\n"
+        f"{id_section}"
         f"Verb: {verb.value}\n\n"
         f"{fields}\n\n"
         f"Return only the JSON object."
