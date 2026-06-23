@@ -34,7 +34,7 @@ def load_gsm8k(split: str, *, source: str | None = None) -> list[dict]:
     cache (question/answer per line); if None, the default cache path under the
     benchmarks dir is used. Raises FileNotFoundError if the cache is absent
     (run the download wrapper first)."""
-    path = Path(source) if source else _REGISTRY_PATH.with_name(f"cache/gsm8k_{split}.jsonl")
+    path = Path(source) if source else _REGISTRY_PATH.parent / "cache" / f"gsm8k_{split}.jsonl"
     if not path.exists():
         raise FileNotFoundError(
             f"GSM8K cache not found at {path}. Provide source= or pre-download "

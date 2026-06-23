@@ -21,6 +21,15 @@ def test_gsm8k_correct_uses_verifier_and_normalizes():
     assert gsm8k_correct("1,000", "1000") is True   # comma stripped
     assert gsm8k_correct("$72", "72") is True        # currency stripped
     assert gsm8k_correct("73", "72") is False
+    # Only the SymPy verifier (not a naive string compare) can equate these:
+    assert gsm8k_correct("1/2", "0.5") is True
+
+
+def test_load_gsm8k_missing_cache_raises_file_not_found(tmp_path):
+    import pytest
+    from experiments.benchmarks.loaders import load_gsm8k
+    with pytest.raises(FileNotFoundError):
+        load_gsm8k("test", source=str(tmp_path / "does_not_exist.jsonl"))
 
 
 def test_registry_lists_gsm8k():
