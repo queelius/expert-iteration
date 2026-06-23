@@ -25,7 +25,9 @@ from verifier_anchored_rl.run_artifacts import (
     create_run_dir,
     load_checkpoint,
     save_checkpoint_atomic,
+    seed_everything,
     update_status,
+    write_json_atomic,
 )
 
 
@@ -162,6 +164,12 @@ def main(argv=None) -> int:
     keys = resolve_problem_selection(args.problems)
     problems = [(PROBLEMS[k]["problem"], PROBLEMS[k]["expected"]) for k in keys]
 
+    # Seed all RNGs before constructing the stack so that weight inits,
+    # dropout masks, and any other torch random draws are reproducible from
+    # --seed alone. numpy rng is re-seeded below via default_rng for the
+    # trajectory rng (which is checkpointed separately).
+    seed_everything(args.seed)
+
     (encoder, state_actor, trainer, buffer, actor, opt,
      llm, cache) = _build_stack(args)
     rng = np.random.default_rng(args.seed)
@@ -185,7 +193,13 @@ def main(argv=None) -> int:
         # was left "failed" by the interrupted process). Status flips to
         # "completed" at the end as usual.
         meta_path = run_dir / "metadata.json"
-        meta = json.loads(meta_path.read_text())
+        try:
+            meta = json.loads(meta_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            # Torn write from a previous crash: fall back to a minimal dict
+            # so the resume can proceed. Provenance fields are lost but
+            # training state is intact (checkpoint.pt is atomic).
+            meta = {"status": "running"}
         meta["status"] = "running"
         meta["resume_count"] = int(meta.get("resume_count", 0)) + 1
         meta["resumed_from"] = {
@@ -193,13 +207,14 @@ def main(argv=None) -> int:
             "global_step": ckpt["global_step"],
             "start_iteration": start_iteration, "start_problem": start_problem,
         }
-        meta_path.write_text(json.dumps(meta, indent=2, default=str))
+        write_json_atomic(meta_path, meta)
     else:
         meta = {
             "notes": args.notes,
             "args": vars(args), "hostname": socket.gethostname(),
             "python": platform.python_version(), **_gpu_info(),
             "model": args.model, "seed": args.seed,
+            "torch_seed": args.seed,
         }
         sha, dirty = _git_sha()
         meta["git_sha"], meta["git_dirty"] = sha, dirty

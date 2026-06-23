@@ -11,9 +11,39 @@ from __future__ import annotations
 
 import json
 import os
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+def seed_everything(seed: int) -> None:
+    """Seed python random, numpy global RNG, and torch (CPU + CUDA if available).
+
+    Torch is imported lazily so this module remains importable on machines
+    without torch installed. Call this BEFORE constructing any nn.Module to
+    ensure reproducible weight initialisation."""
+    random.seed(seed)
+    import numpy as np
+    np.random.seed(seed)
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
+
+
+def write_json_atomic(path: "str | Path", obj: "dict[str, Any]") -> None:
+    """Write *obj* as indented JSON to *path* atomically (write to a ``.tmp``
+    sibling then ``os.replace``), matching the safety of ``save_checkpoint_atomic``.
+    A crash mid-write never leaves torn JSON at *path*."""
+    path = Path(path)
+    tmp = str(path) + ".tmp"
+    tmp_path = Path(tmp)
+    tmp_path.write_text(json.dumps(obj, indent=2, default=str))
+    os.replace(tmp, str(path))
 
 
 def utc_timestamp() -> str:
@@ -37,7 +67,7 @@ def create_run_dir(
     meta = dict(metadata)
     meta.setdefault("start_time", datetime.now(timezone.utc).isoformat())
     meta["status"] = "running"
-    (run_dir / "metadata.json").write_text(json.dumps(meta, indent=2, default=str))
+    write_json_atomic(run_dir / "metadata.json", meta)
     return run_dir
 
 
@@ -47,7 +77,7 @@ def update_status(run_dir: Path, status: str) -> None:
     meta = json.loads(path.read_text())
     meta["status"] = status
     meta["end_time"] = datetime.now(timezone.utc).isoformat()
-    path.write_text(json.dumps(meta, indent=2, default=str))
+    write_json_atomic(path, meta)
 
 
 def append_jsonl(path: str, obj: dict[str, Any]) -> None:
@@ -80,6 +110,8 @@ __all__ = [
     "create_run_dir",
     "load_checkpoint",
     "save_checkpoint_atomic",
+    "seed_everything",
     "update_status",
     "utc_timestamp",
+    "write_json_atomic",
 ]

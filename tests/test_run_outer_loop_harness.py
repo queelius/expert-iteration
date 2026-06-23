@@ -45,6 +45,34 @@ def test_harness_builds_run_dir_and_writes_metrics(tmp_path, monkeypatch):
     assert json.loads(metrics[0])["iteration"] == 1
 
 
+def test_harness_records_torch_seed(tmp_path, monkeypatch):
+    import experiments.run_outer_loop as harness
+    from verifier_anchored_rl.outer_loop import IterationStats
+
+    monkeypatch.setattr(harness, "_build_stack",
+                        lambda args: ("ENC", "SA", "TR", "BUF", "ACTOR", "OPT", "LLM", "CACHE"))
+    monkeypatch.setattr(harness, "_save_checkpoint_for", lambda *a, **k: (lambda state: None))
+    monkeypatch.setattr(harness, "run_outer_loop",
+        lambda *a, **kw: (kw["on_iteration_end"](IterationStats(
+            iteration=1, n_decisions=1, n_simulations=4, buffer_size=1,
+            total_first=1.0, total_last=1.0)) or
+            [IterationStats(iteration=1, n_decisions=1, n_simulations=4,
+                            buffer_size=1, total_first=1.0, total_last=1.0)]))
+
+    run_root = tmp_path / "runs"
+    rc = harness.main([
+        "--iterations", "1", "--problems", "multiply_small",
+        "--run-root", str(run_root), "--tag", "seedtest",
+        "--seed", "7",
+    ])
+    assert rc == 0
+    rd = list(run_root.iterdir())[0]
+    meta = json.loads((rd / "metadata.json").read_text())
+    assert meta.get("torch_seed") == 7, (
+        f"metadata.json must record torch_seed=7; got: {meta}"
+    )
+
+
 def test_harness_records_backend_and_embedder_selectors(tmp_path, monkeypatch):
     import json
     import experiments.run_outer_loop as harness

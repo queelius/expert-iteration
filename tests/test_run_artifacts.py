@@ -59,3 +59,50 @@ def test_update_status_rewrites_metadata(tmp_path):
     meta = json.loads((run_dir / "metadata.json").read_text())
     assert meta["status"] == "completed"
     assert "end_time" in meta
+
+
+def test_seed_everything_makes_actor_init_reproducible():
+    torch = pytest.importorskip("torch")
+    from verifier_anchored_rl.run_artifacts import seed_everything
+    from verifier_anchored_rl.architecture import HiddenStateActor
+
+    def _first_linear_weight(actor):
+        # Skip LayerNorm weight (constant init, all ones) and bias parameters;
+        # grab the first nn.Linear weight tensor, which draws from the RNG.
+        for name, p in actor.named_parameters():
+            if "weight" in name and p.dim() >= 2:
+                return p.clone()
+        raise AssertionError("No 2D weight parameter found in HiddenStateActor")
+
+    seed_everything(0)
+    actor_a = HiddenStateActor(embed_dim=16)
+    param_a = _first_linear_weight(actor_a)
+
+    seed_everything(0)
+    actor_b = HiddenStateActor(embed_dim=16)
+    param_b = _first_linear_weight(actor_b)
+
+    assert torch.equal(param_a, param_b), "Same seed must yield identical init weights"
+
+    seed_everything(99)
+    actor_c = HiddenStateActor(embed_dim=16)
+    param_c = _first_linear_weight(actor_c)
+    assert not torch.equal(param_a, param_c), "Different seed must yield different weights"
+
+
+def test_write_json_atomic_roundtrip_and_guarded(tmp_path):
+    from verifier_anchored_rl.run_artifacts import write_json_atomic
+
+    path = tmp_path / "meta.json"
+    obj = {"status": "running", "seed": 42, "nested": {"a": [1, 2, 3]}}
+
+    write_json_atomic(path, obj)
+    assert not (tmp_path / "meta.json.tmp").exists(), ".tmp file must not remain"
+    loaded = json.loads(path.read_text())
+    assert loaded == obj, "Round-trip must preserve all fields"
+
+    # Writing twice to the same path replaces cleanly.
+    obj2 = {"status": "completed", "seed": 42}
+    write_json_atomic(path, obj2)
+    assert not (tmp_path / "meta.json.tmp").exists()
+    assert json.loads(path.read_text()) == obj2
