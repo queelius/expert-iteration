@@ -29,8 +29,6 @@ Steps:
 
 from __future__ import annotations
 
-import json
-import math
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -42,14 +40,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from verifier_anchored_rl.heads import NUM_VERBS, VERB_ORDER, encode_batch
 from verifier_anchored_rl.trained_prior import load_actor_from_checkpoint
+from experiments.analysis_lib import entropy_bits, load_jsonl
 
 
-def load_jsonl(path):
-    return [json.loads(line) for line in open(path) if line.strip()]
-
-
-def entropy(d):
-    return -sum(p * math.log2(p) for p in d.values() if p > 0)
+def entropy(d: dict) -> float:
+    return entropy_bits(list(d.values()))
 
 
 def step1_compare_training_targets():

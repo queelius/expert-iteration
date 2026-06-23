@@ -29,9 +29,7 @@ runs against a chat-only server.
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
-import math
 import sys
 import time
 from collections import Counter
@@ -46,6 +44,7 @@ from verifier_anchored_rl import (
     mcts_search,
     visit_count_policy,
 )
+from experiments.analysis_lib import entropy_bits, mean_pairwise_l1
 
 try:
     from problems import PROBLEMS
@@ -56,21 +55,6 @@ except ImportError:
 def pi_mcts_of(root) -> dict[str, float]:
     pi = visit_count_policy(root, temperature=1.0)
     return {action.verb.value: float(p) for action, p in pi.items()}
-
-
-def entropy_bits(dist: dict[str, float]) -> float:
-    return -sum(p * math.log2(p) for p in dist.values() if p > 0)
-
-
-def mean_pairwise_l1(dists: list[dict[str, float]]) -> float:
-    verbs = set().union(*dists) if dists else set()
-    pairs = list(itertools.combinations(range(len(dists)), 2))
-    if not pairs:
-        return 0.0
-    total = 0.0
-    for i, j in pairs:
-        total += sum(abs(dists[i].get(v, 0.0) - dists[j].get(v, 0.0)) for v in verbs)
-    return total / len(pairs)
 
 
 def mean_per_verb_std(dists: list[dict[str, float]]) -> float:
@@ -147,7 +131,7 @@ def run_cell(
     l1 = mean_pairwise_l1(dists)
     pv_std = mean_per_verb_std(dists)
     modal, modal_frac = modal_argmax_agreement(dists)
-    mean_ent = float(np.mean([entropy_bits(d) for d in dists]))
+    mean_ent = float(np.mean([entropy_bits(list(d.values())) for d in dists]))
     return {
         "problem_key": problem_key,
         "B": b,

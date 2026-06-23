@@ -37,14 +37,14 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
-import math
 import sys
 from collections import Counter, defaultdict
 from typing import Any
 
 import numpy as np
+
+from experiments.analysis_lib import argmax as argmax_verb, entropy_bits as _entropy_bits_lib, mean_pairwise_l1
 
 CONFIG_KEYS = (
     "model",
@@ -58,22 +58,7 @@ CONFIG_KEYS = (
 
 
 def entropy_bits(dist: dict[str, float]) -> float:
-    return -sum(p * math.log2(p) for p in dist.values() if p > 0)
-
-
-def argmax_verb(dist: dict[str, float]) -> str:
-    return max(dist.items(), key=lambda kv: kv[1])[0]
-
-
-def mean_pairwise_l1(dists: list[dict[str, float]]) -> float:
-    verbs = set().union(*dists)
-    pairs = list(itertools.combinations(range(len(dists)), 2))
-    if not pairs:
-        return 0.0
-    total = 0.0
-    for i, j in pairs:
-        total += sum(abs(dists[i].get(v, 0.0) - dists[j].get(v, 0.0)) for v in verbs)
-    return total / len(pairs)
+    return _entropy_bits_lib(list(dist.values()))
 
 
 def pairwise_agreement(argmaxes: list[str]) -> float:

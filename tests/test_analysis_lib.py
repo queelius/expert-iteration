@@ -67,3 +67,16 @@ def test_render_figure_writes_png_and_pdf(tmp_path):
     paths = render_figure(plot, str(tmp_path / "fig"))
     assert (tmp_path / "fig.png").exists() and (tmp_path / "fig.pdf").exists()
     assert set(paths) == {str(tmp_path / "fig.png"), str(tmp_path / "fig.pdf")}
+
+
+def test_scripts_reuse_analysis_lib_helpers():
+    import inspect
+    import experiments.b_sweep_analyze as bsa
+    import experiments.analyze_distillation_rounds as adr
+    from experiments import analysis_lib
+    # the scripts must reference analysis_lib's functions, not redefine them
+    assert bsa.mean_pairwise_l1 is analysis_lib.mean_pairwise_l1
+    assert adr.entropy_bits is analysis_lib.entropy_bits
+    # and they must not define their own copy
+    assert "def mean_pairwise_l1" not in inspect.getsource(bsa)
+    assert "def entropy_bits" not in inspect.getsource(adr)

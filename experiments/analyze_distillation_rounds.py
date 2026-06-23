@@ -39,8 +39,6 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import json
-import math
 import sys
 from collections import defaultdict
 from typing import Any
@@ -50,20 +48,12 @@ try:
 except ImportError:
     torch = None  # generalization check needs torch; sharpness/agreement do not
 
-
-# -----------------------------------------------------------------------------
-# Dataset utilities
-# -----------------------------------------------------------------------------
-
-
-def load_jsonl(path: str) -> list[dict[str, Any]]:
-    with open(path) as f:
-        return [json.loads(line) for line in f if line.strip()]
+from experiments.analysis_lib import entropy_bits, load_jsonl
 
 
 def entropy_of(dist: dict[str, float]) -> float:
     """Shannon entropy in bits over a probability dict (zeros ignored)."""
-    return -sum(p * math.log2(p) for p in dist.values() if p > 0)
+    return entropy_bits(list(dist.values()))
 
 
 def safe_argmax(dist: dict[str, float]) -> str | None:
