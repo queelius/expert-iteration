@@ -325,6 +325,9 @@ def run_outer_loop(
     rng: np.random.Generator,
     encoder: Any = None,
     gen_source: Any = None,
+    concurrent: bool = False,
+    collect_workers: int = 8,
+    base_seed: int = 0,
     record_sink: Callable[[dict[str, Any]], None] | None = None,
     on_decision: Callable[[dict[str, Any]], None] | None = None,
     on_train_step: Callable[[dict[str, Any]], None] | None = None,
@@ -340,6 +343,13 @@ def run_outer_loop(
     original behavior is unchanged when none are passed. ``start_iteration`` /
     ``start_problem`` resume a partially completed run (1-based iteration index;
     ``start_problem`` only applies to ``start_iteration``).
+
+    When ``concurrent=True``, collection uses ``collect_iteration_concurrent``
+    (a thread pool sized by ``collect_workers``, so a shared vLLM client batches
+    the trajectories' generation requests); resume granularity is per-iteration
+    (no mid-collection trajectory checkpoint) and the entropy/concentration
+    diagnostics are deferred to offline analysis of records.jsonl, so they come
+    back NaN on the iteration stats.
     """
     stats: list[IterationStats] = []
     for it in range(start_iteration, n_iterations + 1):
@@ -362,13 +372,28 @@ def run_outer_loop(
                     "problems_done_this_iter": done,
                 })
 
-        counts = collect_iteration(
-            problems, mdp_factory, state_actor, config, buffer, rng,
-            tau=tau, max_turns=max_turns, record_sink=record_sink,
-            on_decision=on_decision, on_trajectory_end=_on_trajectory_end,
-            start_problem=(start_problem if it == start_iteration else 0),
-            iteration_index=it, gen_source=gen_source,
-        )
+        if concurrent:
+            # vLLM path: many trajectories run at once so the shared client
+            # batches their generation. Resume granularity is per-iteration
+            # (no mid-collection trajectory checkpoint); the per-iteration
+            # "training" checkpoint below still fires. Sharpening diagnostics
+            # are deferred to offline analysis of records.jsonl (pi_mcts per
+            # decision), so they come back NaN here.
+            counts = collect_iteration_concurrent(
+                problems, mdp_factory, state_actor, config, buffer,
+                base_seed=base_seed, tau=tau, max_turns=max_turns,
+                max_workers=collect_workers, record_sink=record_sink,
+                on_decision=on_decision, gen_source=gen_source,
+                iteration_index=it,
+            )
+        else:
+            counts = collect_iteration(
+                problems, mdp_factory, state_actor, config, buffer, rng,
+                tau=tau, max_turns=max_turns, record_sink=record_sink,
+                on_decision=on_decision, on_trajectory_end=_on_trajectory_end,
+                start_problem=(start_problem if it == start_iteration else 0),
+                iteration_index=it, gen_source=gen_source,
+            )
         after = _flop_counters(encoder, gen_source)
 
         losses: list[dict[str, float]] = []
@@ -405,10 +430,10 @@ def run_outer_loop(
             q_first=summary["q_first"], q_last=summary["q_last"],
             pi_first=summary["pi_first"], pi_last=summary["pi_last"],
             total_first=summary["total_first"], total_last=summary["total_last"],
-            visit_entropy=counts["mean_visit_entropy"],
-            prior_entropy=counts["mean_prior_entropy"],
-            visit_concentration=counts["mean_visit_concentration"],
-            prior_concentration=counts["mean_prior_concentration"],
+            visit_entropy=counts.get("mean_visit_entropy", float("nan")),
+            prior_entropy=counts.get("mean_prior_entropy", float("nan")),
+            visit_concentration=counts.get("mean_visit_concentration", float("nan")),
+            prior_concentration=counts.get("mean_prior_concentration", float("nan")),
         )
         stats.append(s)
         if on_iteration_end is not None:

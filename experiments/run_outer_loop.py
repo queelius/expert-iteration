@@ -52,20 +52,43 @@ def _gpu_info() -> dict:
 
 
 def _build_stack(args):
-    """Construct the run stack. Heavy: loads the frozen model. Factored out so
-    tests can stub it. Returns (encoder, state_actor, trainer, buffer, actor,
+    """Construct the run stack. Heavy: loads the frozen model(s). Factored out
+    so tests can stub it. Branches on two selectors: --gen-backend (vllm or
+    transformers) for generation and --embedder (text or hidden_state) for the
+    StateActor's encoder. Returns (encoder, state_actor, trainer, buffer, actor,
     optimizer, llm_client, cache)."""
     import torch
 
     from verifier_anchored_rl.architecture import HiddenStateActor
     from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
     from verifier_anchored_rl.replay import ReplayBuffer
-    from verifier_anchored_rl.shared_forward import SharedForwardEncoder
     from verifier_anchored_rl.train import Trainer
-    from verifier_anchored_rl.transformers_client import TransformersLLMClient
 
-    llm_client = TransformersLLMClient(model_name=args.model)
-    encoder = SharedForwardEncoder.from_llm_client(llm_client)
+    # Generation backend.
+    if args.gen_backend == "vllm":
+        from verifier_anchored_rl.llm_client import OpenAICompatibleLLMClient
+        llm_client = OpenAICompatibleLLMClient(
+            base_url=args.vllm_url, model=args.model, guided_json=True)
+    else:
+        from verifier_anchored_rl.transformers_client import TransformersLLMClient
+        llm_client = TransformersLLMClient(model_name=args.model)
+
+    # State embedder (the StateActor's encoder).
+    if args.embedder == "text":
+        from verifier_anchored_rl.embedder import TextEmbedder
+        from verifier_anchored_rl.transformers_client import TransformersEmbeddingClient
+        emb_client = TransformersEmbeddingClient(model_name=args.embedder_model)
+        embed_dim = int(emb_client.model.config.hidden_size)
+        encoder = TextEmbedder(emb_client, embed_dim=embed_dim)
+    else:  # hidden_state: legacy h_T path; needs an in-process generation model
+        from verifier_anchored_rl.shared_forward import SharedForwardEncoder
+        if args.gen_backend != "transformers":
+            raise SystemExit(
+                "embedder=hidden_state requires gen-backend=transformers "
+                "(the h_T encoder needs the in-process generation model; "
+                "vLLM does not expose hidden states). Use --embedder text with vLLM.")
+        encoder = SharedForwardEncoder.from_llm_client(llm_client)
+
     cache = PrefillCache(capacity=4096)
     actor = HiddenStateActor(embed_dim=encoder.embed_dim)
     state_actor = StateActor(encoder, actor, cache, depth_limit=args.depth_limit)
@@ -119,6 +142,16 @@ def main(argv=None) -> int:
                    help="motivation/notes for this run, recorded in metadata.json")
     p.add_argument("--resume", default=None,
                    help="path to an existing run dir to resume")
+    p.add_argument("--gen-backend", choices=["vllm", "transformers"], default="vllm",
+                   help="generation backend: vllm (OpenAI-compatible server, guided_json, batched) or transformers (in-process)")
+    p.add_argument("--vllm-url", default="http://localhost:8000/v1",
+                   help="base URL of the vLLM OpenAI-compatible server (gen-backend=vllm)")
+    p.add_argument("--embedder", choices=["text", "hidden_state"], default="text",
+                   help="state embedder: text (dedicated TransformersEmbeddingClient) or hidden_state (legacy SharedForwardEncoder h_T)")
+    p.add_argument("--embedder-model", default="Qwen/Qwen2.5-0.5B-Instruct",
+                   help="model id for the text embedder (gen decoupled from embedding)")
+    p.add_argument("--collect-workers", type=int, default=8,
+                   help="concurrent trajectory workers (vLLM batching); used when gen-backend=vllm")
     args = p.parse_args(argv)
 
     try:
@@ -218,10 +251,11 @@ def main(argv=None) -> int:
     def on_decision(info):
         log(f"iter {info['iteration']} prob {info['iteration_problem_index']} "
             f"turn {info['turn']}: verb={info['chosen_verb']} "
-            f"pi_argmax={info['pi_argmax_verb']}({info['pi_argmax_prob']:.2f}) "
-            f"H_visit={info['pi_mcts_entropy']:.2f} H_prior={info['prior_entropy']:.2f} "
-            f"gen={info['gen_calls']} ({info['gen_tokens']} tok) "
-            f"prefill={info['prefill_calls']} ({info['prefill_tokens']} tok)")
+            f"pi_argmax={info.get('pi_argmax_verb','?')}({info.get('pi_argmax_prob', float('nan')):.2f}) "
+            f"H_visit={info.get('pi_mcts_entropy', float('nan')):.2f} "
+            f"H_prior={info.get('prior_entropy', float('nan')):.2f} "
+            f"gen={info.get('gen_calls',0)} ({info.get('gen_tokens',0)} tok) "
+            f"prefill={info.get('prefill_calls',0)} ({info.get('prefill_tokens',0)} tok)")
 
     def on_train_step(info):
         log(f"  train step {info['global_step']}: "
@@ -270,6 +304,8 @@ def main(argv=None) -> int:
             num_simulations=args.num_simulations, c_puct=args.c_puct,
             discount=args.discount, tau=args.tau, max_turns=args.max_turns,
             rng=rng, encoder=encoder, gen_source=llm,
+            concurrent=(args.gen_backend == "vllm"),
+            collect_workers=args.collect_workers, base_seed=args.seed,
             record_sink=lambda rec: append_jsonl(records_path, rec),
             on_decision=on_decision, on_train_step=on_train_step,
             on_iteration_end=on_iteration_end, save_checkpoint=save_ckpt,

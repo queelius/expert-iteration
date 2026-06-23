@@ -477,3 +477,29 @@ def test_collect_iteration_on_decision_reads_gen_from_gen_source():
         tau=1.0, max_turns=4, on_decision=lambda i: decisions.append(i),
         gen_source=GenSrc())
     assert decisions[0]["gen_calls"] == 7 and decisions[0]["gen_tokens"] == 700
+
+
+def test_run_outer_loop_concurrent_branch_collects_and_defers_diagnostics():
+    import math
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.outer_loop import run_outer_loop
+
+    enc, actor, sa, buf, trainer, mf = _build()
+    problems = [("2+2", "4"), ("3+3", "6")]
+    stats = run_outer_loop(
+        problems, mf, sa, trainer, buf,
+        n_iterations=1, train_steps_per_iter=0, batch_size=4,
+        min_buffer_size=10**9,  # skip training; exercise only the collect branch
+        num_simulations=4, c_puct=1.5, discount=1.0, tau=1.0, max_turns=4,
+        rng=np.random.default_rng(0), encoder=enc, gen_source=None,
+        concurrent=True, collect_workers=2, base_seed=0,
+    )
+    assert len(stats) == 1
+    s = stats[0]
+    assert s.n_trajectories == 2
+    assert s.n_decisions == len(buf)
+    # The concurrent path defers entropy/concentration to offline analysis.
+    assert math.isnan(s.visit_concentration)
+    assert math.isnan(s.visit_entropy)
