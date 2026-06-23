@@ -50,3 +50,51 @@ def test_validate_raw_row_accepts_valid_and_rejects_bad():
     bad_type = dict(good, budget_B="eight")
     with pytest.raises(ValueError):
         validate_raw_row(bad_type)
+
+
+def test_experiment_creates_dir_manifest_index_and_is_idempotent(tmp_path):
+    import json
+    from verifier_anchored_rl.experiment import Experiment
+    root = str(tmp_path)
+    e = Experiment("e1-demo", "sharpening rises with budget", root=root,
+                   provenance={"git": {"sha": "abc"}}, date="20260623")
+    assert e.exp_dir == tmp_path / "exp" / "20260623-e1-demo"
+    manifest = json.loads((e.exp_dir / "manifest.json").read_text())
+    assert manifest["slug"] == "e1-demo"
+    assert manifest["status"] == "running"
+    assert (e.exp_dir / "EXPERIMENT.md").exists()
+    # index has exactly one row for this slug, even after re-construction
+    Experiment("e1-demo", "sharpening rises with budget", root=root,
+               provenance={"git": {"sha": "abc"}}, date="20260623")
+    rows = [json.loads(l) for l in (tmp_path / "index.jsonl").read_text().splitlines() if l.strip()]
+    assert sum(r["slug"] == "e1-demo" for r in rows) == 1
+
+
+def test_experiment_add_run_dedups_and_append_raw_validates(tmp_path):
+    import json
+    import pytest
+    from verifier_anchored_rl.experiment import Experiment
+    e = Experiment("e2", "h", root=str(tmp_path), date="20260623")
+    e.add_run("20260622T0-sweep-B8")
+    e.add_run("20260622T0-sweep-B8")  # dup
+    manifest = json.loads((e.exp_dir / "manifest.json").read_text())
+    assert manifest["runs"] == ["20260622T0-sweep-B8"]
+    good = dict(dataset="gsm8k", dataset_version="main", split="test",
+                problem_id="p0", seed=0, budget_B=8, correct=True, pred="1",
+                gold="1", verifier_verdict="pass", n_turns=1, gen_calls=1,
+                gen_tokens=1, prefill_calls=1, prefill_tokens=1, flops_est=None,
+                wall_s=1.0, run_id="r0")
+    e.append_raw(good)
+    with pytest.raises(ValueError):
+        e.append_raw({"dataset": "gsm8k"})  # invalid
+    lines = (e.exp_dir / "raw" / "results.jsonl").read_text().splitlines()
+    assert len(lines) == 1
+
+
+def test_experiment_does_not_clobber_edited_experiment_md(tmp_path):
+    from verifier_anchored_rl.experiment import Experiment
+    e = Experiment("e3", "h", root=str(tmp_path), date="20260623")
+    md = e.exp_dir / "EXPERIMENT.md"
+    md.write_text("# e3\n\nMY EDITS\n")
+    Experiment("e3", "h", root=str(tmp_path), date="20260623")  # re-construct
+    assert "MY EDITS" in md.read_text()

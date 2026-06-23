@@ -125,5 +125,97 @@ def validate_raw_row(row: dict) -> None:
                 f"raw row {key!r} must be {typ}, got {type(val).__name__}")
 
 
+from .run_artifacts import append_jsonl, write_json_atomic
+
+_TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "experiments" / "templates"
+
+
+class Experiment:
+    """A container tying a set of runs to one hypothesis. Creates
+    exp/<date>-<slug>/ with a machine-readable manifest, registers the
+    experiment in the program index, and offers a validated raw-results sink.
+    Runs are referenced by id and never moved."""
+
+    def __init__(self, slug: str, hypothesis: str, *, root: str = "experiments/results",
+                 provenance: dict | None = None, date: str | None = None):
+        self.root = Path(root)
+        self.slug = slug
+        self.date = date or utc_timestamp()[:8]
+        self.exp_dir = self.root / "exp" / f"{self.date}-{slug}"
+        (self.exp_dir / "raw").mkdir(parents=True, exist_ok=True)
+        (self.exp_dir / "analysis" / "figures").mkdir(parents=True, exist_ok=True)
+        (self.exp_dir / "analysis" / "tables").mkdir(parents=True, exist_ok=True)
+        manifest_path = self.exp_dir / "manifest.json"
+        if manifest_path.exists():
+            self._manifest = json.loads(manifest_path.read_text())
+        else:
+            self._manifest = {
+                "slug": slug, "date": self.date, "hypothesis": hypothesis,
+                "status": "running", "headline": "",
+                "provenance": provenance or {}, "runs": [], "datasets": [],
+                "seeds": [], "analysis": {"script": "analysis/analyze.py",
+                                          "last_run": None, "code_sha": None},
+            }
+            self._write_manifest()
+        self._upsert_index()
+        md = self.exp_dir / "EXPERIMENT.md"
+        if not md.exists():
+            tmpl = (_TEMPLATE_DIR / "EXPERIMENT.md").read_text()
+            md.write_text(tmpl.format(slug=slug, date=self.date,
+                                      status=self._manifest["status"],
+                                      hypothesis=hypothesis))
+
+    def _write_manifest(self) -> None:
+        write_json_atomic(self.exp_dir / "manifest.json", self._manifest)
+
+    def _upsert_index(self) -> None:
+        index = self.root / "index.jsonl"
+        rows = []
+        if index.exists():
+            rows = [json.loads(l) for l in index.read_text().splitlines() if l.strip()]
+        rows = [r for r in rows if r.get("slug") != self.slug]
+        rows.append({"slug": self.slug, "date": self.date,
+                     "hypothesis": self._manifest["hypothesis"],
+                     "status": self._manifest["status"],
+                     "headline": self._manifest["headline"],
+                     "exp_dir": str(self.exp_dir)})
+        self.root.mkdir(parents=True, exist_ok=True)
+        index.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    def add_run(self, run_id_or_dir: str) -> None:
+        run_id = Path(run_id_or_dir).name
+        if run_id not in self._manifest["runs"]:
+            self._manifest["runs"].append(run_id)
+            self._write_manifest()
+
+    def append_raw(self, row: dict) -> None:
+        validate_raw_row(row)
+        append_jsonl(str(self.exp_dir / "raw" / "results.jsonl"), row)
+
+    def set_headline(self, text: str, status: str) -> None:
+        self._manifest["headline"] = text
+        self._manifest["status"] = status
+        self._write_manifest()
+        self._upsert_index()
+
+
+def rebuild_index_md(root: str = "experiments/results") -> Path:
+    """Render the human-readable INDEX.md from index.jsonl."""
+    root = Path(root)
+    index = root / "index.jsonl"
+    rows = []
+    if index.exists():
+        rows = [json.loads(l) for l in index.read_text().splitlines() if l.strip()]
+    rows.sort(key=lambda r: r.get("date", ""), reverse=True)
+    lines = ["# Experiment index", "",
+             "| date | slug | status | headline |", "|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r.get('date','')} | {r.get('slug','')} | "
+                     f"{r.get('status','')} | {r.get('headline','')} |")
+    out = root / "INDEX.md"
+    out.write_text("\n".join(lines) + "\n")
+    return out
+
+
 __all__ = ["capture_provenance", "provenance_from_metadata",
-           "RAW_SCHEMA", "validate_raw_row"]
+           "RAW_SCHEMA", "validate_raw_row", "Experiment", "rebuild_index_md"]
