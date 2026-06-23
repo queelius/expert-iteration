@@ -407,6 +407,92 @@ def test_invoke_verifier_failure_does_not_promote_and_yields_negative_reward():
     assert not any(f.source == "verified" for f in next_state.facts)
 
 
+def test_invoke_verifier_reward_requires_claim_tied_to_target():
+    # A genuinely-true check ("2 + 2" == "4") that is NOT stated in the target
+    # hypothesis earns no reward and promotes no fact: the reward requires the
+    # verified claim to be about the target (closes the farming hole).
+    base = MathState(
+        problem="P",
+        hypotheses=(Hypothesis(id="hyp_1", statement="the answer is 42"),),
+    )
+    client = MockLLMClient(script={
+        ("INVOKE_VERIFIER",): {
+            "target_id": "hyp_1", "verifier_verb": "check_arith",
+            "input_expression": "2 + 2", "expected": "4",
+        }
+    })
+    mdp = LLMContextMDP(problem_statement="P", llm_client=client)
+    next_state, reward = mdp.sample_transition(base, MathAction(verb=Verb.INVOKE_VERIFIER))
+    assert reward == 0.0
+    assert next_state.verifier_log[0].success is True  # the check DID succeed
+    assert not any(f.source == "verified" for f in next_state.facts)  # but unrewarded
+
+
+def test_invoke_verifier_trivial_tautology_rejected_even_when_in_target():
+    # input == expected (after normalization) is a content-free identity, so it
+    # earns nothing even though "5" appears in the target statement "5 = 5".
+    base = MathState(
+        problem="P",
+        hypotheses=(Hypothesis(id="hyp_1", statement="5 = 5"),),
+    )
+    client = MockLLMClient(script={
+        ("INVOKE_VERIFIER",): {
+            "target_id": "hyp_1", "verifier_verb": "check_arith",
+            "input_expression": "5", "expected": "5",
+        }
+    })
+    mdp = LLMContextMDP(problem_statement="P", llm_client=client)
+    next_state, reward = mdp.sample_transition(base, MathAction(verb=Verb.INVOKE_VERIFIER))
+    assert reward == 0.0
+    assert not any(f.source == "verified" for f in next_state.facts)
+
+
+def test_invoke_verifier_reward_deduped_per_target():
+    # A second successful, target-tied verification of an already-verified
+    # target earns nothing and promotes no new fact.
+    base = MathState(
+        problem="P",
+        hypotheses=(Hypothesis(id="hyp_1", statement="7 * 6 = 42"),),
+        verifier_log=(
+            VerifierCall(id="vcall_0", verb="check_arith", input="7 * 6",
+                         output="42", success=True, target_id="hyp_1"),
+        ),
+    )
+    client = MockLLMClient(script={
+        ("INVOKE_VERIFIER",): {
+            "target_id": "hyp_1", "verifier_verb": "check_arith",
+            "input_expression": "7 * 6", "expected": "42",
+        }
+    })
+    mdp = LLMContextMDP(problem_statement="P", llm_client=client)
+    next_state, reward = mdp.sample_transition(base, MathAction(verb=Verb.INVOKE_VERIFIER))
+    assert reward == 0.0
+    assert not any(f.source == "verified" for f in next_state.facts)
+    assert len(next_state.verifier_log) == 2  # the repeat call is still logged
+
+
+def test_invoke_verifier_farming_attack_earns_nothing():
+    # Five successive tautology checks against an unrelated hypothesis yield zero
+    # cumulative reward and zero promoted facts (the Goodhart-immunity property).
+    state = MathState(
+        problem="P",
+        hypotheses=(Hypothesis(id="hyp_1", statement="the answer is 42"),),
+    )
+    client = MockLLMClient(script={
+        ("INVOKE_VERIFIER",): {
+            "target_id": "hyp_1", "verifier_verb": "check_arith",
+            "input_expression": "1", "expected": "1",
+        }
+    })
+    mdp = LLMContextMDP(problem_statement="P", llm_client=client, max_turns=20)
+    total = 0.0
+    for _ in range(5):
+        state, reward = mdp.sample_transition(state, MathAction(verb=Verb.INVOKE_VERIFIER))
+        total += reward
+    assert total == 0.0
+    assert not any(f.source == "verified" for f in state.facts)
+
+
 def test_backtrack_moves_subgoal_to_closed_and_abandoned():
     base = MathState(
         problem="P",

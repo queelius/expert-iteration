@@ -1242,9 +1242,22 @@ class LLMContextMDP:
         # "verified" fact for an unchecked self-claim (which also falsely
         # unlocks COMMIT_ANSWER). Keep it neutral and unpromoted. A genuine
         # failed check is still mildly penalized.
+        #
+        # A successful CHECKED claim earns the reward and promotion only when it
+        # is tied to the target, is not a content-free tautology, and is the
+        # first success for the target (see _verification_is_rewardable). This
+        # closes the reward-farming hole where a tautology like
+        # check_arith("1","1") on an unrelated target earned +0.05 every turn
+        # and falsely promoted a "verified" fact (method.tex 4.6 Goodhart claim).
         if result.success and expected is not None:
-            promoted = _promote_to_fact(new_state, target_id, input_expression, result.observed)
-            return promoted, _INTERMEDIATE_VERIFIER_REWARD
+            if _verification_is_rewardable(
+                state, target_id, input_expression, expected
+            ):
+                promoted = _promote_to_fact(
+                    new_state, target_id, input_expression, result.observed
+                )
+                return promoted, _INTERMEDIATE_VERIFIER_REWARD
+            return new_state, 0.0
         if result.success:
             return new_state, 0.0
         return new_state, -_INTERMEDIATE_VERIFIER_REWARD
@@ -1426,6 +1439,49 @@ def _spawn_case_children(
 ) -> MathState:
     """Like _decompose_target for the hypothesis branch only, with case-style children."""
     return _decompose_target(state, target_id, cases)
+
+
+def _verification_is_rewardable(
+    state: MathState, target_id: str, input_expression: str, expected: str
+) -> bool:
+    """Whether a SUCCESSFUL verifier call earns the intermediate reward and a
+    ``source="verified"`` promotion.
+
+    Closes the reward-farming hole (audit 2026-06-23): a successful check is
+    rewardable only if all three hold:
+
+    1. Dedup: it is the FIRST successful verification of this ``target_id``
+       (repeat verifications of an already-verified target earn nothing).
+    2. Not a tautology: the input is not literally the expected value (after
+       whitespace/case normalization), so a content-free identity like
+       ``check_arith("1","1")`` earns nothing. Value-equal but different-form
+       checks (``"2+2"`` vs ``"4"``) are still allowed: sympy auto-evaluates,
+       so the comparison is on the raw strings, not the parsed forms.
+    3. Tie to target: both ``input_expression`` and ``expected`` appear in the
+       target entity's statement, so the verifier must confirm a claim actually
+       made about the target (a true-but-unrelated check earns nothing).
+
+    Without these gates an agent farms +0.05 and a "verified" fact every turn,
+    biasing MCTS toward verifier-spam and falsifying the verifier-anchored
+    (Goodhart-resistant) reward guarantee in method.tex 4.6.
+    """
+
+    def _norm(s: str) -> str:
+        return "".join(str(s).split()).lower()
+
+    if any(v.target_id == target_id and v.success for v in state.verifier_log):
+        return False
+    if _norm(input_expression) == _norm(expected):
+        return False
+    target = (
+        state.hypothesis_by_id(target_id)
+        or state.fact_by_id(target_id)
+        or state.subgoal_by_id(target_id)
+    )
+    if target is None:
+        return False
+    statement = _norm(target.statement)
+    return _norm(input_expression) in statement and _norm(expected) in statement
 
 
 def _promote_to_fact(
