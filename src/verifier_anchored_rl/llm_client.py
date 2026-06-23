@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol, runtime_checkable
 
@@ -247,6 +248,15 @@ class OpenAICompatibleLLMClient:
     max_retries: int = 1
     extra_headers: dict[str, str] = field(default_factory=dict)
     guided_json: bool = False
+    # FLOP counters: mirroring TransformersLLMClient attribute names so that
+    # outer_loop._flop_counters can read them uniformly across backends.
+    generate_calls: int = field(default=0, compare=False, repr=False)
+    generated_tokens: int = field(default=0, compare=False, repr=False)
+    # Lock guards counter mutations: complete_json is called concurrently from
+    # many collection-thread workers in collect_iteration_concurrent.
+    _counter_lock: threading.Lock = field(
+        default_factory=threading.Lock, compare=False, repr=False
+    )
 
     def complete_json(
         self,
@@ -311,6 +321,12 @@ class OpenAICompatibleLLMClient:
                 content = payload["choices"][0]["message"]["content"]
                 parsed = _parse_json_lenient(content)
                 _validate_against_schema(parsed, schema)
+                completion_tokens = int(
+                    (payload.get("usage") or {}).get("completion_tokens", 0) or 0
+                )
+                with self._counter_lock:
+                    self.generate_calls += 1
+                    self.generated_tokens += completion_tokens
                 return parsed
             except (httpx.HTTPError, KeyError, ValueError, LLMResponseError) as e:
                 last_err = e
