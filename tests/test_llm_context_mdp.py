@@ -407,25 +407,25 @@ def test_invoke_verifier_failure_does_not_promote_and_yields_negative_reward():
     assert not any(f.source == "verified" for f in next_state.facts)
 
 
-def test_invoke_verifier_reward_requires_claim_tied_to_target():
-    # A genuinely-true check ("2 + 2" == "4") that is NOT stated in the target
-    # hypothesis earns no reward and promotes no fact: the reward requires the
-    # verified claim to be about the target (closes the farming hole).
+def test_invoke_verifier_reward_denied_on_value_contradiction():
+    # The value-tie rejects a successful check whose concrete expected value
+    # contradicts a concrete identity the target asserts: target "7 * 6 = 42"
+    # claims 42, so verifying "40 + 3" == "43" (true, non-tautology) earns nothing.
     base = MathState(
         problem="P",
-        hypotheses=(Hypothesis(id="hyp_1", statement="the answer is 42"),),
+        hypotheses=(Hypothesis(id="hyp_1", statement="7 * 6 = 42"),),
     )
     client = MockLLMClient(script={
         ("INVOKE_VERIFIER",): {
             "target_id": "hyp_1", "verifier_verb": "check_arith",
-            "input_expression": "2 + 2", "expected": "4",
+            "input_expression": "40 + 3", "expected": "43",
         }
     })
     mdp = LLMContextMDP(problem_statement="P", llm_client=client)
     next_state, reward = mdp.sample_transition(base, MathAction(verb=Verb.INVOKE_VERIFIER))
     assert reward == 0.0
-    assert next_state.verifier_log[0].success is True  # the check DID succeed
-    assert not any(f.source == "verified" for f in next_state.facts)  # but unrewarded
+    assert next_state.verifier_log[0].success is True  # the check itself is true
+    assert not any(f.source == "verified" for f in next_state.facts)  # but contradicts target
 
 
 def test_invoke_verifier_trivial_tautology_rejected_even_when_in_target():
@@ -491,6 +491,66 @@ def test_invoke_verifier_farming_attack_earns_nothing():
         total += reward
     assert total == 0.0
     assert not any(f.source == "verified" for f in state.facts)
+
+
+def test_verification_reward_capped_per_episode():
+    # The hard cap bounds cumulative intermediate reward: once
+    # MAX_INTERMEDIATE_VERIFIER_REWARD has been granted (one verified fact per
+    # reward), further successful, legitimate verifications are not rewardable.
+    # This is the Goodhart backstop against self-authored-target farming.
+    from verifier_anchored_rl.llm_context_mdp import (
+        _INTERMEDIATE_VERIFIER_REWARD,
+        _MAX_INTERMEDIATE_VERIFIER_REWARD,
+        _verification_is_rewardable,
+    )
+    max_rewarded = round(_MAX_INTERMEDIATE_VERIFIER_REWARD / _INTERMEDIATE_VERIFIER_REWARD)
+    verified = tuple(
+        Fact(id=f"fact_{i}", statement=f"{i} + {i} = {2 * i}", source="verified")
+        for i in range(max_rewarded)
+    )
+    hyp = (Hypothesis(id="hyp_new", statement="9 * 9 = 81"),)
+    at_cap = MathState(problem="P", facts=verified, hypotheses=hyp)
+    below_cap = MathState(problem="P", facts=verified[:-1], hypotheses=hyp)
+    assert _verification_is_rewardable(at_cap, "hyp_new", "9 * 9", "81") is False
+    assert _verification_is_rewardable(below_cap, "hyp_new", "9 * 9", "81") is True
+
+
+def test_value_tie_allows_symbolic_and_natural_language_targets():
+    # The value-tie is permissive: it denies ONLY a concrete contradiction, so it
+    # does not falsely deny solve/factor/natural-language phrasings (the
+    # over-restriction the earlier surface-substring tie caused).
+    from verifier_anchored_rl.llm_context_mdp import _value_consistent_with_target
+    # solve target (free variable on the lhs): the solution 4 is not the rhs 13,
+    # but an equation-to-solve must be allowed.
+    assert _value_consistent_with_target("2*x + 5 = 13", "4") is True
+    # factoring target (free variable): allowed.
+    assert _value_consistent_with_target("x**2 - 9 = (x - 3)*(x + 3)", "(x - 3)*(x + 3)") is True
+    # natural-language target with no "=" claim: allowed (cap bounds farming).
+    assert _value_consistent_with_target("the answer is 42", "29") is True
+    # concrete identity, matching expected: allowed.
+    assert _value_consistent_with_target("7 * 6 = 42", "42") is True
+    # concrete identity, contradicting expected: denied.
+    assert _value_consistent_with_target("7 * 6 = 42", "43") is False
+
+
+def test_invoke_verifier_value_tie_allows_solve_phrasing():
+    # Regression for the over-restriction the substring tie caused: a legitimate
+    # solve verification earns the reward even though the solution "4" is not a
+    # substring of the equation statement (the value-tie allows symbolic targets).
+    base = MathState(
+        problem="Solve 2*x + 5 = 13.",
+        hypotheses=(Hypothesis(id="hyp_1", statement="2*x + 5 = 13"),),
+    )
+    client = MockLLMClient(script={
+        ("INVOKE_VERIFIER",): {
+            "target_id": "hyp_1", "verifier_verb": "solve",
+            "input_expression": "2*x + 5 = 13", "expected": "4",
+        }
+    })
+    mdp = LLMContextMDP(problem_statement="Solve 2*x + 5 = 13.", llm_client=client)
+    next_state, reward = mdp.sample_transition(base, MathAction(verb=Verb.INVOKE_VERIFIER))
+    assert reward > 0
+    assert any(f.source == "verified" for f in next_state.facts)
 
 
 def test_backtrack_moves_subgoal_to_closed_and_abandoned():

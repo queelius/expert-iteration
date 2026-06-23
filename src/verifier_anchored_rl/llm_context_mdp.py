@@ -907,20 +907,30 @@ def _verb_fields_description(verb: Verb, state: MathState) -> str:
 
 # Per framework paper section 4.6 (verifier-anchored-reward-only):
 # * Non-terminal, non-verifier verbs contribute zero reward.
-# * INVOKE_VERIFIER yields a small shaped signal (+/-) so the policy
-#   learns to spend verifier calls; the magnitude is small relative
-#   to the terminal reward so it cannot dominate.
+# * INVOKE_VERIFIER yields a small shaped signal (+/-) for the FIRST
+#   non-trivial, target-consistent verification of each target, and the
+#   cumulative POSITIVE intermediate reward is hard-capped per episode
+#   (MAX_INTERMEDIATE_VERIFIER_REWARD) so it cannot rival or be farmed above
+#   the terminal reward. The cap is the Goodhart backstop (audit 2026-06-23):
+#   because the agent can author the hypotheses/facts it then verifies, no
+#   per-call relevance gate alone is sufficient; bounding the cumulative signal
+#   well below the terminal magnitude makes farming immaterial by construction.
 # * COMMIT_ANSWER yields the terminal verifier outcome (+/-1).
 # * A turn-budget cap can convert a non-terminal episode into a
 #   terminal "no commit" outcome with negative reward.
 
 INTERMEDIATE_VERIFIER_REWARD = 0.05
+# Cap on cumulative positive intermediate verifier reward per episode, as a small
+# fraction of the terminal magnitude (0.2 = at most 4 rewarded verifications at
+# 0.05 each). Bounds any verifier-spam farm well below the +/-1 terminal reward.
+MAX_INTERMEDIATE_VERIFIER_REWARD = 0.2
 TERMINAL_SUCCESS_REWARD = 1.0
 TERMINAL_FAILURE_REWARD = -1.0
 MASKED_ACTION_REWARD = -0.01
 
 # Backward-compatible private aliases (existing call sites).
 _INTERMEDIATE_VERIFIER_REWARD = INTERMEDIATE_VERIFIER_REWARD
+_MAX_INTERMEDIATE_VERIFIER_REWARD = MAX_INTERMEDIATE_VERIFIER_REWARD
 _TERMINAL_SUCCESS_REWARD = TERMINAL_SUCCESS_REWARD
 _TERMINAL_FAILURE_REWARD = TERMINAL_FAILURE_REWARD
 
@@ -1441,38 +1451,83 @@ def _spawn_case_children(
     return _decompose_target(state, target_id, cases)
 
 
+def _value_consistent_with_target(statement: str, expected: str) -> bool:
+    """Permissive value-tie: deny ONLY a clear contradiction, where the target
+    states a fully-CONCRETE arithmetic identity ``A = B`` (neither side has a
+    free symbol) and ``expected`` is not ``B`` under SymPy equality.
+
+    For symbolic targets (an equation to solve like ``2*x + 5 = 13``, or a
+    factoring claim with a variable), and for natural-language targets with no
+    parseable ``=`` claim, there is no clean concrete value to contradict, so we
+    allow: the per-episode cap (MAX_INTERMEDIATE_VERIFIER_REWARD) is what bounds
+    farming, while this check only rejects verifying a concrete value that
+    disagrees with a concrete value the target asserts. This replaces an earlier
+    surface-substring tie that wrongly denied legitimate solve/factor/GSM8K
+    phrasings (audit review 2026-06-23)."""
+    if "=" not in statement:
+        return True
+    parts = statement.split("=")
+    if len(parts) != 2:
+        return True
+    lhs_s, rhs_s = parts[0].strip(), parts[1].strip()
+    if not rhs_s:
+        return True
+    try:
+        import sympy as sp
+
+        lhs = sp.sympify(lhs_s)
+        rhs = sp.sympify(rhs_s)
+        if lhs.free_symbols or rhs.free_symbols:
+            return True  # an equation with a variable: no concrete claim to contradict
+        exp = sp.sympify(expected)
+        if exp.free_symbols:
+            return True
+        return bool(sp.simplify(exp - rhs) == 0)
+    except Exception:
+        return True  # parse ambiguity: do not deny legitimate reward (cap bounds farming)
+
+
 def _verification_is_rewardable(
     state: MathState, target_id: str, input_expression: str, expected: str
 ) -> bool:
     """Whether a SUCCESSFUL verifier call earns the intermediate reward and a
     ``source="verified"`` promotion.
 
-    Closes the reward-farming hole (audit 2026-06-23): a successful check is
-    rewardable only if all three hold:
+    Restores the verifier-anchored (Goodhart-resistant) reward (method.tex 4.6)
+    via four gates. The hard CAP is the load-bearing protection: because the
+    agent can author the hypotheses/facts it then verifies, no per-call relevance
+    gate alone stops farming, so the cumulative positive intermediate reward is
+    bounded per episode well below the terminal magnitude.
 
-    1. Dedup: it is the FIRST successful verification of this ``target_id``
-       (repeat verifications of an already-verified target earn nothing).
-    2. Not a tautology: the input is not literally the expected value (after
-       whitespace/case normalization), so a content-free identity like
-       ``check_arith("1","1")`` earns nothing. Value-equal but different-form
-       checks (``"2+2"`` vs ``"4"``) are still allowed: sympy auto-evaluates,
-       so the comparison is on the raw strings, not the parsed forms.
-    3. Tie to target: both ``input_expression`` and ``expected`` appear in the
-       target entity's statement, so the verifier must confirm a claim actually
-       made about the target (a true-but-unrelated check earns nothing).
-
-    Without these gates an agent farms +0.05 and a "verified" fact every turn,
-    biasing MCTS toward verifier-spam and falsifying the verifier-anchored
-    (Goodhart-resistant) reward guarantee in method.tex 4.6.
+    1. Cap: the cumulative positive intermediate reward this episode (one
+       ``source="verified"`` fact is promoted per rewarded verification, so their
+       count times INTERMEDIATE_VERIFIER_REWARD is the reward so far) must be
+       below MAX_INTERMEDIATE_VERIFIER_REWARD. Past the cap, further successful
+       verifications are neutral (logged, no reward, no promotion).
+    2. Dedup: the FIRST successful verification of this ``target_id`` only.
+    3. Not a tautology: ``input`` not literally ``expected`` after whitespace/case
+       normalization (rejects ``check_arith("1","1")``; ``"2+2"`` vs ``"4"`` is
+       allowed since the comparison is on raw strings, not auto-evaluated forms).
+    4. Value-tie: not a clear contradiction with a concrete identity the target
+       asserts (see ``_value_consistent_with_target``).
     """
 
     def _norm(s: str) -> str:
         return "".join(str(s).split()).lower()
 
+    # (1) Cap: each rewarded verification promotes exactly one source="verified"
+    # fact, so the verified-fact count is the number of intermediate rewards
+    # already granted this episode.
+    n_rewarded = sum(1 for f in state.facts if f.source == "verified")
+    if n_rewarded * _INTERMEDIATE_VERIFIER_REWARD >= _MAX_INTERMEDIATE_VERIFIER_REWARD:
+        return False
+    # (2) Dedup: only the first success per target (scan the PRE-append log).
     if any(v.target_id == target_id and v.success for v in state.verifier_log):
         return False
+    # (3) Reject a content-free tautology (input literally equals expected).
     if _norm(input_expression) == _norm(expected):
         return False
+    # (4) Value-tie to the target (permissive; rejects only concrete contradictions).
     target = (
         state.hypothesis_by_id(target_id)
         or state.fact_by_id(target_id)
@@ -1480,8 +1535,7 @@ def _verification_is_rewardable(
     )
     if target is None:
         return False
-    statement = _norm(target.statement)
-    return _norm(input_expression) in statement and _norm(expected) in statement
+    return _value_consistent_with_target(target.statement, expected)
 
 
 def _promote_to_fact(
