@@ -1,0 +1,10 @@
+{
+  "gsm8k": {"loader": "gsm8k", "version": "main", "splits": ["train", "test"],
+            "n_test": 1319, "answer_style": "final-number",
+            "citation": "Cobbe et al. 2021"},
+  "math": {"loader": "math", "version": "v1", "splits": ["train", "test"],
+           "answer_style": "boxed", "citation": "Hendrycks et al. 2021",
+           "status": "planned"},
+  "toy-train": {"loader": "toy", "version": "1", "splits": ["train", "holdout"],
+                "source": "experiments/problems.py"}
+}
