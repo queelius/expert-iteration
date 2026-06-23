@@ -414,7 +414,6 @@ class Experiment:
                      "headline": self._manifest["headline"],
                      "exp_dir": str(self.exp_dir)})
         self.root.mkdir(parents=True, exist_ok=True)
-        write_json_atomic(index, {"_": 0})  # ensure parent; replaced next line
         index.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
 
     def add_run(self, run_id_or_dir: str) -> None:
@@ -451,8 +450,6 @@ def rebuild_index_md(root: str = "experiments/results") -> Path:
     out.write_text("\n".join(lines) + "\n")
     return out
 ```
-
-Note: the `write_json_atomic(index, {"_": 0})` line only ensures the parent dir exists before the plain-text rewrite; the index is JSONL, so it is rewritten on the next line. Keep it.
 
 - [ ] **Step 5: Run, verify PASS** (`python -m pytest tests/test_experiment.py -q`).
 - [ ] **Step 6: Commit**
