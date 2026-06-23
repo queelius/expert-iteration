@@ -43,3 +43,27 @@ def test_load_jsonl_and_sharpness_report(tmp_path):
     rep = sharpness_report(recs, label="round-a")
     assert rep["label"] == "round-a"
     assert abs(rep["mean_max_prob"] - 0.75) < 1e-9  # (1.0 + 0.5) / 2
+
+
+def test_write_report_renders_prose_and_tables(tmp_path):
+    from experiments.analysis_lib import write_report
+    path = write_report(str(tmp_path), "Demo", [
+        ("Summary", "All good."),
+        ("Cells", [{"B": 8, "acc": 0.5}, {"B": 16, "acc": 0.7}]),
+    ])
+    text = (tmp_path / "report.md").read_text()
+    assert path.endswith("report.md")
+    assert "# Demo" in text and "## Summary" in text and "All good." in text
+    assert "| B | acc |" in text and "| 8 | 0.5 |" in text
+
+
+def test_render_figure_writes_png_and_pdf(tmp_path):
+    import pytest
+    pytest.importorskip("matplotlib")
+    from experiments.analysis_lib import render_figure
+    def plot(fig):
+        ax = fig.add_subplot(111)
+        ax.plot([1, 2, 3], [1, 4, 9])
+    paths = render_figure(plot, str(tmp_path / "fig"))
+    assert (tmp_path / "fig.png").exists() and (tmp_path / "fig.pdf").exists()
+    assert set(paths) == {str(tmp_path / "fig.png"), str(tmp_path / "fig.pdf")}

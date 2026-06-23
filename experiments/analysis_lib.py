@@ -70,5 +70,50 @@ def sharpness_report(records: list[dict], label: str) -> dict:
     }
 
 
+def _md_table(rows: list[dict]) -> str:
+    if not rows:
+        return "(no rows)"
+    cols = list(rows[0].keys())
+    out = ["| " + " | ".join(cols) + " |",
+           "|" + "|".join("---" for _ in cols) + "|"]
+    for r in rows:
+        out.append("| " + " | ".join(str(r.get(c, "")) for c in cols) + " |")
+    return "\n".join(out)
+
+
+def write_report(out_dir: str, title: str, sections: list) -> str:
+    """Write a markdown report. Each section is (heading, body); body is a
+    markdown string or a list-of-dicts rendered as a table. This is the
+    persistent artifact the ad-hoc scripts never produced."""
+    from pathlib import Path
+    lines = [f"# {title}", ""]
+    for heading, body in sections:
+        lines.append(f"## {heading}")
+        lines.append(_md_table(body) if isinstance(body, list) else str(body))
+        lines.append("")
+    path = Path(out_dir) / "report.md"
+    path.write_text("\n".join(lines) + "\n")
+    return str(path)
+
+
+def render_figure(plot_fn: Callable, out_stem: str) -> list[str]:
+    """Call ``plot_fn(fig)`` and save the figure as both PNG (committed, for
+    report.md) and PDF (for the paper). Uses the Agg backend so it runs
+    headless. matplotlib is imported lazily."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig = plt.figure(figsize=(7, 4))
+    plot_fn(fig)
+    paths = []
+    for ext in ("png", "pdf"):
+        p = f"{out_stem}.{ext}"
+        fig.savefig(p, bbox_inches="tight")
+        paths.append(p)
+    plt.close(fig)
+    return paths
+
+
 __all__ = ["entropy_bits", "normalized_concentration", "load_jsonl", "argmax",
-           "mean_pairwise_l1", "bootstrap_ci", "sharpness_report"]
+           "mean_pairwise_l1", "bootstrap_ci", "sharpness_report",
+           "write_report", "render_figure"]
