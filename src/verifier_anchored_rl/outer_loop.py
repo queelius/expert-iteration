@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -31,6 +32,14 @@ def _entropy(probs: Any) -> float:
     log2(k) bits. Used to quantify how sharp the MCTS visit distribution and
     the learned prior are (lower entropy = more concentrated = sharper)."""
     return -sum(p * math.log2(p) for p in probs if p > 0.0)
+
+
+def _normalized_concentration(entropy_bits: float, k: int) -> float:
+    """Normalized concentration: 1 - H/log2(k), in [0, 1].
+
+    Returns 0 for a uniform distribution (maximum entropy), 1 for a delta
+    (zero entropy). Caller must ensure k > 1 (undefined for k=1; log2(1)=0)."""
+    return 1.0 - entropy_bits / math.log2(k)
 
 
 def loss_summary(losses: list[dict[str, float]]) -> dict[str, float]:
@@ -83,6 +92,9 @@ class IterationStats:
     prior_concentration: float = float("nan")
 
 
+_flop_counter_warned: set[int] = set()  # tracks gen_source ids already warned
+
+
 def _flop_counters(encoder: Any, gen_source: Any = None) -> dict[str, int]:
     """Read prefill counters from the encoder and generation counters from
     ``gen_source`` (zeros if absent). When generation runs on a separate
@@ -90,8 +102,24 @@ def _flop_counters(encoder: Any, gen_source: Any = None) -> dict[str, int]:
     the llm_client while the encoder only embeds), pass that backend as
     ``gen_source``; it exposes ``generate_calls``/``generated_tokens`` (the
     llm_client) or ``gen_calls``/``gen_tokens`` (the encoder). Defaults to the
-    encoder, so the one-forward path is unchanged."""
+    encoder, so the one-forward path is unchanged.
+
+    Emits a one-time UserWarning when gen_source is not None but exposes none
+    of the four expected counter attributes, so a misconfigured backend cannot
+    silently report 0 generation FLOPs."""
     gen = gen_source if gen_source is not None else encoder
+    _COUNTER_ATTRS = ("generate_calls", "generated_tokens", "gen_calls", "gen_tokens")
+    if gen_source is not None and not any(hasattr(gen_source, a) for a in _COUNTER_ATTRS):
+        key = id(gen_source)
+        if key not in _flop_counter_warned:
+            _flop_counter_warned.add(key)
+            warnings.warn(
+                f"_flop_counters: gen_source {type(gen_source).__name__!r} exposes "
+                f"none of {_COUNTER_ATTRS}; generation FLOP counts will be 0. "
+                "Check that the backend is correctly instrumented.",
+                UserWarning,
+                stacklevel=2,
+            )
     return {
         "prefill_calls": int(getattr(encoder, "prefill_calls", 0)),
         "prefill_tokens": int(getattr(encoder, "prefill_tokens", 0)),
@@ -158,6 +186,10 @@ def collect_iteration(
                 "available_verbs": [a.value for a in avail],
                 "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
                 "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
+                # Provenance tags for offline de-duplication on crash/resume.
+                "iteration": iteration_index,
+                "problem_index": p_idx,
+                "turn": int(state.turn),
             }
             buffer.add(sample_from_record(record))
             if record_sink is not None:
@@ -173,19 +205,37 @@ def collect_iteration(
             # learned prior sharpens so search visits concentrate). The prior
             # read reuses the cached state prefill, so it adds only a tiny heads
             # pass and does not touch the prefill/gen FLOP counters.
-            prior_probs = state_actor.prior(state, actions)
-            visit_entropy = _entropy(pi.values())
+            #
+            # Concentration is computed over the FULL available action set
+            # (mdp.actions(state)), not only the MCTS-expanded subset
+            # (root.children). When num_simulations < num_available_actions,
+            # using len(root.children) as k would give a different (smaller)
+            # denominator, making the same true sharpness appear weaker at
+            # smaller search budgets and contaminating budget comparisons.
+            # All reported runs used B>=8 with <=7 verbs so the root was fully
+            # expanded and this was numerically identical; the fix is correctness
+            # for B<num_actions or an added verb.
+            #
+            # Alignment note (mcts.py): _make_decision_node initialises
+            # untried_actions = list(mdp.actions(state)) and _expand adds each
+            # action to root.children as a MathAction drawn from that same list.
+            # visit_count_policy returns a dict keyed by those exact MathAction
+            # objects, so pi.keys() is a subset of mdp.actions(state) and
+            # pi.get(a, 0.0) alignment is valid.
+            full_actions = list(mdp.actions(state))
+            k = len(full_actions)
+            visit_probs = [float(pi.get(a, 0.0)) for a in full_actions]
+            prior_probs = state_actor.prior(state, full_actions)
+            visit_entropy = _entropy(visit_probs)
             prior_entropy = _entropy(prior_probs)
             visit_entropy_sum += visit_entropy
             prior_entropy_sum += prior_entropy
             # Normalized concentration 1 - H/log2(k) (confound-free across the
             # variable available-verb count k); higher = sharper. Undefined for
             # k=1, so those decisions are excluded from the mean.
-            k = len(actions)
             if k > 1:
-                lk = math.log2(k)
-                visit_conc_sum += 1.0 - visit_entropy / lk
-                prior_conc_sum += 1.0 - prior_entropy / lk
+                visit_conc_sum += _normalized_concentration(visit_entropy, k)
+                prior_conc_sum += _normalized_concentration(prior_entropy, k)
                 conc_count += 1
 
             if on_decision is not None:
@@ -234,8 +284,12 @@ def collect_iteration_concurrent(
     drives a normal sequential MCTS trajectory with its OWN rng (sub-seeded from
     base_seed plus the problem index) and returns its ReplaySamples; the shared
     llm_client (vLLM) batches the concurrent generation requests. The buffer is
-    populated single-threaded after the workers finish, so it is thread-safe and
-    deterministic regardless of max_workers."""
+    populated single-threaded after the workers finish, so buffer insertion order
+    and per-worker RNG streams are deterministic regardless of max_workers. Record
+    values and counts are deterministic only to the extent the generation backend
+    is: a deterministic mock is bit-reproducible; a real vLLM server is reproducible
+    only up to batch-composition and compute-level nondeterminism, since co-batched
+    requests can change sampled continuations."""
     import concurrent.futures as cf
     import threading
 
@@ -265,6 +319,10 @@ def collect_iteration_concurrent(
                 "available_verbs": [a.value for a in avail],
                 "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
                 "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
+                # Provenance tags for offline de-duplication on crash/resume.
+                "iteration": iteration_index,
+                "problem_index": p_idx,
+                "turn": int(state.turn),
             }
             records.append(rec)
             actions = list(pi.keys())

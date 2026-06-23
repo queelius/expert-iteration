@@ -503,3 +503,199 @@ def test_run_outer_loop_concurrent_branch_collects_and_defers_diagnostics():
     # The concurrent path defers entropy/concentration to offline analysis.
     assert math.isnan(s.visit_concentration)
     assert math.isnan(s.visit_entropy)
+
+
+# ---------------------------------------------------------------------------
+# Bug 1: concentration helper + integration test (full available-action set)
+# ---------------------------------------------------------------------------
+
+
+def test_normalized_concentration_pure_helper():
+    """Unit test for _normalized_concentration helper.
+
+    Worked example: k=7 available actions, 4 equal nonzero entries and 3 zeros.
+    visit entropy = log2(4) = 2 bits; concentration = 1 - 2/log2(7) ~ 0.287.
+    """
+    import math
+    from verifier_anchored_rl.outer_loop import _normalized_concentration
+
+    visit_probs = [0.25, 0.25, 0.25, 0.25, 0.0, 0.0, 0.0]
+    visit_entropy = -sum(p * math.log2(p) for p in visit_probs if p > 0.0)
+    assert abs(visit_entropy - 2.0) < 1e-9, f"entropy should be 2 bits, got {visit_entropy}"
+    k = 7
+    conc = _normalized_concentration(visit_entropy, k)
+    expected = 1.0 - 2.0 / math.log2(7)
+    assert abs(conc - expected) < 1e-3, f"concentration {conc} not near {expected}"
+    assert abs(expected - 0.287) < 0.001, "sanity: expected concentration ~0.287"
+
+
+def test_concentration_uses_full_action_set_not_expanded_subset():
+    """Integration test: concentration is computed with k = len(mdp.actions(state)),
+    not k = len(root.children). When num_simulations < num_available_actions the
+    root is under-expanded, but k should still be the full support size.
+    """
+    import math
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration, _normalized_concentration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    mdp = mdp_factory(("2+2", "4"))
+    s0 = mdp.initial_state()
+    full_actions = list(mdp.actions(s0))
+    k_full = len(full_actions)
+
+    # Run with fewer simulations than available actions so root is under-expanded.
+    num_sims = max(1, k_full - 1)
+    config = MCTSConfig(num_simulations=num_sims, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    captured_records = []
+    counts = collect_iteration(
+        [("2+2", "4")], mdp_factory, sa, config, buf,
+        np.random.default_rng(0), tau=1.0, max_turns=4,
+        record_sink=lambda r: captured_records.append(r),
+    )
+
+    # The reported concentration must be finite and match _normalized_concentration
+    # with the FULL k (k_full), not the expanded subset count.
+    cv = counts["mean_visit_concentration"]
+    assert math.isfinite(cv), "visit_concentration should be finite"
+    # Verify k used is the full set by recomputing concentration for every
+    # captured decision over the full support (avail_verbs = full support),
+    # then averaging, and comparing to the reported mean.
+    if k_full > 1 and captured_records:
+        concentrations = []
+        for rec in captured_records:
+            pi_dict = rec["pi_mcts"]  # verb -> prob over EXPANDED actions only
+            avail_verbs = rec["available_verbs"]
+            # visit_probs over FULL support (unexpanded contribute 0)
+            visit_probs_full = [pi_dict.get(v, 0.0) for v in avail_verbs]
+            k_rec = len(avail_verbs)
+            if k_rec > 1:
+                h_full = -sum(p * math.log2(p) for p in visit_probs_full if p > 0.0)
+                concentrations.append(_normalized_concentration(h_full, k_rec))
+        if concentrations:
+            expected_mean = sum(concentrations) / len(concentrations)
+            assert abs(cv - expected_mean) < 1e-6, (
+                f"mean concentration {cv} does not match full-support recomputation "
+                f"{expected_mean} (k_full={k_full}, num_sims={num_sims}, "
+                f"n_decisions={len(captured_records)})"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Bug 2: _flop_counters warns when gen_source exposes no counters
+# ---------------------------------------------------------------------------
+
+
+def test_flop_counters_warns_when_gen_source_has_no_counters():
+    """_flop_counters must warn (not raise) when gen_source has none of the
+    four expected counter attributes."""
+    import warnings
+    from verifier_anchored_rl.outer_loop import _flop_counters
+
+    class NoCounters:
+        pass
+
+    class Enc:
+        prefill_calls = 1
+        prefill_tokens = 10
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = _flop_counters(Enc(), gen_source=NoCounters())
+    assert any(issubclass(warning.category, UserWarning) for warning in w), (
+        "_flop_counters should emit a UserWarning when gen_source has no counters"
+    )
+    # Should still return 0 for gen counts without raising
+    assert result["gen_calls"] == 0
+    assert result["gen_tokens"] == 0
+
+
+def test_flop_counters_no_warn_when_gen_source_is_none():
+    """No warning when gen_source is None (falls back to encoder)."""
+    import warnings
+    from verifier_anchored_rl.outer_loop import _flop_counters
+
+    class Enc:
+        prefill_calls = 1
+        prefill_tokens = 10
+        gen_calls = 3
+        gen_tokens = 30
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _flop_counters(Enc(), gen_source=None)
+    user_warnings = [x for x in w if issubclass(x.category, UserWarning)]
+    assert not user_warnings, "should not warn when gen_source is None"
+
+
+# ---------------------------------------------------------------------------
+# Bug 4: records carry iteration/problem_index/turn tags
+# ---------------------------------------------------------------------------
+
+
+def test_collect_iteration_record_carries_provenance_tags():
+    """Records passed to record_sink must contain iteration, problem_index,
+    and turn tags for offline de-duplication."""
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=4, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    sink_records = []
+    collect_iteration(
+        [("2+2", "4"), ("3+3", "6")], mdp_factory, sa, config, buf,
+        np.random.default_rng(0), tau=1.0, max_turns=4,
+        record_sink=lambda r: sink_records.append(dict(r)),
+        iteration_index=7,
+    )
+
+    assert sink_records, "record_sink should have been called"
+    for r in sink_records:
+        assert "iteration" in r, "record missing 'iteration' tag"
+        assert "problem_index" in r, "record missing 'problem_index' tag"
+        assert "turn" in r, "record missing 'turn' tag"
+    # iteration_index=7 was passed in
+    assert all(r["iteration"] == 7 for r in sink_records)
+    # problem_index and turn must be non-negative integers
+    assert all(isinstance(r["problem_index"], int) and r["problem_index"] >= 0
+               for r in sink_records)
+    assert all(isinstance(r["turn"], int) and r["turn"] >= 0
+               for r in sink_records)
+
+
+def test_collect_iteration_concurrent_record_carries_provenance_tags():
+    """Concurrent path records must also carry provenance tags."""
+    import pytest
+    pytest.importorskip("torch")
+    import numpy as np
+    from verifier_anchored_rl.mcts import MCTSConfig
+    from verifier_anchored_rl.outer_loop import collect_iteration_concurrent
+
+    enc, actor, sa, buf, trainer, mdp_factory = _build()
+    config = MCTSConfig(num_simulations=4, c_puct=1.5, discount=1.0,
+                        prior_fn=sa.prior, value_fn=sa.leaf_value)
+
+    sink_records = []
+    collect_iteration_concurrent(
+        [("2+2", "4"), ("3+3", "6")], mdp_factory, sa, config, buf,
+        base_seed=0, tau=1.0, max_turns=4, max_workers=2,
+        record_sink=lambda r: sink_records.append(dict(r)),
+        iteration_index=3,
+    )
+
+    assert sink_records, "record_sink should have been called"
+    for r in sink_records:
+        assert "iteration" in r, "concurrent record missing 'iteration' tag"
+        assert "problem_index" in r, "concurrent record missing 'problem_index' tag"
+        assert "turn" in r, "concurrent record missing 'turn' tag"
+    assert all(r["iteration"] == 3 for r in sink_records)
