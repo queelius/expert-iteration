@@ -244,3 +244,10 @@ reductio/
 - No prompt or action-menu rendering in `reductio` (that is `expert-iteration`'s concern).
 - No search (which goal to expand next) in `reductio`; that is MCTS in `expert-iteration`.
 - No domain-specific dependency (SymPy or otherwise) in the core: `Normalizer` and `Verifier` are pluggable protocols, and the math (SymPy) adapter is an optional extra. The core depends only on the standard library.
+
+## 15. Deferred directions (recorded, not built now)
+
+These were considered and deliberately deferred. The point of recording them is that the v1 design must not foreclose them, and it does not.
+
+- **Kernel / vocabulary split and pluggable actions.** The node taxonomy and verbs could be lifted off a domain-blind content-addressed-DAG kernel (intern, edges + ancestor-check, status overlay, a memoized derived-attribute fold, scope, serialize), with the AND-OR reasoning calculus (node kinds, verbs, the solved-fold) as one swappable vocabulary and actions as registerable functions. We build the concrete math calculus in plain Python first and refactor to this seam only when a second vocabulary or an evolving action set demands it. **Forward-compat constraint:** every verb is written as a uniform pure function `Graph -> Result[Graph]`, so an action is already a value, not a method buried in a class, and the lift is a registration concern rather than a rewrite.
+- **Actions as an evolvable population (meta-learning).** Because actions are uniform pure functions and `reductio` is verifier-anchored, a natural future direction is to have an LLM generate candidate action types and run evolution or hill-climbing over the population, scored by how productive each verb is (verified-fact yield and solve rate per unit cost). The pure-function action shape and the kernel/vocabulary seam above are what make this a registration-and-search concern rather than a rewrite. Pinned; out of scope now.
