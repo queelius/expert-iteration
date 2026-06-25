@@ -14,17 +14,14 @@ stronger training targets for expert iteration, and it doubles as a
 test-time-compute knob at inference. Keeping reward verifier-anchored rather
 than learned reduces the Goodhart attack surface. We give the framework, the
 architecture, and a pre-registered experimental plan with falsifiable
-hypotheses (a fixed baseline grid, a FLOP-accounted compute axis, and a
-Holm-Bonferroni-corrected criterion committed before training), plus a
-toy-problem pilot. One round of expert iteration raises zero-shot held-out
-argmax agreement by $15$ percentage points ($57\% \to 72\%$, single training
-seed); a second round on naively-expanded data yields a structurally
-informative regression that a controlled rebalancing test traces to
-distillation-target instability rather than class dilution. We then run the
-full online loop on an in-process $1.5$B substrate: a first closed-loop run
-establishes the honest per-decision compute accounting, and a fully
-instrumented run capturing the $Q$-loss trend and prior-sharpening signal
-across iterations is currently executing, with those results pending. The
-pilot is feasibility evidence; the large-scale benchmark claim is deferred to
-a follow-up study.
+hypotheses (a fixed baseline grid, a FLOP-accounted compute axis that charges
+every LLM forward inside the search, and a Holm-Bonferroni-corrected criterion
+committed before training). We do not report benchmark numbers: this is the
+plan, not results. A preliminary feasibility probe established that the loop is
+implementable end-to-end and surfaced the methodological precautions the plan
+inherits (train/held-out discipline, per-class composition tracking, a
+pairwise-recommended-verb target-stability diagnostic, and honest per-decision
+compute accounting with an observable, resumable run harness); that probe
+predates the current action space and its specific numbers are superseded. The
+large-scale benchmark claim is deferred to the pre-registered study.
 \end{abstract}

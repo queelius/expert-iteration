@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-This repo contains a methodology paper at `paper/`, a companion paper at `paper-recursive/`, a design document at `design.md` (source of truth for what to build), and a Python implementation under `src/verifier_anchored_rl/`. The package is named `verifier_anchored_rl` to align with the framework paper's title and the §1 RL-first directive; `design.md` §3 still mentions the older `mcts_expert_iteration` name in its layout description, which is a historical artifact that should be read as the now-renamed package.
+This repo contains a methodology paper at `paper/`, a design document at `design.md` (source of truth for what to build), and a Python implementation under `src/verifier_anchored_rl/`. The package is named `verifier_anchored_rl` to align with the framework paper's title and the §1 RL-first directive; `design.md` §3 still mentions the older `mcts_expert_iteration` name in its layout description, which is a historical artifact that should be read as the now-renamed package.
 
 When implementing, follow the repository layout in `design.md` §3 (with the package directory renamed to `src/verifier_anchored_rl/`): `tests/`, `experiments/`, `docs/`. Do not invent a different layout.
 

@@ -1177,6 +1177,8 @@ class ContextState:
 
 ## 13.2 Actions
 
+This is the abstract, illustrative action vocabulary for a generic deliberation MDP. The concrete, canonical action space for the verifiable-math target is the `(verb, target)` lens model of §21.4 (verbs: `SPLIT`, `FORM_HYPOTHESIS`, `COMPUTE_SUBEXPR`, `VERIFY`, `COMMIT`, `ABANDON`, optional `CRITIQUE`); read §21.4 as the source of truth and this list as motivation only.
+
 ```python
 class PromptAction(Enum):
     CLASSIFY_TASK = "classify_task"
@@ -1695,6 +1697,9 @@ class Fact:
 class Subgoal:
     id: str                                   # stable identifier, e.g., "sg_7"
     statement: str
+    connective: Literal["AND", "OR"] | None = None  # set by SPLIT on this node's children edge
+    exhaustive: bool = False                  # OR-split claims to cover all cases
+    solution: str | None = None               # id of the hypothesis promoted by COMMIT (if solved)
     parent_subgoal: str | None = None         # for nested subgoals (phase 2)
     children: tuple[str, ...] = ()            # ids of sub-subgoals (phase 2)
 
@@ -1709,7 +1714,7 @@ class Hypothesis:
 @dataclass(frozen=True)
 class VerifierCall:
     id: str                                   # stable identifier, e.g., "vcall_12"
-    verb: Literal["check_arith", "solve", "simplify", "factor", "evaluate"]
+    op: Literal["check_arith", "solve", "simplify", "factor", "evaluate"]  # SymPy operation
     input: str
     output: str
     success: bool
@@ -1719,116 +1724,175 @@ class VerifierCall:
 class MathState:
     problem: str                              # immutable, original problem
     facts: tuple[Fact, ...]                   # established
-    open_subgoals: tuple[Subgoal, ...]        # not yet solved
-    closed_subgoals: tuple[Subgoal, ...]      # solved
+    open_subgoals: tuple[Subgoal, ...]        # not yet solved (the root goal is sg with parent None)
+    closed_subgoals: tuple[Subgoal, ...]      # solved (COMMIT) or abandoned (ABANDON); see status
     hypotheses: tuple[Hypothesis, ...]        # tentative, unverified
     verifier_log: tuple[VerifierCall, ...]    # full history of solver queries
-    committed_answer: str | None              # set by COMMIT_ANSWER
-    abandoned: tuple[str, ...]                # ids of abandoned hypotheses or subgoals
+    committed_answer: str | None              # set by COMMIT on the root goal (terminal)
+    abandoned: tuple[str, ...]                # ids of nodes closed by ABANDON
     depth: int                                # turn count
 ```
 
-The load-bearing distinction is `facts` versus `hypotheses` (verified versus tentative). Without it, the agent cannot tell "I proved this" from "I think this," and `INVOKE_VERIFIER` (§21.4) loses its meaning.
+`closed_subgoals` carries goals closed either positively by `COMMIT` (with `solution` set to the promoted hypothesis id) or negatively by `ABANDON` (the id also appears in `abandoned`). Every goal therefore closes one of two ways, root or subgoal, mirroring the `COMMIT`/`ABANDON` symmetry of §21.4. `committed_answer` is set only by the terminal root `COMMIT`; subgoal commits record their `solution` on the `Subgoal` and are reward-free bookkeeping.
 
-### Recursive structure: a forward-compatible design
+The load-bearing distinction is `facts` versus `hypotheses` (verified versus tentative). Without it, the agent cannot tell "I proved this" from "I think this," and `VERIFY` (§21.4) loses its meaning.
+
+### Recursive structure: derived from the action interface
 
 The fields marked `phase 2` are forward-compatibility hooks for *structural decomposition*: a hypothesis may refine another hypothesis; a subgoal may have nested sub-subgoals; a verifier call may follow up on an earlier one. The collections (`hypotheses`, `open_subgoals`, `verifier_log`) remain flat lists; tree structure is implicit in the parent-pointer / children references rather than carried by nested data structures.
 
-Two reasons for this representation choice:
+Recursion in this design is **derived, not asserted**. Each verb is a lens with a scoped read `view_v(s, t)` and a localized write `apply_v(s, t, o)` (§21.4). The default view scoped to a subgoal `t` is *grounded-local*: the problem statement, the ancestor path root-to-`t`, and `t`'s own subtree (its facts, hypotheses, and open children), with sibling subgoals and unrelated branches hidden. That scoped view **is the state of the sub-MDP rooted at `t`**. So acting on a subgoal is just stepping the sub-MDP induced by that subgoal, with identical machinery: the same six core verbs apply, the same `(verb, target)` action structure, the same verifier-anchored reward. Locality, modularity, and recursion are therefore the same property, and the recursion story falls out of the action interface rather than being bolted on. (This subsumes the recursion content of the former `paper-recursive/` companion, which was deleted; the recursion lives here and in the main paper.)
 
-1. **Embedding stays simple.** Serializing the flat list with depth markers (e.g., `[HYPOTHESIS id=hyp_3 depth=2 parent=hyp_1]`) lets the frozen LLM's attention handle the tree without requiring a GNN, tree-LSTM, or any other tree-aware encoder. The architecture from §21.5 is unchanged.
-2. **The Q-head stays simple.** No structural encoding of trees in the state representation; the action space remains the seven categorical verbs from §21.4. Action targeting (e.g., `DECOMPOSE` applied to which hypothesis or subgoal) is handled by the verb-instantiator generating the target id as part of its content.
+The factored action set makes this concrete: `SPLIT(goal, ...)` and the other verbs target a node by `id` regardless of how deep it sits in the implicit tree, so `SPLIT(sg_7, connective=AND)` decomposes a subgoal at any depth with the same code path that splits the root goal. This is what lets the same lenses recurse without special-casing depth.
 
-The distinction worth preserving in the paper exposition is between *productive recursion* (structural decomposition: a hypothesis splits into sub-hypotheses, each addressing a verifier-anchored sub-problem) and *unproductive recursion* (meta-criticism: critique of critique of critique, which on verifiable math leads to no terminal reward). Phase 1 will not exercise the recursive fields and so cannot produce either kind. Phase 2 exercises them and relies on reward signal plus a small `tree_depth_limit` (a per-hypothesis maximum recursion depth, default 3 or 4) to suppress the unproductive case.
+Two reasons for the flat-list-with-parent-pointers representation choice:
+
+1. **The encoder stays simple, and stays pluggable.** Serializing the flat list with depth markers (e.g., `[HYPOTHESIS id=hyp_3 depth=2 parent=hyp_1]`) lets the frozen LLM's attention, or a decoupled text-embedding endpoint, handle the tree without requiring a GNN or tree-LSTM at the outset. The architecture from §21.5 is unchanged. Because the state is genuinely a goal tree (a graph), a graph neural network over that structure is the natural future encoder, and the `Encoder` protocol admits it as a drop-in `GraphEmbedder` (§21.11).
+2. **The Q-head stays simple.** No structural encoding of trees is forced into the embedding; the action structure is the `(verb, target)` factoring of §21.4. Action targeting is handled by the pointer head scoring live identifiers, not by free-form LLM text, so a derived fact or hypothesis can be targeted directly regardless of tree depth.
+
+The distinction worth preserving in the paper exposition is between *productive recursion* (structural decomposition: a goal or hypothesis splits into sub-problems, each addressing a verifier-anchored sub-MDP) and *unproductive recursion* (meta-criticism: critique of critique of critique, which on verifiable math leads to no terminal reward). Phase 1 will not exercise the recursive fields and so cannot produce either kind. Phase 2 exercises them and relies on reward signal plus a small `tree_depth_limit` (a per-node maximum recursion depth, default 3 or 4) to suppress the unproductive case.
 
 Markov bet: all information needed for future decisions lives in the slots. A lossy parser maps LLM text into slots; the resulting MathState is a compressed approximation of the true conversational history. This is a design choice, not a guarantee. When debugging an obviously wrong Q-value, suspect the parser before the Q-head.
 
 Canonicalization (deferred to phase 2): two semantically equivalent states should map to the same representation for MCTS tree reuse. Requires a normalizer (topological fact ordering, SymPy normal forms, sorted subgoals). The first version uses the natural trajectory ordering.
 
-## 21.4 Math-Tailored Action Space
+## 21.4 Math-Tailored Action Space: actions as lenses
 
-The action space follows option B from the design dialogue: a small fixed set of coarse verbs. Each verb is the type of cognitive move; the LLM generates the specific content. MCTS branches over verbs; LLM stochasticity supplies action-content variation.
+An action is `a = (verb, target)`, where `target` is an identifier into the structured state (the goal tree of facts, hypotheses, and subgoals from §21.3). The verb is the type of cognitive move; the target is the node it operates on; the frozen LLM (where the verb calls for it) supplies the free-form content. Each verb is a **lens**: a focusing operation on the state with a scoped read and a localized write.
+
+A verb is fully specified by five fields:
+
+```text
+avail_v(s, t)     state-conditioned legality mask
+schema_v(s, t)    JSON schema constraining the LLM output
+view_v(s, t)      scoped read (the lens get): the projection of s rendered into the LLM context
+apply_v(s, t, o)  localized write (the lens put): the update applied to t and its subtree given LLM output o
+reward            mostly zero; verifier-anchored (§21.6)
+```
+
+The transition is `o ~ frozenLLM(view_v(s, t) ++ suffix_v)`, then `s' = apply_v(s, t, o)`. Formally `P(s' | s,a)` integrates over LLM continuations, so the MDP is generative (sample, do not enumerate), exactly as the `GenerativeMDP` protocol in §4.1 requires.
+
+This redesign replaces an earlier verb-only baseline (a categorical Q head over seven verbs, with both target and content sampled by the LLM as part of the stochastic transition). That baseline blurred credit: `Q(s, verb)` averaged over every target the LLM might pick, so the agent never learned *which node to act on*. Promoting the target into the chosen action fixes that.
+
+### The verb set: 6 core, 1 optional
 
 ```python
 from enum import Enum
 
-class MathAction(Enum):
-    DECOMPOSE        = "decompose"        # break an open subgoal into sub-subgoals
-    COMPUTE_SUBEXPR  = "compute_subexpr"  # symbolic or numeric computation step
-    FORM_HYPOTHESIS  = "form_hypothesis"  # propose a tentative claim
-    CHECK_CASE       = "check_case"       # case analysis on a hypothesis
-    INVOKE_VERIFIER  = "invoke_verifier"  # call symbolic solver on a hypothesis or fact
-    BACKTRACK        = "backtrack"        # abandon a hypothesis or subgoal
-    COMMIT_ANSWER    = "commit_answer"    # produce final formatted answer
+class Verb(Enum):
+    SPLIT            = "split"            # structure: expand a goal into AND/OR children
+    FORM_HYPOTHESIS  = "form_hypothesis"  # propose: add a tentative, unverified claim
+    COMPUTE_SUBEXPR  = "compute_subexpr"  # propose: add a derived fact (computation step)
+    VERIFY           = "verify"           # assess (symbolic): call SymPy; sole reward source
+    COMMIT           = "commit"           # resolve (+): close a goal as solved
+    ABANDON          = "abandon"          # resolve (-): negative closure, forward prune
+    CRITIQUE         = "critique"         # assess (LLM), optional: reward-free annotation
 ```
 
-Seven actions keeps MCTS branching tractable and the K-head Q-network small. Verbs map to interpretable behaviors. The abstract `CLASSIFY_TASK` and social `CRITIQUE` from §13.2 are dropped; they belong to a different problem class.
+Against the surveyed prior-art literature (§21.10), the operation vocabulary of roughly thirty reasoning systems collapses to five families: propose/expand, verify/evaluate, critique/refine, commit/close, prune/backtrack. The set above is one verb per family plus a split of the propose family into hypothesis-vs-fact, with `CRITIQUE` optional. The minimal verifier-anchored systems are tiny (AlphaGeometry has exactly two verbs, construct and deduce; AlphaProof is a single tactic space), which validates aggressive minimization.
 
-Action availability is state-conditioned:
+| Verb | Family | Target | Realized by | Reward | Node effect |
+| --- | --- | --- | --- | --- | --- |
+| `SPLIT(goal, connective, exhaustive)` | structure | a goal | LLM | none | spawn children; connective in {AND, OR} recorded on the edge |
+| `FORM_HYPOTHESIS(goal)` | propose | a goal | LLM | none | add a Hypothesis (tentative, unverified) |
+| `COMPUTE_SUBEXPR(goal)` | propose | a goal / operands | LLM | none | add a Fact, source = derived |
+| `VERIFY(node)` | assess (symbolic) | a hypothesis or fact | SymPy | gated, capped (sole reward) | on success, promote to source = verified |
+| `COMMIT(goal, hypothesis)` | resolve (+) | a goal and the hypothesis to promote | promote | terminal at root only | close goal as solved; record solution |
+| `ABANDON(node)` | resolve (-) | a goal or hypothesis | bookkeeping | none | negative closure, forward prune, history retained |
+| `CRITIQUE(node, goal)` *(optional)* | assess (LLM) | a hypothesis vs its goal | LLM | none | reward-free annotation; may spawn a concern child |
+
+This set descends from an earlier seven-verb proposal (`DECOMPOSE`, `COMPUTE_SUBEXPR`, `FORM_HYPOTHESIS`, `CHECK_CASE`, `INVOKE_VERIFIER`, `BACKTRACK`, `COMMIT_ANSWER`) by four moves: `SUMMARIZE` was dropped (it was never added; see below), `CHECK_CASE` was folded into `SPLIT`, `INVOKE_VERIFIER` was renamed to `VERIFY` and `BACKTRACK` to `ABANDON`, and `COMMIT_ANSWER` was generalized to a recursive `COMMIT`. `CRITIQUE` is added as an optional reward-free verb.
+
+**SPLIT (folds DECOMPOSE and CHECK_CASE).** `DECOMPOSE` (conjunctive subgoals: solve all children) and `CHECK_CASE` (disjunctive or exhaustive cases: cover the parent) are the same move (expand a goal into children) differing only in the AND/OR semantics of the children. They merge into `SPLIT(goal, connective in {AND, OR}, exhaustive: bool)`. The connective is a structured property recorded on the edge, not inferred from text, because `COMMIT`'s aggregation rule depends on it: a conjunctive goal closes only when all children close; a disjunctive or exhaustive goal closes per its coverage rule. Prior art supports this directly: only ADaPT distinguishes conjunctive from disjunctive composition, and it does so as an And/Or label on a single decomposition act, never as two verbs.
+
+**FORM_HYPOTHESIS and COMPUTE_SUBEXPR (kept distinct).** These are the propose family. They stay as two sibling verbs rather than merging into one `PROPOSE(kind)` because the epistemic status of the node they write back differs (a Hypothesis is tentative and unverified; a Fact with source = derived is a computation), the write-back differs, and the rendered view differs. The distinction is load-bearing: `VERIFY`'s reward gate fires on the promotion of a node to source = verified, and a derived fact must never be treated as verified without a verifier route. Whether to instead expose a single parameterized `PROPOSE(kind in {hypothesis, fact})` is logged as an ablation (§21.9).
+
+**VERIFY (the defining verb, sole reward).** `VERIFY` (the renamed `INVOKE_VERIFIER`) invokes the symbolic oracle (SymPy). On a gated, capped success it promotes the target node to source = verified and emits the reward. It is the only channel that touches reward (§21.6). It is kept strictly distinct from `CRITIQUE`. This is the project's principal novelty relative to the surveyed literature: hard symbolic verification as the sole reward source. Intermediate verifier results land in `verifier_log` and become part of the state, so this converts "LLM formats output, symbolic solver checks" from a post-hoc parser pass into a first-class deliberation action whose timing the agent learns.
+
+**COMMIT (recursive, verifier-gated at the root).** `COMMIT(goal, hypothesis)` promotes a hypothesis to a goal's solution and closes the goal as solved. It is recursive: any goal node can be committed.
+
+- Root commit is terminal and gated by the verifier verdict (+1 on a correct answer, -1 on incorrect). The structural fact `target == root` is what makes a commit terminal, so there is no separate `GENERATE_FINAL_ANSWER` verb. Strict-format output for the terminal verifier is produced by constrained decoding (regex- or grammar-guided sampling via Outlines, Guidance, etc., preferred for reproducibility) or retry-with-correction (sample, parse, on failure resample with a corrective prompt).
+- Subgoal commit is reward-free bookkeeping: it records the subgoal's solution for its parent. A subgoal's correctness, when checkable, flows through `VERIFY`, not through `COMMIT`. Credit for good subgoal solving propagates back through the discounted return and the MCTS backup, not through a subgoal reward.
+- Aggregation reads the `SPLIT` connective: a conjunctive parent requires all children committed; a disjunctive or exhaustive parent requires its coverage rule.
+
+This is "propose then commit": the final answer is `FORM_HYPOTHESIS(root)` followed by `COMMIT(root, that hypothesis)`.
+
+**ABANDON (negative closure, kept on B=0 grounds).** `ABANDON(node)` is the renamed `BACKTRACK`: negative closure that forward-prunes a branch while retaining its full history (revert-to-prefix-with-history, matching Self-Backtracking). It is symmetric to `COMMIT`: every goal now closes either positively (solved) or negatively (abandoned), root or subgoal. Prior art overwhelmingly treats backtracking and pruning as a search-control primitive (MCTS select, expand, backprop), not a learned verb. `ABANDON` is kept as a verb anyway for one framework-specific reason: at inference budget `B = 0` the deployed small model runs no MCTS (§19), so if pruning lived only in the planner the policy could not express "this branch is dead, move on." Self-Backtracking is the precedent for internalizing the prune as a learned, emittable action. `ABANDON` is framed strictly as goal-state closure recorded in the verifiable state, explicitly not as the planner's backup or re-descent. Whether the recorded `ABANDON` marker measurably beats MCTS-only pruning is logged as an ablation (§21.9).
+
+**SUMMARIZE (dropped, subsumed by the lens).** `SUMMARIZE` was considered and is not a verb. No surveyed system makes summarization a policy action; compression is always a serialization or scoped-view concern (LATS state-as-history, GoT Aggregate, fixed serialization). In this design the lens already controls what slice of the tree is rendered, so compressing a closed subtree to "statement plus outcome" is a deterministic rendering property of `view_v`, not a state-mutating action. Closed (committed or abandoned) subtrees render as their statement and verdict. Summarization is thus a *lens property*, not a verb.
+
+**CRITIQUE (optional, reward-free).** `CRITIQUE(node, goal)` is an LLM self-assessment of a hypothesis against its goal. It writes a reward-free critique record and may spawn a child concern node (a sub-hypothesis or subgoal capturing what must be resolved); the policy then decides whether to address, abandon, or commit anyway. It is kept distinct from `VERIFY` (the sharpest coherence boundary): `VERIFY` is a sound symbolic oracle and the sole reward source, `CRITIQUE` is an unreliable LLM self-judge that must never gate reward. Conflating them is the documented failure mode (CRITIC). `CRITIQUE` is optional and not part of the completeness core; many strong systems omit verbal critique, so whether it earns its tokens in a verifier-anchored setting is an ablation (§21.9).
+
+### The factored head and (verb, target) action set
+
+The target is promoted into the chosen action rather than left to LLM sampling. The policy factors as `pi(verb | s) * pi(target | s, verb)`: a categorical **verb head** (K logits over the 6 or 7 verbs) plus a **pointer head** that scores the identifiers present in the state. MCTS branches over `(verb, target)` pairs. This is what fixes the credit blur: value and search now range over what to operate on, not just the cognitive move. The effective action set is `verbs x valid-targets`, which grows with the tree, which is precisely why the target side is a pointer over live identifiers and not a fixed K-vector.
+
+Action availability is state-conditioned (`avail_v`):
 
 ```text
-DECOMPOSE        valid if len(open_subgoals) > 0 or len(hypotheses) > 0
-COMPUTE_SUBEXPR  always valid
-FORM_HYPOTHESIS  always valid until depth limit
-CHECK_CASE       valid if len(hypotheses) > 0
-INVOKE_VERIFIER  valid if len(hypotheses) > 0 or any derived Fact exists
-BACKTRACK        valid if len(hypotheses) > 0 or len(open_subgoals) > 0
-COMMIT_ANSWER    valid if at least one answer-bearing claim is present
+SPLIT            valid for a goal/subgoal that is open
+FORM_HYPOTHESIS  valid for an open goal (subject to depth limit)
+COMPUTE_SUBEXPR  valid for a goal/operands; broadly available
+VERIFY           valid for a hypothesis, or any fact with source = derived
+COMMIT           valid for a goal that has a candidate hypothesis to promote
+ABANDON          valid for an open hypothesis or open subgoal
+CRITIQUE         valid for a hypothesis (optional verb)
 ```
 
-The MathState schema makes these constraints trivial to encode. Invalid actions are masked from PUCT at each decision node.
+The MathState schema makes these constraints trivial to encode. Invalid `(verb, target)` pairs are masked from PUCT at each decision node: the verb head masks unavailable verbs, the pointer head masks targets for which the chosen verb is illegal.
 
-Each verb selects a categorical action (one of seven); the *target* of the action (which subgoal to decompose, which hypothesis to verify, which path to backtrack) is generated by the verb-instantiator (§21.5) as an `id` referencing an existing entity. This separation keeps the Q-head categorical over a small fixed set while letting action content scale with state complexity. It also makes the framework forward-compatible with structurally recursive states (§21.3): `DECOMPOSE(hyp_id)` decomposes a hypothesis regardless of how deep it sits in the implicit tree.
+Migration note: the verb-only baseline (categorical Q head over verbs, target sampled by the LLM) is the Phase-1 starting point. Adding the pointer head and making MCTS branch over `(verb, target)` is the first divergence (§21.11). A later progressive-widening variant with LLM-proposed *candidate* targets is a phase-N upgrade once the pointer-head version trains stably.
 
-`INVOKE_VERIFIER` is the central design choice. The agent decides when to spend a verifier call. Intermediate verifier results land in `verifier_log` and become part of the state. This converts "LLM formats output, symbolic solver checks" from a post-hoc parser pass into a first-class deliberation action.
+## 21.5 Architecture: global value, local generation
 
-`COMMIT_ANSWER` triggers strict-format output for the terminal verifier. Two implementation paths:
+The architecture rests on one split: **the learned heads value on the global state; the frozen LLM generates content from a local view.** Whether an action helps depends on the whole problem, so `Q_psi` and the policy embed the entire goal tree; but generation is short and on-topic, so the LLM sees only the verb's scoped `view_v(s, t)` (§21.4). The full state `s` remains the Markov state; the view is a projection for generation, never the state itself. The embedder sees the whole tree; the generator sees the local view. This split is also load-bearing for the deployable-small-model claim: small models reason poorly across long flat contexts, so the lens keeps each generation short.
 
-1. Constrained decoding (regex- or grammar-guided sampling via Outlines, Guidance, etc.).
-2. Retry-with-correction (sample, parse, on failure resample with corrective prompt).
-
-Path 1 is preferred for reproducibility; path 2 is simpler when constrained decoding is unavailable for the chosen LLM.
-
-Migration plan: option C (progressive widening with LLM-proposed candidates) is a phase-N upgrade once the fixed-verb version trains stably. The migration requires an embedding-based PUCT prior in place of a categorical one.
-
-## 21.5 Architecture: Shared LLM and Trainable Heads
-
-One frozen backbone (the LLM), three trainable heads sharing it through a small adapter.
+One frozen backbone (the LLM) supplies generation; a **decoupled embedder** supplies the global state encoding; trainable heads (verb head, pointer head, Q head) share that encoding through a small adapter.
 
 ```text
-MathState
+GLOBAL VALUE PATH (the whole tree)
+MathState s
     -> serialize with structural markers
-    -> tokenize
-    -> [frozen LLM forward]
-    -> last-token hidden state h in R^d
+    -> [Encoder: emb(s) in R^d]            (decoupled; see encoder choices below)
     -> [Adapter MLP, d -> 256]
     -> z in R^256
-        -> Q-head MLP            -> Q(s, .)   in R^K   (K scalar outputs)
-        -> Policy-head MLP       -> pi(.|s)   in R^K   (K logits, masked)
-        -> Verb-Instantiator     -> continuation prompt text
+        -> Verb head MLP    -> pi(verb | s)         in R^K   (K logits, masked)
+        -> Pointer head     -> pi(target | s, verb) over live identifiers (masked)
+        -> Q head MLP       -> Q(s, verb, target)            (scalar per scored (verb,target))
+
+LOCAL GENERATION PATH (one scoped view)
+chosen action (verb, target)
+    -> view_v(s, target)  ++ suffix_v
+    -> [frozen LLM forward / generate]
+    -> output o  ->  apply_v(s, target, o)  ->  s'
 ```
 
 Architectural specifics:
 
-1. Serialized MathState uses explicit structural markers: `[PROBLEM]`, `[FACT id=k source=verified]`, `[OPEN_SUBGOAL id=k]`, `[VERIFIER_CALL verb=factor success=true]`, `[STATE_END]`. Markers give the LLM's attention stable anchors and let the format evolve without retraining heads.
+1. Serialized MathState uses explicit structural markers: `[PROBLEM]`, `[FACT id=k source=verified]`, `[OPEN_SUBGOAL id=k connective=AND]`, `[VERIFIER_CALL op=factor success=true]`, `[STATE_END]`. Markers give the encoder's attention stable anchors and let the format evolve without retraining heads.
 
-2. Pooling: last-token hidden state (or the `[STATE_END]` sentinel's). Causal attention guarantees this token has integrated the entire prefix. Decoder-only LLMs are trained to make this representation useful for next-token prediction, which transfers reasonably to embedding use.
+2. Decoupled embedder. `emb(s)` comes from a pluggable `Encoder`, not the generator's hidden state, so generation can be served by vLLM while the encoder is chosen independently. Selectable encoders, in increasing structural fidelity:
+   - a text-embedding endpoint over the serialized state (the default; pluggable and cheap);
+   - the legacy LLM `[STATE_END]` last-token hidden state (a selectable baseline; causal attention guarantees this token has integrated the whole prefix, and decoder-only LLMs make it useful for next-token prediction, which transfers to embedding use);
+   - a `GraphEmbedder` (GNN) over the reasoning tree (§21.11), the natural structural encoder once the core is validated.
 
 3. Adapter MLP: a single `Linear(d, 256) -> ReLU -> Linear(256, 256)`. Compresses to task-specific dimensionality; cheaper heads; natural place to start unfreezing later.
 
-4. Q-head outputs K scalars in one forward pass. Backprop on `(s, a, r, s')` only updates the a-th output and the shared body; other heads see zero gradient on that example. Heads specialize without being separate networks.
+4. Factored action heads. The **verb head** outputs K logits over the 6 (or 7) verbs. The **pointer head** scores the live identifiers present in `s` to produce `pi(target | s, verb)`; it is a pointer over a variable-length identifier set, not a fixed K-vector, because the effective action set `verbs x valid-targets` grows with the tree (§21.4). The **Q head** scores `Q(s, verb, target)` per legal pair. Together they realize the factored policy `pi(verb | s) * pi(target | s, verb)` and the MCTS branching over `(verb, target)`. Masking sets illegal verbs and illegal targets to negative infinity before normalization.
 
-5. Policy head outputs K logits, sharing the adapter with Q. Softmax masks invalid actions to negative infinity before normalization.
+5. Q-head updates. Backprop on a transition `(s, (verb, target), r, s')` updates the scored pair and the shared body; other actions see zero gradient on that example. Heads specialize without being separate networks.
 
-6. Verb-instantiator implements as continuation generation from `[STATE_END]`. KV cache from the embedding forward is reused. Two outputs (embedding plus generation prompt) from one LLM forward pass.
+6. Generation reuse. The verb's generation runs from `view_v(s, target) ++ suffix_v`; where the encoder is the LLM itself, the KV cache from the state forward can be reused. Generation and global encoding are otherwise independent forward passes, which is exactly what lets vLLM serve generation while a separate endpoint serves `emb(s)`.
 
-7. Target Q network: frozen copy of Q_psi (and adapter, when shared) synced every N updates, used for the Bellman target `y = r + gamma * max_a' Q_target(s', a')`. Without it, Q targets chase a moving estimate.
+7. Target Q network: frozen copy of `Q_psi` (and adapter, when shared) synced every N updates, used for the Bellman target `y = r + gamma * max_(verb', target') Q_target(s', verb', target')`. Without it, Q targets chase a moving estimate.
 
 8. Phase 1 freezes the LLM. Phase 2 may unfreeze the last 1 to 2 transformer layers via LoRA if results stagnate. Full fine-tuning is a phase-3 experiment with serious infrastructure requirements.
 
-External sentence-transformers (e.g., `BAAI/bge-base-en`, `intfloat/e5-base-v2`) are reserved for side jobs where their semantic-similarity properties pay off: episodic memory retrieval, dedup hashing, MCTS tree-reuse canonicalization. They are not the primary state embedding.
+External sentence-transformers (e.g., `BAAI/bge-base-en`, `intfloat/e5-base-v2`) are natural choices for the decoupled text-embedding encoder, and also serve side jobs where their semantic-similarity properties pay off: episodic memory retrieval, dedup hashing, MCTS tree-reuse canonicalization.
 
-## 21.6 Reward Structure
+## 21.6 Reward Structure: the verifier-anchor invariant
+
+The symbolic verifier is the **only** reward source. This is the project's load-bearing invariant, and the lens redesign preserves and reinforces it rather than relaxing it. The literature actively supports it: DeepSeek-R1 explicitly rejects learned process-reward models (reward hacking and ill-defined step boundaries); CRITIC shows that self-critique without external grounding is unreliable; the most reliable systems (AlphaProof, AlphaGeometry, rStar-Math, R1, Tulu-3) are all hard-verifier-anchored.
 
 Two principles:
 
@@ -1836,16 +1900,23 @@ Two principles:
 
 2. Aesthetic signals (reasoning-quality classifiers, deception detectors, stylistic critics) enter as MCTS priors or expansion-pruning heuristics, never as Bellman targets. A policy optimized against "looks like good reasoning" learns to look like good reasoning at the detector's resolution; underlying behavior need not improve.
 
+Where reward attaches to verbs:
+
+- Most verbs return reward 0 (`SPLIT`, `FORM_HYPOTHESIS`, `COMPUTE_SUBEXPR`, subgoal `COMMIT`, `ABANDON`, `CRITIQUE`, and the lens-based compression of closed subtrees).
+- `VERIFY` returns a gated, capped positive reward only on a genuinely new promotion to a verified fact. The anti-farming gates (hard cumulative cap, dedup per target, reject tautologies, value-tie to target) are retained unchanged.
+- Root `COMMIT` returns the terminal verdict (+1 / -1).
+- `CRITIQUE` is reward-free by construction: it is an unreliable LLM self-judge and must never gate reward (the CRITIC failure mode). "More signal" means more verifier-derived shaping, never a reward model or an LLM-judge reward. The moment reward comes from a model's opinion rather than the verifier's check, the project has changed.
+
 First version uses terminal-only reward:
 
 ```text
-r_T = +1.0  if verifier(committed_answer, problem) == correct
-r_T =  0.0  if depth limit reached without commit
-r_T = -1.0  if committed_answer is incorrect
+r_T = +1.0  if verifier(committed_answer, problem) == correct   (root COMMIT)
+r_T =  0.0  if depth limit reached without a root commit
+r_T = -1.0  if committed_answer is incorrect                    (root COMMIT)
 intermediate steps: r = 0
 ```
 
-MCTS supplies credit assignment for earlier actions (AlphaZero pattern). If sparsity becomes a blocker on harder benchmarks (small base models scoring 0 on hard problems), introduce verifier-anchored intermediate rewards: +0.1 per successful `INVOKE_VERIFIER` that promotes a hypothesis to a verified fact. These are still objective and additive.
+MCTS supplies credit assignment for earlier actions (AlphaZero pattern). If sparsity becomes a blocker on harder benchmarks (small base models scoring 0 on hard problems), introduce verifier-anchored intermediate rewards: a gated, capped `+epsilon` per successful `VERIFY` that promotes a hypothesis to a verified fact. These are still objective and additive, and they route through `VERIFY` alone.
 
 The channel-decomposed reward from §17.2 is overkill for the verifiable-answer setting; a single correctness channel suffices. Channel decomposition becomes relevant when domains expand to open-ended deliberation.
 
@@ -1856,31 +1927,34 @@ Per outer iteration:
 ```text
 1. Collect trajectories:
    for problem in batch:
-       run MCTS(problem, B simulations)
+       run MCTS(problem, B simulations)               # branches over (verb, target)
        record:
-         - chance-node Q estimates Qhat_MCTS(s, a) for every (s, a) visited
-         - visit-count policy pi_MCTS(a|s) at every decision node
+         - chance-node Q estimates Qhat_MCTS(s, verb, target) for every (s, verb, target) visited
+         - visit-count policy pi_MCTS(verb, target | s) at every decision node
          - terminal reward r_T
-         - full trajectory (s_0, a_0, s_1, a_1, ..., s_T)
+         - full trajectory (s_0, a_0, s_1, a_1, ..., s_T),  a_t = (verb_t, target_t)
    add to replay buffer with priority on high TD-error samples
 
 2. Update heads:
    sample minibatch from replay buffer
    compute:
-     L_Q(psi)    = sum over (s,a) of (Q_psi(s,a) - Qhat_MCTS(s,a))^2
-     L_pi(theta) = - sum over s of [sum over a of pi_MCTS(a|s) * log p_theta(a|s)]
+     L_Q(psi)    = sum over (s,verb,target) of (Q_psi(s,verb,target) - Qhat_MCTS(s,verb,target))^2
+     L_pi(theta) = - sum over s of [sum over (verb,target) of pi_MCTS(verb,target|s)
+                                      * log p_theta(verb,target|s)]
      L_total = L_Q + lambda * L_pi
-   step optimizer
+   step optimizer                                      # updates verb head, pointer head, Q head, adapter
    every N steps: sync target Q network
+   note: p_theta(verb,target|s) = pi(verb|s) * pi(target|s,verb), so L_pi decomposes
+         over the verb head and the pointer head.
 
 3. Evaluate (every K iterations):
    run learned policy at B=0 and B=N_eval on validation set
    record accuracy, compute, wall-clock
 ```
 
-The Q-loss uses chance-node MCTS estimates, which are themselves bootstrapped from leaf evaluations plus per-edge rewards backed up (§8.4). The policy loss uses visit counts. Both come from the same MCTS rollout, so trajectory collection is shared.
+The Q-loss uses chance-node MCTS estimates, which are themselves bootstrapped from leaf evaluations plus per-edge rewards backed up (§8.4). The policy loss uses visit counts, distributed over the factored verb and pointer heads. Both come from the same MCTS rollout, so trajectory collection is shared.
 
-In phase 1 the LLM is frozen, so backprop only flows through adapter, Q-head, policy-head, and verb-instantiator. Optimizer state and memory footprint are dominated by the heads (under 5M params total), not the LLM.
+In phase 1 the LLM is frozen, so backprop only flows through the adapter and the verb, pointer, and Q heads. Optimizer state and memory footprint are dominated by the heads (under 5M params total), not the LLM.
 
 ## 21.8 Evaluation Plan and Baselines
 
@@ -1915,12 +1989,58 @@ Risk to flag in the paper: compute leaks. Test-time compute scaling claims have 
 
 ## 21.9 Open Questions Carried into Implementation
 
-The following design questions are deliberately deferred. They are not blockers for phase 1 but should be revisited as data accumulates:
+The following design questions are deliberately deferred. They are not blockers for phase 1 but should be revisited as data accumulates.
 
-1. Canonicalization of MathState for MCTS tree reuse (phase 2).
-2. Activation of the recursive parent-pointer fields on `Hypothesis`, `Subgoal`, and `VerifierCall` (phase 2). Schema is already forward-compatible (§21.3); phase 1 leaves these fields at default values and renders them as no-ops in serialization. Phase 2 introduces a `tree_depth_limit` and exercises the structural-decomposition pattern.
-3. Progressive widening with LLM-proposed actions (phase 2 or 3, depending on capacity needs).
-4. LoRA on LLM last layers if frozen-encoder Q-learning underfits (phase 2).
-5. Per-channel Q heads if reward decomposition becomes relevant (phase 3, likely not for verifiable math).
-6. Persistent search trees across user interactions (§19.3) for anytime deliberation (phase 3+).
-7. Migration from terminal-only to verifier-anchored intermediate rewards if sample efficiency demands (decided empirically).
+Action-space ablations (from the lens redesign):
+
+1. `PROPOSE(kind)` as one parameterized verb versus two sibling verbs (`FORM_HYPOTHESIS`, `COMPUTE_SUBEXPR`). The epistemic distinction survives either way; the question is policy-head learnability.
+2. Does a policy-emitted, recorded `ABANDON` measurably beat MCTS-only pruning?
+3. Does reward-free `CRITIQUE` improve trajectories in a verifier-anchored setting, or just add tokens?
+4. Is the exhaustiveness obligation of a disjunctive `SPLIT` itself a `VERIFY` target (a logical check), or an unchecked structural flag (a soundness hole if unchecked)?
+
+Architecture and phase ablations:
+
+5. Canonicalization of MathState for MCTS tree reuse (phase 2).
+6. Activation of the recursive parent-pointer fields on `Hypothesis`, `Subgoal`, and `VerifierCall` (phase 2). Schema is already forward-compatible (§21.3); phase 1 leaves these fields at default values and renders them as no-ops in serialization. Phase 2 introduces a `tree_depth_limit` and exercises the structural-decomposition pattern.
+7. Progressive widening with LLM-proposed candidate targets (phase 2 or 3, depending on capacity needs).
+8. Choice of decoupled encoder: text-embedding endpoint versus LLM last-token hidden state versus `GraphEmbedder` GNN (§21.5, §21.11).
+9. LoRA on LLM last layers if frozen-encoder Q-learning underfits (phase 2).
+10. Per-channel Q heads if reward decomposition becomes relevant (phase 3, likely not for verifiable math).
+11. Persistent search trees across user interactions (§19.3) for anytime deliberation (phase 3+).
+12. Migration from terminal-only to verifier-anchored intermediate rewards if sample efficiency demands (decided empirically).
+
+## 21.10 Prior-Art Grounding (summary)
+
+Across roughly thirty systems (ToT, GoT, RAP, LATS, ReST-MCTS*, rStar and rStar-Math, MCTSr, TS-LLM, Self-Refine, Reflexion, CRITIC, ReAct, Least-to-Most, Decomposed Prompting, Plan-and-Solve, ADaPT, PoT and PAL, AlphaProof, AlphaGeometry, DeepSeek-R1, Tulu-3, STaR and V-STaR, Stream of Search and GSoS, Searchformer, Self-Backtracking, SCoRe, ASTRO) the operation vocabulary collapses to five families: propose/expand, verify/evaluate, critique/refine, commit/close, prune/backtrack. The reduced verb set of §21.4 is one verb per family (with the propose family split into hypothesis-vs-fact and `CRITIQUE` optional).
+
+Key data points for this design:
+
+- **Minimal verifier-anchored systems are tiny.** AlphaGeometry has exactly two verbs (construct, deduce); AlphaProof is a single tactic space. This validates aggressive minimization.
+- **Reward source is the load-bearing axis.** DeepSeek-R1 rejects learned PRMs; CRITIC shows external grounding is what makes critique reliable. Strong support for the verifier-only reward of §21.6.
+- **Backtracking is search-control by default.** Every MCTS system puts it in selection; it becomes a learned action only in the internalized-search cluster (Self-Backtracking, ReVISE, SCoRe, ASTRO, GSoS), which is exactly the B=0 deployment case that justifies keeping `ABANDON`.
+- **Closest structural analogue:** TS-LLM (PUCT MCTS plus learned value plus policy distillation, i.e., generalized policy iteration). It differs from this project principally in reward source: it trains an outcome reward model, whereas this project uses a symbolic verifier as the sole, untrained reward. That difference is the main novelty.
+- **GSoS operation-level MDP** (each search operation is one discrete action) is the closest analogue to the `(verb, target)` action MDP and validates operation-level over token-level credit assignment.
+
+## 21.11 Relationship to Current Code and Phase Boundary
+
+The current `verifier_anchored_rl` implements the verb-only baseline: seven verbs (`DECOMPOSE`, `COMPUTE_SUBEXPR`, `FORM_HYPOTHESIS`, `CHECK_CASE`, `INVOKE_VERIFIER`, `BACKTRACK`, `COMMIT_ANSWER`), a categorical Q head, a global `serialize_state`, and an LLM verb-instantiator that samples both target and content. This design diverges from that baseline in four places, in rough order of effort:
+
+1. Rename `BACKTRACK` to `ABANDON`; generalize `COMMIT_ANSWER` to a recursive `COMMIT(goal, hypothesis)`; fold `CHECK_CASE` into `SPLIT(connective)`; keep `SUMMARIZE` out (it is a lens property, §21.4); add the optional `CRITIQUE`.
+2. Promote the target into the action: add the pointer head and make MCTS branch over `(verb, target)`.
+3. Add per-verb scoped `view_v` (grounded-local default) and localized `apply_v` write-backs; keep the heads on the global state embedding (§21.5).
+4. Persist the `SPLIT` connective and the committed/abandoned closure status structurally (the schema fields of §21.3) so aggregation and rendering can read them.
+
+Phase-1 validation anchors (gridworld, expectimax, MCTS triangulation; §10) are unaffected. Honesty discipline for the paper and decks: present this `(verb, target)` plus lens system as the *method*, with explicit notes marking what the Phase-1 code realizes today (verb-only, global view, the seven older verbs) versus the designed target (pointer head, scoped lenses, the reduced verb set, `CRITIQUE`). Do not claim as built what is still spec.
+
+## 21.12 Pinned Extensions (recorded, not in scope now)
+
+- **`RETRIEVE` (RAG exemplar retrieval).** A candidate introduce-from-corpus verb: fetch a solved example similar to a goal or subgoal and write it into that node's subtree as grounding. It fits the lens framing cleanly (an introduce verb whose content comes from a corpus rather than the LLM) and is reward-free. Pinned, not adopted, for three reasons: it adds an external corpus and retriever dependency beyond the verifier-anchored core; a retrieved example can leak the answer, which is exactly the compute-and-data-leak confound the evaluation plan already guards against (§21.8); and it does not change the thesis. Revisit after the core is validated.
+- **`GraphEmbedder` (GNN state encoder).** The heads embed the serialized state through a decoupled text-embedding endpoint by default (§21.5). Because the state is a goal tree (a graph), a graph neural network over that structure is the natural encoder: it would respect the true structure (parent/child links, fact-vs-hypothesis edges, the `SPLIT` connectives) rather than a linearized serialization. The `Encoder` protocol already admits it as a drop-in. Pinned as a future encoder upgrade; orthogonal to the action-space design.
+
+## 21.13 Non-Goals (for the action-space design)
+
+- No reward model and no learned process-reward; the verifier is the sole reward source (§21.6).
+- No LLM-judge reward; `CRITIQUE` is reward-free information.
+- No macro solve-it-all verb that bypasses per-step search and verification. (An action may write a localized multi-node chain, e.g. a step-by-step expansion under a subgoal, still atomic at the MDP level; intrinsically multi-node verbs like `SPLIT` already do this. What is excluded is a single verb that solves the whole problem and skips the search and verification that are the point.)
+- No regression of the Phase-1 gridworld, expectimax, and MCTS correctness anchors (§10).
+- No MCTS-first reframing in any artifact: the central object remains the agent (policy + Q heads) learning over the induced context MDP whose only reward source is the symbolic verifier; MCTS is the sample-efficient policy-improvement operator and the B>0 test-time compute knob.

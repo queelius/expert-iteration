@@ -5,9 +5,9 @@ Search as a sample-efficient policy improvement operator and a test-time
 compute knob. The project develops the chain that begins with the Bellman
 equation, moves through tabular and approximate $Q$-learning, exploration,
 and MCTS, and finally generalizes to LLM deliberation over a verifiable
-context MDP. Two methodology papers accompany the implementation: the
-framework paper at `paper/` and the companion paper on bounded structural
-recursion at `paper-recursive/`.
+context MDP. A methodology paper accompanies the implementation: the
+framework paper at `paper/`.
+
 
 This repository ships the classical-MDP scaffold (Phase 1 plus the MCTS
 planner from Phase 2 of the design document). It implements:
@@ -30,7 +30,6 @@ scheduled for later phases; see `design.md` for the roadmap.
 |------|---------|
 | `design.md` | Authoritative design specification (Phase 1, 2, 3, and the LLM-context MDP target) |
 | `paper/` | Methodology paper: Verifier-Anchored Reinforcement Learning for Small Language Model Deliberation |
-| `paper-recursive/` | Companion paper: Bounded Structural Recursion in Verifier-Anchored Reinforcement Learning |
 | `src/verifier_anchored_rl/` | The Python package |
 | `tests/` | Pytest suite |
 | `experiments/` | Standalone scripts that exercise the package end to end |

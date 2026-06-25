@@ -26,7 +26,7 @@ underlying network to compute things it has never been trained to compute.
 Phase 2 admits unfreezing of the last one or two transformer layers via LoRA
 \citep{hu2022lora}, but that is a separate intervention whose contribution
 must be measured against the frozen baseline. Closely related is our use of a
-fixed seven-verb action space. Problems whose solutions require verbs we did
+fixed verb set. Problems whose solutions require verbs we did
 not anticipate (literature search, tool invocation outside the verifier set,
 mid-stream consultation of an external oracle) are out of reach until
 migration to progressive widening with LLM-proposed actions
@@ -188,69 +188,65 @@ discipline easy to maintain: by structuring the reward channel so that
 inserting a learned critic requires a deliberate choice rather than an
 accident, we shift the burden of justification onto whoever would add one.
 
-\subsection{What the Pilot Surfaced}
+\subsection{What the Feasibility Probe Surfaced}
 \label{sec:disc-pilot}
 
-The toy-problem pilot of Section~\ref{sec:pilot} owns the post-mortem in full:
-the v3-to-v4 training-set-expansion regression (Section~\ref{sec:pilot-v3-v4}),
-the controlled \texttt{v4b} re-fit that refutes class dilution as the dominant
-mechanism (Section~\ref{sec:pilot-v4b}), and the target-instability mechanism
-the rebalancing test elevates to the leading explanation. We do not re-narrate
-those findings here. The discussion's distinct contribution is the
-forward-looking monitoring the pre-registered benchmark study of
-Section~\ref{sec:experimental-plan} inherits from them.
+The preliminary feasibility probe of Section~\ref{sec:pilot} predates the
+current action space, so it contributes no benchmark number and we report none
+here. Its distinct contribution to the discussion is the forward-looking
+monitoring the pre-registered benchmark study of
+Section~\ref{sec:experimental-plan} inherits from it, and the demonstration that
+the framework's mechanics are implementable end-to-end (a precondition for the
+pre-registered study being worth running).
 
-First, composition tracking. Because composition shifts co-occur with
-regressions without being their dominant cause
-(Section~\ref{sec:pilot-v4b}), any multi-round result must report the per-round
-training composition and the per-class accuracy breakdown on the held-out set,
-so that a regression of this shape is attributed to its actual mechanism rather
-than to the most visible covariate. The pre-registered study carries this as a
-reporting requirement and adds the per-class breakdown to the plan as an
-analytic output rather than a post-hoc audit.
+First, composition tracking. A multi-round training-set expansion can change
+held-out behavior on families that were not the target of the intervention, and
+a composition shift co-occurs with such a change without necessarily being its
+cause (Section~\ref{sec:pilot-v3-v4}). Any multi-round result must therefore
+report the per-round training composition and the per-class accuracy breakdown
+on the held-out set, so that a regression of this shape is attributed to its
+actual mechanism rather than to the most visible covariate. The pre-registered
+study carries this as a reporting requirement and adds the per-class breakdown
+to the plan as an analytic output rather than a post-hoc audit.
 
-Second, target stability. The pilot showed that visit-count distillation
-targets are noisier across collection runs than the distillation prescription
-assumes (Section~\ref{sec:pilot-v3-v4}), with the unseeded LLM transition
-sampling as the residual source. We commit to reporting target stability,
-defined as the mean $L_1$ between two MCTS visit-count distributions on the
-same state at the same prior but with different random seeds, on a stratified
-sample of training states for each benchmark, and to running additional MCTS
-seeds at the heavy-search budget on any state where target stability falls
-below a pre-committed threshold.
+Second, target stability. The probe found that visit-count distillation targets
+are noisier across collection runs than the distillation prescription assumes
+when the search budget is low, with the unseeded LLM transition sampling as the
+residual source (Section~\ref{sec:pilot-bsweep}). It also found that the natural
+distance metric, the mean $L_1$ between two visit-count distributions, is
+confounded by sharpness and can anti-correlate with true stability, so the
+correct diagnostic is pairwise recommended-verb argmax agreement across
+independent searches from a fixed state. We commit to reporting that diagnostic
+on a stratified sample of training states for each benchmark, stratified by
+problem family, and to running additional MCTS seeds at the heavy-search budget
+on any state where agreement falls below a pre-committed threshold.
 \textcolor{red}{\textbf{[PRE-REG TODO: commit the target-stability
 threshold (the same number used in Section~\ref{sec:pilot-lessons});
 suggested: pairwise recommended-verb agreement $\geq 0.70$ at the
 collection budget, stratified by family, confirm]}} The pre-registered
-$N_{\mathrm{large}} = 500$ is substantially above the pilot's $B = 20$ and we
+$N_{\mathrm{large}} = 500$ is substantially above the probe's budget and we
 expect target stability to improve accordingly, but the expectation is now a
-falsifiable monitoring claim rather than an unstated assumption.
+falsifiable monitoring claim rather than an unstated assumption, and the budget
+that buys a stable target is set by the slowest-converging family rather than
+the average.
 
-The pilot also produced a positive finding the discussion should not
-understate: the first round of expert iteration closed the loop on every
-metric simultaneously, including a $15$ percentage-point absolute gain in
-zero-shot held-out argmax agreement against the $\pimcts$ targets
-(Section~\ref{sec:pilot-v2-v3}). This does not establish benchmark
-performance, but it confirms that the framework's mechanics are not vacuous,
-which is a precondition for the pre-registered study being worth running.
-
-The closed-loop implementation surfaced two further methodological commitments
-the pre-registered study inherits. The first is honest per-decision compute
+The closed-loop exercise surfaced two further methodological commitments the
+pre-registered study inherits. The first is honest per-decision compute
 accounting: once the frozen model runs in process and one state prefill serves
 both the heads and verb generation (Section~\ref{sec:pilot-closedloop}), the
-decoder forwards become countable, and the first closed-loop run shows
-generation dominating prefill in a decision's token cost by about $79$ to $1$.
-The compute axis of the plan (Section~\ref{sec:exp-compute}) stays denominated
-in total inference FLOPs, and this measurement says where those FLOPs go: the
-accounting must charge every generated token inside the search, because a
-simulation's cost is itself dominated by generation. The second is that
-observability and resumability are research infrastructure, not conveniences:
-the central claim is an across-iteration trend (the approximate-$Q$-learning
-$L_Q$ decrease and the expert-iteration sharpening of $\ptheta$), and a first
-long run that persisted only a per-iteration $L_{\mathrm{total}}$ summary (in
-which $L_{\pi}$ near its entropy floor masks the small $L_Q$ term) could not
-surface it. A run long enough to matter must persist the separated learning
-signals per iteration and checkpoint often enough to resume from a crash.
+decoder forwards become countable, and the probe found that generation, not
+prefill, dominates a decision's token cost. The compute axis of the plan
+(Section~\ref{sec:exp-compute}) stays denominated in total inference FLOPs, and
+this measurement says where those FLOPs go: the accounting must charge every
+generated token inside the search, because a simulation's cost is itself
+dominated by generation. The second is that observability and resumability are
+research infrastructure, not conveniences: the central claim is an
+across-iteration trend (the approximate-$Q$-learning $L_Q$ decrease and the
+expert-iteration sharpening of $\ptheta$), and a long run that persists only a
+per-iteration $L_{\mathrm{total}}$ summary (in which $L_{\pi}$ near its entropy
+floor masks the small $L_Q$ term) cannot surface it. A run long enough to matter
+must persist the separated learning signals per iteration and checkpoint often
+enough to resume from a crash.
 
 \subsection{Threats to the Empirical Story}
 \label{sec:disc-threats}
@@ -291,9 +287,9 @@ statement that the framework is limited to math. The same structural
 commitments transfer to any domain where a non-LLM program supplies the
 terminal verdict. Code generation fits naturally: the verifier is a unit-test
 suite, the action space gains a \textsc{RunTests} verb playing the role of
-\textsc{InvokeVerifier}, and the terminal reward is the suite's binary outcome.
+\textsc{Verify}, and the terminal reward is the suite's binary outcome.
 Formal proof fits even more cleanly: the verifier is the Lean (or Coq, or
-Isabelle) kernel, \textsc{InvokeVerifier} becomes a tactic submission, and the
+Isabelle) kernel, \textsc{Verify} becomes a tactic submission, and the
 reward is kernel acceptance. Boolean satisfiability and related decision
 procedures admit Z3 (or another SMT solver) as a verifier, the verbs adapting
 while the structural pattern is preserved. Restricted fact verification (claims

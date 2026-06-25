@@ -37,24 +37,22 @@ to much larger reasoning models on a fixed compute axis. This paper is the
 methodological prerequisite to answering that question.
 
 \paragraph{Position.}
-This is a methodology paper with a toy-problem pilot. We make the framework
-precise enough to be evaluated as a contribution in its own right, we
-pre-register the experimental design so that the eventual benchmark study
-will not be confused with post-hoc rationalization, and we report a
-small-scale pilot that exercises the full pipeline end-to-end and demonstrates
-that the expert-iteration loop closes under the framework's implementation.
-The pilot is not a benchmark study: it tests feasibility on four toy problems
-under a single base model and a small MCTS budget, with the goal of falsifying
-the framework's basic mechanics before the large benchmark study begins.
-Concretely, we present a reinforcement-learning framework specialized for
-verifiable LLM-induced context Markov decision processes, an architecture
-that uses a shared frozen language model as both encoder and stochastic
-transition model, a reward structure that quarantines learned aesthetic
-signals away from the Bellman target, an explicit role for tree search as a
-policy improvement operator rather than as the central learning algorithm,
-a pre-registered evaluation plan with falsifiable hypotheses against
-standardized benchmarks, and a toy-problem pilot whose positive and
-informatively-negative findings are reported alongside the framework.
+This is a methodology paper that presents a plan, not results. We make the
+framework precise enough to be evaluated as a contribution in its own right, and
+we pre-register the experimental design so that the eventual benchmark study
+will not be confused with post-hoc rationalization. We also report a preliminary
+feasibility probe (Section~\ref{sec:pilot}) that exercised the full pipeline
+end-to-end; the probe predates the current action space, so we report it only as
+evidence that every component is implementable and as the source of several
+methodological precautions the plan inherits, not as a benchmark result and not
+as a number the framework's claims rest on. Concretely, we present a
+reinforcement-learning framework specialized for verifiable LLM-induced context
+Markov decision processes, an architecture that uses a shared frozen language
+model as both encoder and stochastic transition model, a reward structure that
+quarantines learned aesthetic signals away from the Bellman target, an explicit
+role for tree search as a policy improvement operator rather than as the central
+learning algorithm, and a pre-registered evaluation plan with falsifiable
+hypotheses against standardized benchmarks.
 
 The reframing relative to prior MCTS-centric work is deliberate. In the
 AlphaZero tradition \citep{silver2017alphagozero, silver2018alphazero} and its
@@ -74,7 +72,7 @@ We make six contributions:
         verifiable tasks as an approximate $Q$-learning problem over an
         induced context MDP, with a structured state schema
         (Section~\ref{sec:method-state}) that makes the Markov bet explicit
-        and a canonical \textsc{InvokeVerifier} action that is part of
+        and a canonical \textsc{Verify} action that is part of
         the agent's action space rather than a post-hoc parser pass.
   \item An architecture that uses a single frozen base language model as both
         encoder and stochastic transition model, with a small adapter and a
@@ -102,16 +100,16 @@ We make six contributions:
         the compute axis, and the headline compute-versus-accuracy frontier
         figure before any training begins, with falsifiable hypotheses and an
         explicit threat model for compute leaks in test-time-compute claims.
-  \item A toy-problem pilot (Section~\ref{sec:pilot}) that exercises every
-        component of the framework end-to-end across two rounds of expert
-        iteration plus a controlled rebalancing test, shows that a
-        single round improves zero-shot held-out argmax agreement by $15$
-        percentage points ($57\% \to 72\%$) and reduces mean $L_1$ to MCTS
-        targets by $42\%$, and dissects a second-round regression: the
-        rebalancing test rules out class dilution as the dominant
-        mechanism, surfacing target-stability and shortcut-dependence
-        constraints that the pre-registered benchmark study inherits as
-        monitoring requirements.
+  \item A preliminary feasibility probe (Section~\ref{sec:pilot}) that exercised
+        every component of the framework end-to-end and established that the
+        expert-iteration loop is implementable, while surfacing the
+        methodological precautions the pre-registered study inherits as
+        monitoring requirements: train/held-out structural discipline, per-class
+        composition tracking, a pairwise-recommended-verb target-stability
+        diagnostic with the budget set by the slowest-converging family, and
+        honest per-decision compute accounting with an observable, resumable run
+        harness. The probe predates the current action space, so it contributes
+        feasibility evidence and methodology, not benchmark numbers.
 \end{enumerate}
 
 \paragraph{Paper structure.}
@@ -126,11 +124,10 @@ training targets and at inference, the reward structure, the training loop
 combining replay-based approximate $Q$-learning with expert-iteration
 distillation, and the two inference modes.
 Section~\ref{sec:experimental-plan} specifies the experimental design and the
-hypotheses to be tested. Section~\ref{sec:pilot} reports the toy-problem
-pilot: setup, the improvement from the first round of expert iteration, the
-informatively-negative regression of the second round, a controlled
-rebalancing test that isolates the regression's mechanism, and the design
-implications carried forward into the pre-registered study.
+hypotheses to be tested. Section~\ref{sec:pilot} reports the preliminary
+feasibility probe: what it exercised end-to-end, the methodological lessons that
+survive the action-space redesign, and the design implications carried forward
+into the pre-registered study.
 Section~\ref{sec:related-work} positions the contribution against prior work
 in classical RL, verifier-supervised reasoning, test-time-compute scaling,
 MCTS-augmented language models, and small-model self-improvement.

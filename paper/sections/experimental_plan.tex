@@ -61,7 +61,7 @@ serialization, error-message ingestion, and dependency management; the
 framework is constructed to admit it without redesign, but the phase-1
 empirical study targets the SymPy-checkable benchmarks first. The
 verifier interface is the same callable referenced by the
-\textsc{InvokeVerifier} action of Section~\ref{sec:method-actions}: the
+\textsc{Verify} action of Section~\ref{sec:method-actions}: the
 agent can spend intermediate verifier calls during deliberation and
 also be scored by the same checker at terminal commit.
 
@@ -231,7 +231,7 @@ the empirical work is in hand. We fix the MCTS simulation budgets at
 $N_{\mathrm{small}} = 50$ for the light-search baseline B3 and
 $N_{\mathrm{large}} = 500$ for the heavy-search baseline B4. These
 values are committed before training. They are chosen so that
-$N_{\mathrm{small}}$ exceeds the seven-verb branching factor by enough
+$N_{\mathrm{small}}$ exceeds the verb branching factor by enough
 to give every action multiple visits on average from the root, and so
 that $N_{\mathrm{large}} = 10 \cdot N_{\mathrm{small}}$ tests a
 one-order-of-magnitude compute scaling. Best-of-$N$ for B1 is sized

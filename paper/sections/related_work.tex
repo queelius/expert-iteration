@@ -70,7 +70,7 @@ only signals allowed to enter the Bellman target; learned aesthetic
 signals such as reasoning-quality classifiers or deception detectors may
 enter only as MCTS priors, where they bias exploration but cannot rewrite
 the value function. The second is architecture-level:
-$\textsc{InvokeVerifier}$ is a callable verb in the agent's action space
+$\textsc{Verify}$ is a callable verb in the agent's action space
 (Section~\ref{sec:method-actions}) rather than a post-hoc parser pass
 applied only at the terminal answer. The agent decides when to spend a
 verifier call, intermediate verifier outputs land in the structured state
@@ -89,7 +89,7 @@ objectives (IQL- and CQL-style updates with a modified Bellman backup)
 and identifying the verifier itself \emph{as} the learned $Q$-function
 for test-time compute. Our core differs on three axes that matter for the
 framing of this paper. First, the verifier is an \emph{action}
-(\textsc{InvokeVerifier}) the policy may take inside the MDP, not the
+(\textsc{Verify}) the policy may take inside the MDP, not the
 $Q$-function itself: we keep a separate multi-head $Q$ over a structured
 context state (Section~\ref{sec:method-state}) and let the agent decide
 when to spend a check. Second, our targets are produced \emph{online} by
@@ -177,7 +177,7 @@ the $Q$-function is a multi-head categorical output rather than a scorer
 over $(s, a)$ embeddings of free-form text, which trades expressivity for
 a stable categorical distribution that PUCT can branch on and that the
 policy head can match by cross-entropy. Third,
-$\textsc{InvokeVerifier}$ is one of the verbs the agent may take rather
+$\textsc{Verify}$ is one of the verbs the agent may take rather
 than a step performed only on the committed answer
 (Section~\ref{sec:method-actions}); the verifier is a learnable resource
 the policy budgets. Fourth, the architecture, action space, evaluation
@@ -205,7 +205,7 @@ Two of these distinctions deserve specific contrast with
 \citet{guan2025rstarmath}. On the state and action axis, rStar-Math
 operates over token-level or step-level decoding, with search nodes
 keyed to partial generations of natural-language reasoning; our context
-MDP is a structured-state object with a fixed seven-verb action space
+MDP is a structured-state object with a fixed verb set
 and id-based targeting (Sections~\ref{sec:method-state}
 and~\ref{sec:method-actions}), so the categorical action set is small
 and stable across problems and chance nodes can be addressed by

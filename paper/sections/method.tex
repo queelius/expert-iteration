@@ -45,7 +45,7 @@ architecture, in which one frozen LLM serves as both encoder and
 generator so a single forward yields the state embedding and the
 verb-instantiator's continuation rather than running two models
 (Section~\ref{sec:method-architecture}); and (iii) the
-\textsc{InvokeVerifier} action that makes checker calls a first-class
+\textsc{Verify} action that makes checker calls a first-class
 move within the MDP rather than a post-hoc filter
 (Section~\ref{sec:method-actions}). The chance-node $Q$-estimate
 $\Qmcts(s, a)$ is used as a direct Bellman target in place of
@@ -102,7 +102,7 @@ has additionally been promoted by a successful \texttt{VerifierCall}. A
 \texttt{Hypothesis} is a tentative claim that has not been (or could not be)
 verified by the available checker. Without this distinction, the agent
 cannot tell ``I have proven this'' from ``I think this is true,'' and the
-\textsc{InvokeVerifier} action (Section~\ref{sec:method-actions}) loses its
+\textsc{Verify} action (Section~\ref{sec:method-actions}) loses its
 operational meaning. The distinction also exposes a structurally
 interesting learnable behavior: spend a verifier call to promote a
 hypothesis to a fact precisely when the chain of reasoning depends on it.
@@ -177,44 +177,66 @@ set, the policy head a categorical distribution to learn, and MCTS
 something categorical to branch on; the LLM-generated content lets the
 action's effect adapt to the state.
 
-\begin{definition}[Action set]
+\begin{definition}[Action: a verb applied to a target]
 \label{def:actionset}
-The action set $\Aset = \{a_1, \ldots, a_7\}$ consists of seven
-categorical verbs:
-\textsc{Decompose}, \textsc{ComputeSubexpr}, \textsc{FormHypothesis},
-\textsc{CheckCase}, \textsc{InvokeVerifier}, \textsc{Backtrack}, and
-\textsc{CommitAnswer}. Each verb selects a cognitive move; the
-verb-instantiator (Section~\ref{sec:method-architecture}) generates
-the action's target identifier (when applicable) and any free-form
-content as a continuation of the serialized state.
+An action is a pair $a = (\textsc{verb}, \tau)$: a categorical \emph{verb}
+drawn from a small fixed set, together with a \emph{target} identifier
+$\tau$ naming the node of the state the verb operates on (absent for the
+few verbs that introduce free-standing content). The six core verbs are
+\textsc{Split}, \textsc{FormHypothesis}, \textsc{ComputeSubexpr},
+\textsc{Verify}, \textsc{Commit}, and \textsc{Abandon}; an optional
+reward-free \textsc{Critique} supports LLM self-assessment. The policy
+factors accordingly into a categorical head over the verbs and a pointer
+head over the live target identifiers; the verb-instantiator
+(Section~\ref{sec:method-architecture}) supplies any free-form content as
+a continuation of the serialized state. Each verb is a \emph{lens}: it
+renders a scoped, grounded-local view of the target's neighborhood for the
+frozen generator and writes the generated content back locally to that node
+and its subtree.
 \end{definition}
 
-The verb meanings are:
+The verbs and their effects:
 
 \begin{itemize}[leftmargin=*, itemsep=0.2em]
-  \item \textsc{Decompose}: split a subgoal or hypothesis into a tuple of
-        sub-entities, each addressing a smaller problem. The
-        identifier of the target subgoal or hypothesis is supplied by
-        the verb-instantiator.
-  \item \textsc{ComputeSubexpr}: perform a symbolic or numeric
-        computation step. The result enters as a \texttt{Fact} with
+  \item \textsc{Split}: decompose a goal into children combined either
+        conjunctively (subgoals, all of which must be solved) or, as an
+        exhaustive case analysis, disjunctively (the cases together with an
+        exhaustiveness obligation that is itself reified as a goal). The
+        connective is recorded on the produced edge and consumed by
+        \textsc{Commit}'s aggregation.
+  \item \textsc{FormHypothesis}: introduce a tentative claim, a candidate
+        solution addressing a goal.
+  \item \textsc{ComputeSubexpr}: perform a symbolic or numeric computation
+        step; the result enters as a \texttt{Fact} with
         \texttt{source = "derived"}.
-  \item \textsc{FormHypothesis}: introduce a tentative claim addressing
-        an open subgoal.
-  \item \textsc{CheckCase}: perform case analysis on a target
-        hypothesis, spawning child hypotheses each handling a case.
-  \item \textsc{InvokeVerifier}: call the symbolic checker on a chosen
-        hypothesis or derived fact. The result is appended to
-        \texttt{verifier\_log}; on success, the targeted hypothesis is
-        promoted to a verified fact.
-  \item \textsc{Backtrack}: append the chosen hypothesis or subgoal
-        identifier to \texttt{abandoned}; serialization
-        (Section~\ref{sec:method-architecture}) elides the subtree
-        rooted at that identifier from subsequent states.
-  \item \textsc{CommitAnswer}: produce a final formatted answer and set
-        \texttt{committed\_answer}. This action is terminal: the next
-        transition is the verifier's binary verdict.
+  \item \textsc{Verify}: call the symbolic checker on a chosen hypothesis or
+        derived fact; the call is appended to \texttt{verifier\_log} and, on
+        success, the target is promoted to a verified fact. \textsc{Verify}
+        is the only reward-bearing verb (Section~\ref{sec:method-reward}).
+  \item \textsc{Commit}: close a goal by promoting a discharging witness (a
+        verified fact, a solved decomposition, or a verified hypothesis) to
+        its solution. \textsc{Commit} is recursive: committing the root goal
+        is terminal and yields the verifier's verdict, while committing a
+        subgoal is reward-free bookkeeping that records its solution for the
+        parent.
+  \item \textsc{Abandon}: close a goal or hypothesis negatively. This is a
+        forward prune that marks the node abandoned and retains its subtree
+        as a checked dead end, never a rollback to a prior state.
+  \item \textsc{Critique} (optional, reward-free): an LLM self-assessment of
+        a hypothesis against its goal. It adds information the policy may use
+        to decide whether to commit, abandon, or refine, but never adds
+        reward, so the symbolic verifier remains the sole reward source.
 \end{itemize}
+
+\textsc{Split} unifies conjunctive decomposition and case analysis under one
+connective-tagged verb; compression of a closed subtree is handled by how the
+lens renders it rather than by a verb. The \emph{Phase-1} implementation
+realizes a conservative subset: a verb-only categorical action whose target
+and content are sampled by the frozen generator from a global, unscoped view,
+with verified-fact promotion and the terminal commit already in place. The
+\emph{designed target} is the full $(\textsc{verb}, \tau)$ factorization with a
+pointer head over identifiers and per-verb scoped lenses; the two are
+distinguished wherever the difference matters below.
 
 \paragraph{State-conditioned availability.}
 Not every verb is meaningful in every state. We define an availability
@@ -227,25 +249,26 @@ invalid actions before PUCT:
 \toprule
 Verb & Available when \\
 \midrule
-\textsc{Decompose}       & $|G_{\textsc{open}}| > 0$ or $|H| > 0$ \\
+\textsc{Split}           & $|G_{\textsc{open}}| > 0$ and $d < d_{\max}$ \\
+\textsc{FormHypothesis}  & $|G_{\textsc{open}}| > 0$ and $d < d_{\max}$ \\
 \textsc{ComputeSubexpr}  & always \\
-\textsc{FormHypothesis}  & $d < d_{\max}$ \\
-\textsc{CheckCase}       & $|H| > 0$ \\
-\textsc{InvokeVerifier}  & $|H| > 0$ or $\exists f \in F:
+\textsc{Verify}          & $|H| > 0$ or $\exists f \in F:
                            f.\texttt{source} = \texttt{"derived"}$ \\
-\textsc{Backtrack}       & $|H| > 0$ or $|G_{\textsc{open}}| > 0$ \\
-\textsc{CommitAnswer}    & at least one answer-bearing claim exists \\
+\textsc{Commit}          & a discharging witness exists for some open goal \\
+\textsc{Abandon}         & $|H| > 0$ or $|G_{\textsc{open}}| > 0$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 The state schema (Section~\ref{sec:method-state}) makes these predicates
 trivial to evaluate. At each decision node, the policy logits for
-unavailable actions are masked to $-\infty$ before the softmax, and the
-$Q$-head's unavailable entries are excluded from the PUCT argmax.
+unavailable verbs are masked to $-\infty$ before the softmax, and the
+$Q$-head's unavailable entries are excluded from the PUCT argmax; under the
+designed $(\textsc{verb}, \tau)$ factorization the same mask additionally
+restricts the pointer head to type-valid targets.
 
-\paragraph{The \textsc{InvokeVerifier} design choice.}
-\textsc{InvokeVerifier} is the action that converts ``LLM formats output,
+\paragraph{The \textsc{Verify} design choice.}
+\textsc{Verify} is the action that converts ``LLM formats output,
 symbolic solver checks'' from a post-hoc parser pass into a first-class
 deliberation move. The agent decides when to spend a verifier call;
 intermediate results land in \texttt{verifier\_log} and become part of
@@ -263,8 +286,8 @@ checkpoints, each of which can carry a small intermediate reward
 (Section~\ref{sec:method-reward}) without introducing the Goodhart
 concerns that attend learned-aesthetic signals.
 
-\paragraph{The \textsc{CommitAnswer} format constraint.}
-\textsc{CommitAnswer} requires strict-format output: the produced text
+\paragraph{The root \textsc{Commit} format constraint.}
+The terminal root \textsc{Commit} requires strict-format output: the produced text
 must parse for the terminal verifier (a boxed numeric expression for
 GSM8K, a SymPy-evaluable expression for MATH, a Lean tactic for formal
 proof tasks). Two implementations are possible:
@@ -281,11 +304,11 @@ proof tasks). Two implementations are possible:
 Path 1 is preferred when the chosen LLM and decoding framework support
 it; path 2 is a portable fallback. The choice affects the
 verb-instantiator (Section~\ref{sec:method-architecture}) but not the
-$Q$-head or the action set: \textsc{CommitAnswer} is a single
-categorical action regardless of how its content is produced.
+$Q$-head or the action set: the root \textsc{Commit} is a single verb
+regardless of how its content is produced.
 
 \paragraph{Alternatives and migration path.}
-We adopt the categorical seven-verb design as the conservative phase 1
+We adopt the small fixed verb set as the conservative phase 1
 starting point: the verb-instantiator supplies enough action-content
 variation that MCTS still explores meaningfully, and the small fixed
 action set keeps the multi-head $Q$ architecture
@@ -741,7 +764,7 @@ r_T \;=\;
 \end{equation}
 
 with $c$ the committed answer (the contents of the
-$\texttt{committed\_answer}$ slot when \textsc{CommitAnswer} fires) and
+$\texttt{committed\_answer}$ slot when \textsc{Commit} fires) and
 $P$ the problem statement. Per-edge backup (Equation~\ref{eq:backup})
 distributes the terminal signal to ancestor chance nodes weighted by
 $\gamma$; combined with PUCT-driven selection, this is sufficient to
@@ -752,7 +775,7 @@ binary terminal signal.
 If terminal sparsity becomes a blocker on harder benchmarks (small base
 models that score near zero on AIME, say), we introduce small positive
 rewards for verifier-anchored intermediate events. The simplest such
-event is a successful \textsc{InvokeVerifier} that promotes a
+event is a successful \textsc{Verify} that promotes a
 hypothesis to a verified fact: $r_t = +0.1$ on the transition that
 sets $f.\texttt{source} = \texttt{"verified"}$. The reward remains
 objective (the verifier's success bit is a deterministic non-LLM
