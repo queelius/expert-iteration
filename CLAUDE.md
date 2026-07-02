@@ -2,170 +2,116 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository status
+## What this repository is
 
-This repo contains a methodology paper at `paper/`, a design document at `design.md` (source of truth for what to build), and a Python implementation under `src/verifier_anchored_rl/`. The package is named `verifier_anchored_rl` to align with the framework paper's title and the §1 RL-first directive; `design.md` §3 still mentions the older `mcts_expert_iteration` name in its layout description, which is a historical artifact that should be read as the now-renamed package.
+A verifier-anchored RL system: a small external controller network (verb head,
+pointer head, Q head; a few million parameters) is trained to orchestrate a
+**frozen** LLM by issuing typed `(verb, target)` actions over a structured,
+nested reasoning forest, with a symbolic verifier as the **only** reward
+source. This is explicitly NOT an o1/DeepSeek-R1-style system: RL never
+touches the LLM's weights.
 
-When implementing, follow the repository layout in `design.md` §3 (with the package directory renamed to `src/verifier_anchored_rl/`): `tests/`, `experiments/`, `docs/`. Do not invent a different layout.
+**`design.md` (repo root) is the source of truth.** It is self-contained
+(state, actions/lenses, controller, reward, training, evaluation, prior-art
+positioning). Historical documents live in `docs/archive/`:
+`design-2025-pedagogical.md` (the original MCTS-pedagogy design plus its
+LLM specialization; still the detailed reference for the classical
+Gridworld/value-iteration/expectimax/MCTS core) and `paper-v1/` (the
+superseded 48-page paper).
 
-## Common commands (after implementation exists)
+## Framing directive (do not regress)
 
-The design specifies Python 3.11+ with `numpy` and `pytest` as the only core dependencies. `matplotlib` is optional for plots; `torch` is explicitly forbidden until tabular expert iteration works end-to-end (`design.md` §3).
+**RL first, MCTS second.** The central object is the agent (policy + Q heads)
+learning over an induced context MDP whose only reward source is the symbolic
+verifier. The training spine is off-policy value-based Q-learning with n-step
+or Monte Carlo returns; MCTS is a strictly additive accelerator (better
+behavior, better targets) and the test-time compute knob, never the spine
+(`design.md` section 0 and section 7).
+
+**Subagent-briefing discipline:** every paper-drafting or doc-restructuring
+subagent brief must restate this directive verbatim at the top. Verified
+failure mode (2026-05-23): an entire paper draft regressed to MCTS-first
+framing because the directive was not in the briefs. Hard checklist item.
+
+## Common commands
 
 ```bash
-# Install in editable mode with dev deps
-pip install -e ".[dev]"
-
-# Run the full test suite
-pytest
-
-# Run a single test file
-pytest tests/test_value_iteration.py
-
-# Run a single test by node id
-pytest tests/test_mcts.py::test_puct_respects_priors_when_values_equal
-
-# Run experiments (each is a standalone script)
-python experiments/run_value_iteration.py
-python experiments/run_mcts.py
-python experiments/run_expert_iteration.py
+pip install -e ".[dev]"        # editable install, pytest
+pip install -e ".[llm]"        # + httpx, sympy (LLM-backed paths, verifier)
+pytest                          # full suite
+pytest tests/reductio/ -q       # the vendored state core (48 tests)
+pytest tests/test_mcts.py::test_puct_respects_priors_when_values_equal  # one test
+cd paper && latexmk -pdf main.tex   # build the paper scaffold
+pandoc design.md -o design.pdf --pdf-engine=xelatex -V colorlinks=true  # design PDF
 ```
 
-There is no lint configuration prescribed by the design. If introducing one, prefer `ruff` over a heavier stack to keep the dependency footprint small.
+Python 3.11+; core deps are `numpy` + `pytest` only. No lint config; prefer
+`ruff` if introducing one.
 
-## Architecture: the pedagogical spine
+## Architecture map
 
-The project teaches an explicit conceptual chain, and the code should make every link visible. The chain (from `design.md` §0):
+- **`src/verifier_anchored_rl/reductio/`**: the vendored state core (from the
+  now-archived github.com/queelius/reductio, slimmed during roll-in). An
+  immutable reasoning forest (`Goal`/`Hypothesis`/`Fact`/`VerifierCall`
+  frozen dataclasses) plus a pure verb algebra (`split`, `form_hypothesis`,
+  `compute`, `verify`, `commit`, `abandon`: total functions
+  `Graph -> Ok | Err`). Invariants the tests pin and any change must
+  preserve: nodes are frozen with no reward/value fields; core modules import
+  stdlib only (sympy lives in `adapters/sympy_math.py`; boundary test
+  enforces this); `solved`/`verified`/`holds` are derived predicates that
+  never gate anything except `commit`'s verifier-vouched witness check;
+  structure never gates (a parent commits regardless of children; the
+  AND/OR connective is non-gating metadata); there is NO Method node kind.
+- **Classical core** (`gridworld.py`, `value_iteration.py`, `expectimax.py`,
+  `mcts.py`, `mdp.py`, ...): the validation anchor. Value iteration,
+  expectimax, and MCTS triangulate on hand-computable MDPs; the LLM system
+  must never regress these tests. Details in the archived pedagogical design.
+- **`llm_context_mdp.py` (legacy, 1600 lines)**: the pre-redesign monolith
+  (MathState, seven verbs, verb-only actions). It is scheduled for
+  replacement by an integration that consumes the reductio core; do not
+  extend it. It exports `Fact`/`Hypothesis`/`VerifierCall` names that
+  collide with reductio's: always import explicitly from the subpackage.
+- **`paper/`**: fresh LaTeX scaffold (article + natbib + latexmk). STUB
+  discipline: `\stub{...}` marks content awaiting the integration or
+  experimental runs; never present stubbed content as complete, and never
+  resurrect numbers from the archived pilot.
+- **Integration flags** (from the 2026-07-02 final review; the LLMContextMDP
+  integration must resolve): facts attach to no goal, so the lens cannot
+  render a target's facts yet (needs a goal-to-fact edge or scan); the
+  verifier's `expected` argument must never be supplied by the policy
+  (self-verification hole); goal openness at commit belongs in the avail
+  mask; serializer statements need sanitizing against marker injection.
 
-```
-utility maximization
-  → deterministic search
-  → stochastic search / expectimax
-  → MDPs and Bellman equations
-  → MCTS as sampled expectimax / online planning
-  → MCTS expert iteration as approximate policy iteration / RL
-  → LLM deliberation as an induced context MDP
-```
+## Reward invariant (load-bearing)
 
-**Critical ordering note** (`design.md` §1): the design was revised to teach **RL first, MCTS second**. MCTS is framed as a sample-efficient policy-improvement operator that produces stronger training targets, not as the central object. When writing docs, comments, paper sections, or the blog article, do not regress to MCTS-first framing.
+The symbolic verifier is the only reward source: terminal +1/-1 at root
+COMMIT, optional gated and capped intermediate reward through VERIFY, zero
+everywhere else. No reward model, no learned process reward, no LLM-judge
+reward, ever. Aesthetic signals may enter only as search priors or pruning
+heuristics, never as Bellman targets.
 
-**Subagent-briefing discipline**: when dispatching subagents for any paper drafting or restructuring work, restate the §1 RL-first directive at the top of the subagent brief verbatim. The directive is a layered correction over older MCTS-first content in `design.md`, and a subagent reading the bulk of the design document statistically pulls toward MCTS-first framing unless the correction is surfaced explicitly. Verified failure mode (resolved 2026-05-23): an entire paper draft regressed to MCTS-first framing because the directive was not in the subagent briefs, even though it was in this file. Treat this as a hard checklist item: every paper-related subagent brief gets the §1 RL-first directive at the top, every time.
+## Style requirements (pedagogical, load-bearing for the paper)
 
-## Architecture: layered interfaces
+1. Expanded sums before expectation notation; define `P(s'|s,a)`,
+   `R(s,a,s')`, `pi(a|s)`, `gamma` before use.
+2. Any shorthand (`G_t`, `r_T`) defined where it first appears.
+3. Code aligned with the math (loop variables named `next_state`, `prob`,
+   `reward`).
+4. Hand-computable examples before general algorithms.
+5. Do not write the em-dash glyph in files (a hook rejects it); use commas,
+   colons, parentheses, or hyphens.
 
-Two MDP protocols separate concerns by what each algorithm needs:
+## Honesty discipline
 
-- `FiniteMDP[S, A]`: exposes `transitions(s, a) → [(s', prob, reward)]`. Required by **value iteration** and **expectimax**, which sum over all next states.
-- `GenerativeMDP[S, A]`: exposes `sample_transition(s, a, rng) → (s', reward)`. Required by **MCTS**, which samples rather than enumerates.
+Present the `(verb, target)` lens system as the method, with explicit
+markers separating what the code realizes today from what is designed but
+unbuilt. Do not claim as built what is still spec. Report archived pilot
+results nowhere.
 
-The Gridworld environment implements **both**. This is intentional: the same environment supports exact planners (for ground-truth comparison) and the sampling-based planner that will later generalize to the LLM-context setting where `P(s'|s,a)` cannot be enumerated.
+## Non-goals
 
-Use `Protocol` (PEP 544 structural subtyping), not ABCs. This matches the design's `from typing import Protocol` snippet in §4.1 and keeps `Gridworld` and any later `ContextEnvironment` decoupled.
-
-## Architecture: MCTS with explicit chance nodes
-
-`design.md` §8.1 mandates **separate `DecisionNode` and `ChanceNode` types**. Decision nodes hold state and per-action children; chance nodes hold `(s, a)` statistics (`visits`, `total_value`, `mean_value`, `prior`) and a list of sampled successor decision nodes.
-
-Why this matters: the MCTS chance-node mean value is the empirical estimator of
-
-```
-Q(s,a) = Σ_s' P(s'|s,a) [R(s,a,s') + γ V(s')]
-```
-
-Collapsing chance and decision nodes (common in deterministic-game MCTS tutorials) hides this estimator and breaks the analogy to Bellman that the article is supposed to teach.
-
-**Backup must accumulate per-edge rewards**, not a single terminal scalar. The pattern from §8.4:
-
-```python
-G = leaf_value
-for chance, reward in reversed(path):
-    G = reward + gamma * G
-    update chance with G
-```
-
-A backup that propagates one fixed return to every ancestor is wrong for discounted MDPs with intermediate rewards (the gridworld has step rewards of -0.01).
-
-PUCT formula (`design.md` §8.2): `Q(s,a) + c_puct · P0(a|s) · sqrt(N(s)) / (1 + N(s,a))`. The prior may be uniform initially; in expert iteration it becomes the learned policy.
-
-## Architecture: expert iteration as policy distillation
-
-Loop from `design.md` §9.3:
-
-```
-search → improved visit distribution → distill → better policy prior → better search
-```
-
-`pi_MCTS(a|s) = N(s,a)^(1/τ) / Σ_b N(s,b)^(1/τ)` is the distillation target. Train `p_θ(a|s)` toward it with cross-entropy.
-
-**Start with a tabular softmax policy.** §9.1 is explicit: do not introduce a neural network until the tabular version trains and improves measurably. The pedagogical value comes from seeing the loop close in the simplest possible setting.
-
-The later sections (`design.md` §17–19) extend this to:
-- **Online learning during deployment** (§17): user feedback as reward, per-user adapter tiers, channel-decomposed reward (correctness vs satisfaction).
-- **Direct Q-learning from chance-node estimates** (§18): `Q_ψ(C,a) ≈ Q̂_MCTS(C,a)`, with the policy prior derived by softmax over Q. Recommended over a separate policy network in the LLM-context setting.
-- **Inference-time compute budget B** (§19): `B=0` uses the learned model directly, `B>0` runs MCTS for that many simulations. Persistent search trees enable "think harder" semantics.
-
-These are design extensions, not Phase 1 work.
-
-## Phase discipline (do not skip ahead)
-
-`design.md` §2 partitions the work into phases that must be respected:
-
-- **Phase 1**: Gridworld + `FiniteMDP`/`GenerativeMDP` + value iteration + expectimax + MCTS + tests. **Do not implement MCTS until value iteration and expectimax tests pass** (§15).
-- **Phase 2**: Tabular policy prior + PUCT-guided MCTS + visit-count distillation + training loop.
-- **Phase 3**: LLM context MDP. **Relaxed 2026-05-27 (user instruction to begin Tier 2 smoke test):** LLM calls are now permitted. The schema, action space, structured-marker serializer, and `LLMContextMDP.sample_transition` are implemented and tested with `MockLLMClient`, `EchoLLMClient`, and `OpenAICompatibleLLMClient` (HTTP to vLLM/Ollama/llama.cpp servers). The verifier (`verifier.py`) wraps SymPy. LLM-extension deps are optional (`pip install -e .[llm]`).
-
-The first version exists to make "the formal core unmistakably correct" (§16). Speed, polish, and breadth come later.
-
-## Validation: hand-computable ground truth
-
-Tests should anchor on the tiny MDP from `design.md` §10.2 (the S/A/G/B example) where the optimal values are derived by hand:
-
-```
-V*(A) = 10
-Q*(S, safe)  = 4
-Q*(S, risky) = 0.8·10 + 0.2·(-10) = 6
-V*(S) = 6
-```
-
-Value iteration must reproduce these exactly. Expectimax at sufficient depth must match. MCTS must converge toward them within a configurable simulation budget. This triangulation is the central correctness signal. If any of the three disagrees with the hand calculation on this MDP, the bug is in that planner, not in the math.
-
-Gridworld property tests (`design.md` §10.1): transition probabilities sum to 1 for every `(s, a)`; walls and boundaries keep the agent in place; terminal states have `V = 0`.
-
-## Style requirements (load-bearing for the article)
-
-`design.md` §12 imposes a specific pedagogical style that comments, docstrings, and the eventual blog article must honor:
-
-1. Write expanded sums (`Σ_s' P(s'|s,a) [R(s,a,s') + γV(s')]`) before introducing `E[...]` expectation notation.
-2. Define `P(s'|s,a)`, `R(s,a,s')`, `π(a|s)`, and `γ` explicitly before using them.
-3. Any shorthand (e.g., `G_t`, `R_t`) must be defined where it first appears. No unexplained notation in comments.
-4. Keep code aligned with the math: the loop variable names in `value_iteration` and `expectimax_value` should match the symbols in the corresponding equations (`next_state`, `prob`, `reward`).
-5. Show hand-computable examples before general algorithms in docs.
-
-This is not aesthetic preference. The project's deliverable includes `docs/blog_article.md`, and the article's argument requires the math, code, and prose to share a vocabulary. Compact notation introduced too early defeats the pedagogy.
-
-## Non-goals (design.md §16)
-
-Do not introduce, even when tempting:
-
-- neural networks beyond the small Q/policy heads the framework specifies (no general-purpose ML stack creep)
-- ~~LLM API calls (Phase 3 is design-only)~~ **Relaxed 2026-05-27.** LLM calls are permitted through `LLMContextMDP` against an OpenAI-compatible HTTP endpoint (Ollama or vLLM on a LAN GPU box). The classical-MDP scaffold remains the validation anchor; LLM-extension code does not regress the gridworld/expectimax/MCTS tests.
-- adversarial games (Go/chess/checkers); minimax; multi-agent
-- POMDP belief states
-- reward-model training (the verifier is the only reward source)
-- a web UI
-
-The single-player stochastic Gridworld is chosen because it generalizes cleanly to the LLM context MDP without adversarial complexity. Resist scope creep into game-playing.
-
-## Deliverables checklist (§14)
-
-A "done" Phase 1+2 implementation produces:
-
-1. Working `verifier_anchored_rl` package (editable-installable).
-2. Gridworld environment implementing both protocols.
-3. Value iteration, expectimax, chance-node MCTS, tabular policy, expert-iteration training loop.
-4. Tests for each component, including the hand-computable triangulation in §10.
-5. `experiments/run_*.py` scripts that produce reproducible numbers/plots.
-6. `docs/blog_article.md` drafted to the §11 outline, honoring §12 style.
-7. `README.md` with run instructions.
-
-When marking work complete, verify against this list and against §10's correctness criteria, not just "tests pass."
+- No reward model, no learned PRM/ORM/critic in the reward path.
+- No macro solve-it-all verb bypassing per-step search and verification.
+- No adversarial games, minimax, or multi-agent scope creep.
+- No POMDP belief states; no web UI.
+- No regression of the classical anchors; no MCTS-first reframing anywhere.
