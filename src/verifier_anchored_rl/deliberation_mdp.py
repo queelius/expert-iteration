@@ -110,6 +110,26 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+def _terminal_verdict(witness_statement: str, label: str) -> bool:
+    """Terminal check: the witness statement, or the value it claims.
+
+    Witnesses that can pass VERIFY are typically equations ("6*7 = 42");
+    dataset labels are typically bare values ("42"). The statement is
+    checked against the label directly first; if it is an equation, the
+    value it claims (the right-hand side) is checked as well. The
+    extraction is a deterministic string operation; the equation's own
+    truth was already the verifier's job at VERIFY time, and the guessing
+    bar is unchanged: the agent must still produce the correct value.
+    """
+    from .verifier_adapter import check_answer
+    if check_answer(witness_statement, label).success:
+        return True
+    if "=" in witness_statement and "Eq" not in witness_statement:
+        rhs = witness_statement.rsplit("=", 1)[1]
+        return check_answer(rhs, label).success
+    return False
+
+
 def _verification_is_rewardable(graph_before: Graph, target: NodeId,
                                 statement: str) -> bool:
     """Anti-farming gates, kept as predicates (defense in depth).
@@ -201,7 +221,6 @@ class DeliberationMDP:
 
     def _do_commit(self, state: DeliberationState, target: NodeId
                    ) -> tuple[DeliberationState, float]:
-        from .verifier_adapter import check_answer
         goal = get(state.graph, target)
         witness = _witnesses(state.graph, goal)[-1]     # most recent
         result = _r_commit(state.graph, target, witness)
@@ -210,9 +229,9 @@ class DeliberationMDP:
         g = result.graph
         reward = 0.0
         if target == g.root_id:
-            verdict = check_answer(get(g, witness).statement,
-                                   self.expected_answer)
-            reward = (TERMINAL_SUCCESS_REWARD if verdict.success
+            success = _terminal_verdict(get(g, witness).statement,
+                                        self.expected_answer)
+            reward = (TERMINAL_SUCCESS_REWARD if success
                       else TERMINAL_FAILURE_REWARD)
         return DeliberationState(g, state.turn + 1), reward
 

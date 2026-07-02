@@ -54,7 +54,7 @@ def test_verify_false_statement_records_failure():
 
 
 def test_root_commit_correct_answer_is_terminal_plus_one():
-    mdp = _mdp(expected_answer="6*7 = 42")
+    mdp = _mdp()
     s = mdp.initial_state()
     g = compute(s.graph, 0, "6*7 = 42", premise_ids=()).graph          # fact 1
     g = verify(g, 1, "check", None, mdp.verifier).graph                 # verified
@@ -74,22 +74,22 @@ def test_root_commit_wrong_answer_is_terminal_minus_one():
     s2, r = mdp.sample_transition(s, DeliberationAction(Verb.COMMIT, 0), _rng())
     assert r == TERMINAL_FAILURE_REWARD
     assert mdp.is_terminal(s2)
+    assert solved(s2.graph, 0)
 
 
-def test_commit_uses_most_recent_witness_statement():
-    # Two witnesses discharge the root; the most recent (highest id) wins.
+def test_commit_uses_most_recent_witness():
+    # Two verified hypotheses discharge the root; the most recent wins.
+    # The older is true but claims the wrong value (41); the newer is true
+    # and claims the right one (42). Reward +1 proves the newer was used.
     mdp = _mdp(expected_answer="42")
     s = mdp.initial_state()
-    g = compute(s.graph, 0, "6*7 = 41", premise_ids=()).graph  # fact 1: wrong,
-    g = form_hypothesis(g, 0, "6*7 = 42").graph                # hyp 2: right
-    g = verify(g, 2, "check", None, mdp.verifier).graph
-    # fact 1 is derived but unverified: it does not hold, so it is not a
-    # witness; hyp 2 is. Commit compares "6*7 = 42" against the label.
-    s = DeliberationState(g, 3)
+    g = form_hypothesis(s.graph, 0, "40 + 1 = 41").graph    # hyp 1
+    g = verify(g, 1, "check", None, mdp.verifier).graph
+    g = form_hypothesis(g, 0, "6*7 = 42").graph             # hyp 3
+    g = verify(g, 3, "check", None, mdp.verifier).graph
+    s = DeliberationState(g, 4)
     s2, r = mdp.sample_transition(s, DeliberationAction(Verb.COMMIT, 0), _rng())
-    assert r == TERMINAL_FAILURE_REWARD    # "6*7 = 42" != "42" as an answer
-    # (The witness statement is the whole equation; the label is the value.
-    #  This pins the comparison semantics: check_answer sees the statement.)
+    assert r == TERMINAL_SUCCESS_REWARD
 
 
 def test_root_abandon_terminal_reward_zero():

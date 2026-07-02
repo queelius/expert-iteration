@@ -142,8 +142,14 @@ New module `src/verifier_anchored_rl/lenses.py`:
   goal's verified candidates and holding attached facts. If none exists the
   action was unavailable. Root commit computes the terminal reward by
   comparing the witness statement against the environment's ground-truth
-  label using the ported `check_answer` logic; subgoal commit is reward-free
-  bookkeeping.
+  label using the ported `check_answer` logic; because verifiable witnesses
+  are typically equations ("6*7 = 42") while dataset labels are bare values
+  ("42"), the terminal check accepts the witness statement directly OR the
+  value it claims (the equation's right-hand side), both via `check_answer`.
+  The extraction is a deterministic string operation, the equation's own
+  truth was already gated at `VERIFY` time, and the guessing bar is
+  unchanged (the agent must still produce the correct value). Subgoal commit
+  is reward-free bookkeeping.
 - `ABANDON`: no LLM call; `reductio.actions.abandon`.
 
 **Masked-action fallback (kept from legacy):** on LLM failure or an illegal
