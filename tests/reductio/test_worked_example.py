@@ -1,9 +1,9 @@
 """The abs-value case analysis of new-design.md section 3.1, end to end.
 
 Solve |x-3| + |x+2| = 7 by exhaustive case split. Exercises: SPLIT with
-direct children, per-case hypothesis discharge (including a verified
-no-solution result), ABANDON of a dead-end case, subgoal COMMIT as
-bookkeeping, and the root COMMIT from a verified root hypothesis.
+direct children, per-case hypothesis discharge, a derived contradiction
+followed by ABANDON of the dead-end case, subgoal COMMIT as bookkeeping,
+and the root COMMIT from a verified root hypothesis.
 """
 
 from verifier_anchored_rl.reductio import (
