@@ -69,20 +69,67 @@ ancestors of our architecture on one axis: a small external policy trained
 with RL over a \emph{frozen} language model. Their action spaces are
 single-turn prompt tokens or discrete prompt edits for classification-style
 tasks; ours is a multi-step MDP of typed reasoning operations over an
-evolving structured state. PNLC \citep{pnlc} learns an offline
-goal-conditioned value critic that guides a frozen LLM's action refinement
-without any external action policy; we learn the action policy itself, and
-anchor its value on a symbolic verifier rather than a learned critic. UniR
-\citep{unir} attaches an external reasoning module to a frozen LLM at the
-logit level with supervised verifiable-reward guidance; our module acts at
-the operation level via off-policy Q-learning. DSPy \citep{dspy} optimizes
-LM-program orchestration without RL or a learned controller network. In
-concurrent work, Active Context Curation \citep{contextcuration} trains a
-lightweight RL policy (a 7B model) to prune the working memory of a frozen
-executor; this is the closest existing work on our lens axis, and differs in
-that our context scoping is not a dedicated pruning policy but a byproduct
-of typed reasoning operations chosen by an under-5M-parameter controller,
-and in the verifier-anchored reward.
+evolving structured state. Closest on the controller shape itself is
+DialogXpert \citep{dialogxpert}: a frozen LLM proposes a candidate action
+set per dialogue turn and a compact external Q-network over frozen text
+embeddings, trained by temporal-difference learning, selects among them.
+This is value-based external control of a frozen LLM, and we cite it as the
+nearest architectural neighbor; it differs in every load-bearing
+particular of this work: its actions are open-domain dialogue moves rather
+than typed operations on a reasoning forest, its reward is task and emotion
+feedback rather than a symbolic verifier, and it has no pointer over a
+growing symbolic state and no lens. A related 2024--2025 line folds LLM
+priors into value-based RL more broadly \citep{linvit, llmpriorsrl}. PNLC
+\citep{pnlc} learns an offline goal-conditioned value critic that guides a
+frozen LLM's action refinement without any external action policy; we learn
+the action policy itself, and anchor its value on a symbolic verifier rather
+than a learned critic. UniR \citep{unir} attaches an external reasoning
+module to a frozen LLM at the logit level with supervised verifiable-reward
+guidance; our module acts at the operation level via off-policy Q-learning.
+DSPy \citep{dspy} optimizes LM-program orchestration without RL or a learned
+controller network. In concurrent work, Active Context Curation
+\citep{contextcuration} trains a lightweight RL policy (a 7B model) to prune
+the working memory of a frozen executor; this is the closest existing work
+on our lens axis, and differs in that our context scoping is not a dedicated
+pruning policy but a byproduct of typed reasoning operations chosen by an
+under-5M-parameter controller, and in the verifier-anchored reward.
+
+\paragraph{Structured-state encoders.}
+Our encoder ladder (\cref{sec:method-controller}) adopts, rather than
+proposes, the finding that graph-structured encodings of proof-like states
+improve learned action selection and generalization. In theorem proving,
+GNN encodings of higher-order-logic formulas and proof states outperform
+sequence encodings for tactic and premise selection
+\citep{formulanet, holist, paliwal2020graph}, and Graph2Tac
+\citep{graph2tac} shows GNNs over Coq proof states with
+definition-embedding node features generalize strongly to unseen
+definitions and theorems, the same semantic-features-plus-message-passing
+construction as our third encoder rung. Gasse et al.\ \citep{gasse2019}
+established GNN-encoded states for learned combinatorial search
+(branch-and-bound branching), and relational encoders improve RL sample
+efficiency and out-of-distribution generalization in general
+\citep{zambaldi2019, battaglia2018}. Nearer to LLMs, graph learning over an
+LLM agent's task-decomposition graphs improves plan search
+\citep{gnn4taskplan}. None of these place the GNN as the state encoder
+inside a value-based RL controller that drives a frozen LLM; our encoder
+ablation is designed to isolate exactly that contribution.
+
+\paragraph{Bootstrapping from demonstrations and teachers.}
+Our three-rung training ladder (\cref{sec:training-ladder}) is likewise an
+application of standard machinery to a new label space. Supervised
+initialization followed by RL is the classical cure for sparse reward:
+AlphaGo's supervised policy from human games \citep{alphago}, Deep
+Q-learning from Demonstrations \citep{dqfd} (our loss family), and
+kickstarting \citep{kickstarting}. Distilling a stronger LLM's agentic
+behavior into a smaller model is now standard when the student is itself a
+small LM trained on token trajectories \citep{fireact, agenttuning}, and
+LLMs serve as policy priors inside search \citep{llmmcts} and as exploration
+guidance for RL \citep{ellm}. The distribution-shift risk of cloning a
+teacher off the student's state distribution is classical \citep{dagger},
+which is why our teacher orchestrates the \emph{deployed small generator}
+during collection. The open element is the label space and the student: a
+frontier model's decisions over typed $(\textit{verb}, \textit{target})$
+operations, distilled into an under-5M-parameter non-LM controller.
 
 \paragraph{Verifiable rewards and verification-in-the-loop.}
 DeepSeek-R1 \citep{deepseekr1} and T\"ulu 3 \citep{tulu3} established

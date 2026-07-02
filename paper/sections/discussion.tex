@@ -3,10 +3,13 @@
 
 \paragraph{What is and is not claimed.} Every element of this system has a
 precedent somewhere: small external policies over frozen LMs
-\citep{rlprompt, tempera}, operation-level MDPs \citep{gsos}, off-policy
-value-based RL for LLM agents \citep{archer, oreo}, verifiable reward
-\citep{deepseekr1, tulu3}, pointer selection over dynamic sets
-\citep{pointernets}. The claim is the conjunction, an external
+\citep{rlprompt, tempera}, external value-based selection over a frozen
+LLM's proposals \citep{dialogxpert}, operation-level MDPs \citep{gsos},
+off-policy value-based RL for LLM agents \citep{archer, oreo}, verifiable
+reward \citep{deepseekr1, tulu3}, pointer selection over dynamic sets
+\citep{pointernets}, GNN encodings of proof-like states
+\citep{paliwal2020graph, graph2tac}, and teacher bootstrapping
+\citep{dqfd, alphago}. The claim is the conjunction, an external
 under-5M-parameter controller with a factored verb-plus-pointer action
 space over a growing reasoning forest, trained by off-policy Q-learning
 against a symbolic-verifier-only reward, with lens-scoped generation and

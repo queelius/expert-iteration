@@ -952,7 +952,7 @@ per-work differentiation sentences) lives in
 condensed verdict follows. Appendix A grounds the verb set; this appendix
 addresses publishable novelty, a different question.
 
-**The three named threats.**
+**The four named threats.**
 
 1. **TS-LLM** (Feng et al. 2023, arXiv:2309.17179): AlphaZero-style
    generalized policy iteration for LLM reasoning (PUCT MCTS, learned value,
@@ -971,6 +971,15 @@ addresses publishable novelty, a different question.
    concurrent and differentiated (their curator is a 7B model doing context
    pruning; our lens is a byproduct of typed reasoning operations chosen by an
    under-5M verifier-anchored Q controller).
+4. **DialogXpert** (arXiv:2505.17795, 2025): a frozen LLM proposes candidate
+   actions per dialogue turn and a compact external Q-network over frozen
+   text embeddings, TD-trained, selects among them. The nearest neighbor on
+   the controller shape itself (value-based external control of a frozen
+   LLM). Differentiation: its actions are open-domain dialogue moves, its
+   reward is task and emotion feedback, and it has no typed operations, no
+   pointer over a symbolic state, no verifier, and no lens. Related cluster:
+   LLM priors folded into value-based RL (LINVIT arXiv:2402.16181; Yan et
+   al. arXiv:2410.07927; LLM-guided Q-learning arXiv:2405.03341).
 
 **What survives as novel: the conjunction, claimed as such.** No single prior
 work has: (a) a tiny external controller that is neither the LLM nor an
@@ -981,7 +990,10 @@ Q-learning as the training spine with MCTS strictly optional and additive;
 or critic anywhere in the reward path; (e) the lens property, one action
 selecting both the operation and the scoped context of the frozen generator.
 Honest caveat: each element individually has a precedent (pointer networks,
-RLPrompt/TEMPERA's small-policy-over-frozen-LM, ArCHer's value-based RL,
-GSoS's operation MDP, RLVR's verifier reward). The paper must claim the
-conjunction and the small-controller compute-frontier result, not a new RL
-algorithm or a new action idea.
+RLPrompt/TEMPERA's small-policy-over-frozen-LM, DialogXpert's external
+Q-network over a frozen LLM, ArCHer's value-based RL, GSoS's operation MDP,
+RLVR's verifier reward, theorem-proving GNN state encoders, DQfD-style
+teacher bootstrapping). The paper must claim the conjunction and the
+small-controller compute-frontier result, not a new RL algorithm, a new
+encoder idea, or a new bootstrapping idea. The verification addendum in the
+research memo (Part 3) records the full evidence for this narrowing.

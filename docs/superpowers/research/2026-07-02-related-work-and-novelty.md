@@ -200,3 +200,73 @@ compute-frontier claim, not as a new RL algorithm or a new action idea.
   the harder line that only a symbolic verifier produces reward.
 - UniR: token-logit-level external module with supervised guidance; ours is
   operation-level off-policy Q-learning.
+
+## Part 3: verification addendum (GNN encoder and LLM-teacher clusters)
+
+A second verification pass (2026-07-02, against actual abstracts) checked the
+two component ideas: (A) GNN encoding of the structured state; (B)
+bootstrapping the small controller by supervised learning on a strong-LLM
+teacher's (verb, target) decisions.
+
+### Cluster A: GNN encoders of structured states (verified)
+
+- Bansal et al., "HOList" (ICML 2019, arXiv:1904.03241): the HOL Light RL
+  environment DeepHOL builds on.
+- Paliwal et al., "Graph Representations for Higher-Order Logic and Theorem
+  Proving" (AAAI 2020, arXiv:1905.10006): GNN encodings of proof states beat
+  sequence encodings for tactic/premise selection. Canonical.
+- Wang et al., "Premise Selection for Theorem Proving by Deep Graph
+  Embedding" (NeurIPS 2017, arXiv:1709.09994): the FormulaNet model
+  (FormulaNet is the model name, not the paper title).
+- Blaauwbroek et al., "Graph2Tac" (arXiv:2401.02949): GNN over Coq proof
+  states with definition embeddings; strong generalization to unseen
+  definitions and theorems. Venue unconfirmed; cite as preprint.
+- Gasse et al. (NeurIPS 2019, arXiv:1906.01629): GCNN branch-and-bound
+  branching, generalizes to larger instances.
+- Zambaldi et al. (ICLR 2019, arXiv:1806.01830; camera-ready title "Deep
+  reinforcement learning with relational inductive biases").
+- Battaglia et al. (arXiv:1806.01261): the inductive-bias rationale;
+  preprint only.
+- NEW, closest: Wu et al., "Can Graph Learning Improve Planning in LLM-based
+  Agents?" (NeurIPS 2024, arXiv:2405.19119): GNNs over LLM task-decomposition
+  graphs beat LLM-native traversal for plan search. Also GNNVerifier
+  (arXiv:2603.14730, 2026): GNN critic over LLM plan graphs (verifier role,
+  no RL). TAPE (ICLR 2024, arXiv:2305.19523): LLM-generated text as GNN node
+  features.
+
+Verdict: GNN-for-structured-state is heavily precedented (theorem proving,
+combinatorial search) and GNN-plus-LLM-produced-structure now exists (Wu et
+al.). Open: GNN as the state encoder inside a value-based RL controller
+driving a frozen LLM with verifier-only reward. Frame as adopted best
+practice plus a pre-registered encoder ablation, never as a novelty claim.
+
+### Cluster B: LLM-teacher bootstrapping (verified, and NARROWED)
+
+- Hester et al., DQfD (AAAI 2018, arXiv:1704.03732): demonstrations plus
+  Q-learning for sparse reward. Silver et al. (Nature 2016): SL policy init
+  then RL. Schmitt et al., Kickstarting (arXiv:1803.03835, preprint only).
+  Ross et al., DAgger (AISTATS 2011): the distribution-shift caveat.
+- FireAct (arXiv:2310.05915) and AgentTuning (arXiv:2310.12823): GPT-4 agent
+  trajectories distilled into smaller LMs (student = a small LM).
+- Zhao et al., LLM-MCTS (NeurIPS 2023, arXiv:2305.14078): LLM as policy and
+  world-model prior inside MCTS. ELLM (ICML 2023, arXiv:2302.06692): LLM
+  goal-shaping for RL exploration.
+- NEW and architecturally close: **DialogXpert** (arXiv:2505.17795, 2025):
+  frozen LLM proposes a candidate action set per turn; a compact external
+  Q-network over frozen BERT embeddings, trained by TD learning, selects the
+  action. Nearly isomorphic to our controller shape, for open-domain
+  dialogue actions with task/emotion reward. Also: LINVIT
+  (arXiv:2402.16181), LLM-priors-for-RL (arXiv:2410.07927, including a
+  DQN-Prior variant), and LLM-guided Q-learning (arXiv:2405.03341).
+
+Verdict: the mechanism is standard (that is its virtue), and the earlier
+claim that "a small external non-LM Q-controller over a frozen LLM is
+unoccupied" is WRONG as stated: DialogXpert and the LLM-priors-for-value-RL
+cluster occupy that shape in 2024-2025. What survives: no found work
+combines (a) a typed (verb, target) action space over a structured
+reasoning forest, (b) symbolic-verifier-only reward, and (c) the under-5M
+controller with lens-scoped generation. DialogXpert joins the must-cite
+list with the differentiation: "DialogXpert selects among LLM-proposed
+open-domain dialogue actions with an external TD-trained Q-network; our
+controller selects typed operations over a verifier-anchored reasoning
+forest, with the action space, reward, and state all symbolic."
