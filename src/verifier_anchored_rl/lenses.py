@@ -78,7 +78,9 @@ def render_view(graph: Graph, target: NodeId) -> str:
     """
     sub = scope(graph, target)
     closed = {nid for nid in sub.node_ids
-              if nid != target and _is_closed_goal(graph, nid)}
+              if nid != target
+              and _is_closed_goal(graph, nid)
+              and target not in _subtree_ids(graph, nid)}
     hidden: set[NodeId] = set()
     for cid in closed:
         hidden |= _subtree_ids(graph, cid) - {cid}
@@ -91,7 +93,7 @@ def render_view(graph: Graph, target: NodeId) -> str:
         node = get(graph, nid)
         kind = type(node).__name__.upper()
         line = f"[{kind} id={nid}] {_detail(graph, node)}"
-        if nid in closed:
+        if _is_closed_goal(graph, nid) and nid != target:
             verdict = "solved" if solved(graph, nid) else "abandoned"
             line += f" ({verdict})"
         lines.append(line)

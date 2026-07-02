@@ -37,6 +37,20 @@ def test_render_view_compacts_closed_subtrees():
     assert "[GOAL id=4]" not in view
 
 
+def test_render_view_never_compacts_the_targets_own_subtree():
+    # A closed ANCESTOR of the target must not hide the target's subtree
+    # (spec section 4: compaction applies to closed goals other than the
+    # target's ancestors).
+    g = new_graph("p")
+    g = split(g, 0, "conjunctive", ("a", "b")).graph      # goals 1, 2
+    g = split(g, 1, "conjunctive", ("a1", "a2")).graph    # goals 3, 4 under 1
+    g = form_hypothesis(g, 3, "claim for a1").graph       # hyp 5 under goal 3
+    g = abandon(g, 1).graph                               # close the ancestor
+    view = render_view(g, 3)
+    assert "claim for a1" in view          # the target's subtree stays visible
+    assert "(abandoned)" in view           # the closed ancestor still shows its verdict
+
+
 def test_global_prefix_carries_turn_marker():
     s = DeliberationState(new_graph("p"), 3)
     text = global_prefix(s)
