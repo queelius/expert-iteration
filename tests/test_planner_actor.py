@@ -260,6 +260,81 @@ def test_prefill_cache_get_or_encode_is_thread_safe():
         assert v == expected[k], f"Value mismatch for {k}: got {v}, expected {expected[k]}"
 
 
+# ---------------------------------------------------------------------------
+# Finding 2: prior() must split a verb's head mass across its legal targets
+# ---------------------------------------------------------------------------
+
+class _EqualVerbFakeActor:
+    """Fake actor whose masked-softmax gives every masked VERB CLASS equal
+    probability (1/k for k available verb classes), independent of the
+    embedding. Isolates the target-splitting behavior under test from an
+    actual trained head's arbitrary per-verb differences: with this actor,
+    any two available verbs always start with equal raw head mass, so any
+    difference in a verb's total prior mass can only come from how many
+    targets it has in this state."""
+
+    def parameters(self):
+        return iter(())
+
+    def pi(self, h, available_mask):
+        mask = available_mask.bool()
+        n = mask.sum(dim=-1, keepdim=True).float()
+        return mask.float() / n
+
+
+def test_state_actor_prior_splits_verb_mass_across_targets():
+    """A verb legal on several targets (SPLIT: root goal + child goal) must
+    not get multiple times the head's per-verb mass relative to a verb legal
+    on only one target (VERIFY: the lone unverified hypothesis). Building the
+    state with reductio verbs new_graph/split/form_hypothesis/abandon:
+
+        root goal 0 --split--> child goals 1, 2
+        abandon(2)                              # 2 no longer an open goal
+        form_hypothesis(1, "h")                 # hypothesis 3, unverified
+
+    leaves SPLIT legal on exactly 2 targets (0, 1) and VERIFY legal on
+    exactly 1 target (3). With a head that assigns every available verb
+    class equal raw probability, SPLIT's total prior mass must still equal
+    VERIFY's total prior mass: the two targets of SPLIT must each get HALF
+    of what the single target of VERIFY gets.
+    """
+    pytest.importorskip("torch")
+    from verifier_anchored_rl.deliberation_mdp import (
+        DeliberationState, available_actions,
+    )
+    from verifier_anchored_rl.planner_actor import StateActor
+    from verifier_anchored_rl.reductio import abandon, form_hypothesis, new_graph, split
+
+    g = new_graph("prove x")
+    g = split(g, 0, "conjunctive", ("a", "b")).graph  # child goals 1, 2
+    g = abandon(g, 2).graph                            # goal 2 no longer open
+    g = form_hypothesis(g, 1, "h").graph                # hypothesis 3
+
+    state = DeliberationState(g, 0)
+    actions = list(available_actions(state))
+
+    n_split_targets = sum(1 for a in actions if a.verb.value == "split")
+    n_verify_targets = sum(1 for a in actions if a.verb.value == "verify")
+    assert n_split_targets == 2
+    assert n_verify_targets == 1
+
+    enc = FakeEncoder(embed_dim=8)
+    sa = StateActor(enc, _EqualVerbFakeActor(), depth_limit=3)
+    prior = sa.prior(state, actions)
+
+    assert abs(sum(prior) - 1.0) < 1e-6
+
+    split_mass = sum(p for a, p in zip(actions, prior) if a.verb.value == "split")
+    verify_mass = sum(p for a, p in zip(actions, prior) if a.verb.value == "verify")
+    assert split_mass == pytest.approx(verify_mass, abs=1e-6)
+
+    # And explicitly: each of SPLIT's two targets gets half of VERIFY's mass.
+    split_per_target = [p for a, p in zip(actions, prior) if a.verb.value == "split"]
+    verify_per_target = [p for a, p in zip(actions, prior) if a.verb.value == "verify"]
+    assert split_per_target[0] == pytest.approx(verify_per_target[0] / 2, abs=1e-6)
+    assert split_per_target[1] == pytest.approx(verify_per_target[0] / 2, abs=1e-6)
+
+
 def test_embed_drops_kv_cache_and_offloads_hidden_to_cpu():
     """The heads need only h_T, not the encoder's KV cache. Retaining one KV
     cache per embedded state exhausts VRAM at high search budgets (CUDA OOM at

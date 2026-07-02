@@ -26,6 +26,36 @@ from .mcts import MCTSConfig, mcts_search, root_q_estimates, visit_count_policy
 from .replay import sample_from_record
 
 
+def _verb_marginals(pi: dict, q: dict) -> tuple[dict[str, float], dict[str, float]]:
+    """Marginalize (verb, target) search results onto the verb-keyed record.
+
+    The record schema predates the (verb, target) action space and keys by
+    verb. pi_mcts[verb] is the SUM of the visit-count policy over that
+    verb's targets (a true marginal); q_mcts[verb] is the pi-weighted mean
+    of Q over that verb's targets (the value of the verb under the search
+    policy's target choice), falling back to a plain mean when the verb's
+    pi mass is zero.
+    """
+    pi_m: dict[str, float] = {}
+    q_sum: dict[str, float] = {}
+    q_cnt: dict[str, int] = {}
+    qw: dict[str, float] = {}
+    for a, p in pi.items():
+        v = a.verb.value
+        pi_m[v] = pi_m.get(v, 0.0) + float(p)
+    for a, val in q.items():
+        v = a.verb.value
+        w = float(pi.get(a, 0.0))
+        qw[v] = qw.get(v, 0.0) + w * float(val)
+        q_sum[v] = q_sum.get(v, 0.0) + float(val)
+        q_cnt[v] = q_cnt.get(v, 0) + 1
+    q_m: dict[str, float] = {}
+    for v in q_sum:
+        mass = pi_m.get(v, 0.0)
+        q_m[v] = (qw[v] / mass) if mass > 0 else (q_sum[v] / q_cnt[v])
+    return pi_m, q_m
+
+
 def _entropy(probs: Any) -> float:
     """Shannon entropy in bits of a probability vector. Zero-probability
     entries are skipped (0 log 0 = 0). A delta is 0 bits; a uniform over k is
@@ -181,11 +211,12 @@ def collect_iteration(
                 break
             pi = visit_count_policy(root, temperature=tau)
             q = root_q_estimates(root)
+            pi_rec, q_rec = _verb_marginals(pi, q)
             record = {
                 "embedding": state_actor.embed(state).detach().cpu().tolist(),
                 "available_verbs": [a.verb.value for a in avail],
-                "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
-                "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
+                "pi_mcts": pi_rec,
+                "q_mcts": q_rec,
                 # Provenance tags for offline de-duplication on crash/resume.
                 "iteration": iteration_index,
                 "problem_index": p_idx,
@@ -314,11 +345,12 @@ def collect_iteration_concurrent(
                 break
             pi = visit_count_policy(root, temperature=tau)
             q = root_q_estimates(root)
+            pi_rec, q_rec = _verb_marginals(pi, q)
             rec = {
                 "embedding": state_actor.embed(state).detach().cpu().tolist(),
                 "available_verbs": [a.verb.value for a in avail],
-                "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
-                "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
+                "pi_mcts": pi_rec,
+                "q_mcts": q_rec,
                 # Provenance tags for offline de-duplication on crash/resume.
                 "iteration": iteration_index,
                 "problem_index": p_idx,

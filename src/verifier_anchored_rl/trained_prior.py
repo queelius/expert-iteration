@@ -228,10 +228,20 @@ def make_trained_prior(
                 pi = model.pi(x, mask)[0].numpy()
             pi_cache[cache_key] = pi
 
+        # ``actions`` is over (verb, target) pairs, but pi is verb-indexed:
+        # several actions can share a verb (e.g. ABANDON legal on every open
+        # node). Splitting the verb's mass evenly across its legal targets
+        # before smoothing/renormalizing keeps a verb's aggregate mass equal
+        # to the head's trained per-verb marginal instead of scaling with
+        # its target count. Same pattern as StateActor.prior.
+        idxs = [VERB_NAME_TO_INDEX.get(action.verb.value) for action in actions]
+        verb_counts: dict[int, int] = {}
+        for idx in idxs:
+            if idx is not None:
+                verb_counts[idx] = verb_counts.get(idx, 0) + 1
         probs = []
-        for action in actions:
-            idx = VERB_NAME_TO_INDEX.get(action.verb.value)
-            probs.append(float(pi[idx]) if idx is not None else 0.0)
+        for idx in idxs:
+            probs.append(float(pi[idx]) / verb_counts[idx] if idx is not None else 0.0)
 
         smoothed = [p + smoothing for p in probs]
         total = sum(smoothed)

@@ -1,10 +1,10 @@
-"""Bridge between the trainable heads and the MCTS planner over MathState.
+"""Bridge between the trainable heads and the MCTS planner over DeliberationState.
 
 method.tex 3.7: the outer loop runs MCTS with the online policy head as the
 PUCT prior and the target-Q head as the bootstrap leaf value, and feeds the
 same per-state embedding embed(s) = h_T to the heads. This module wires
 those three reads (embed / prior / leaf value) over the LLM context MDP's
-MathState, depending only on a minimal encoder Protocol so a CPU fake can
+DeliberationState, depending only on a minimal encoder Protocol so a CPU fake can
 drive the whole loop with no GPU.
 
 MCTS interleaves prior(s), value_fn(s'), and sample_transition(s, a) across
@@ -80,7 +80,7 @@ class PrefillCache:
 
 
 class StateActor:
-    """Heads-over-MathState bridge: embed(s), prior(s), leaf_value(s).
+    """Heads-over-DeliberationState bridge: embed(s), prior(s), leaf_value(s).
 
     ``prior`` reads the ONLINE policy head (the PUCT prior); ``leaf_value``
     reads the TARGET-Q head (the bootstrap leaf), matching method.tex 3.7.
@@ -142,15 +142,24 @@ class StateActor:
             for j in idxs:
                 mask[0, j] = True
             pi = self.actor.pi(h, mask)  # masked softmax, 0 off the mask
-        raw = [float(pi[0, j]) for j in idxs]
         # The heads are verb-indexed (one slot per Verb), but ``actions`` is
         # over (verb, target) pairs: several actions can share a verb slot
-        # (e.g. ABANDON is legal on every open node). Those actions get the
-        # SAME raw per-verb mass above, so summing raw over-counts a shared
-        # verb once per action sharing it. Renormalizing keeps the documented
-        # contract (this is a probability distribution over `actions`, always
-        # summing to 1) instead of silently returning an unnormalized vector;
-        # same pattern already used by trained_prior.make_trained_prior.
+        # (e.g. ABANDON is legal on every open node). Giving every action
+        # sharing a verb that verb's FULL head probability would let the
+        # verb's aggregate mass scale with its target count (a verb legal on
+        # every open node would dominate regardless of what the head
+        # actually learned). Instead split each verb's mass evenly across
+        # its legal targets before normalizing, so the verb's total mass
+        # after normalizing matches the head's trained per-verb marginal.
+        verb_counts: dict[int, int] = {}
+        for j in idxs:
+            verb_counts[j] = verb_counts.get(j, 0) + 1
+        raw = [float(pi[0, j]) / verb_counts[j] for j in idxs]
+        # Defensive renormalization: the sum should already equal the total
+        # available-verb mass, but normalizing keeps the documented contract
+        # (this is a probability distribution over `actions`, always summing
+        # to 1) robust to floating-point drift or a masked softmax that
+        # doesn't sum to exactly 1 over the available verbs.
         total = sum(raw)
         if total <= 0:
             n = len(actions)

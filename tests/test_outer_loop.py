@@ -706,3 +706,30 @@ def test_collect_iteration_concurrent_record_carries_provenance_tags():
         assert "problem_index" in r, "concurrent record missing 'problem_index' tag"
         assert "turn" in r, "concurrent record missing 'turn' tag"
     assert all(r["iteration"] == 3 for r in sink_records)
+
+
+# ---------------------------------------------------------------------------
+# Finding 1: _verb_marginals must not silently collapse shared-verb actions
+# ---------------------------------------------------------------------------
+
+def test_verb_marginals_sums_pi_and_pi_weights_q_over_shared_verb_targets():
+    """Two actions can share a verb (e.g. ABANDON legal on several targets).
+    pi_mcts[verb] must be the SUM of the visit-count policy over that verb's
+    targets (a true marginal, not an arbitrary dict-comprehension overwrite);
+    q_mcts[verb] must be the pi-weighted mean of Q over that verb's targets."""
+    import pytest
+    from verifier_anchored_rl.deliberation_mdp import DeliberationAction, Verb
+    from verifier_anchored_rl.outer_loop import _verb_marginals
+
+    abandon_1 = DeliberationAction(Verb.ABANDON, 1)
+    abandon_2 = DeliberationAction(Verb.ABANDON, 2)
+    commit_0 = DeliberationAction(Verb.COMMIT, 0)
+
+    pi = {abandon_1: 0.3, abandon_2: 0.2, commit_0: 0.5}
+    q = {abandon_1: 1.0, abandon_2: 0.0, commit_0: 0.7}
+
+    pi_m, q_m = _verb_marginals(pi, q)
+
+    assert pi_m == pytest.approx({"abandon": 0.5, "commit": 0.5})
+    assert q_m["abandon"] == pytest.approx((0.3 * 1.0 + 0.2 * 0.0) / 0.5)
+    assert q_m["commit"] == pytest.approx(0.7)

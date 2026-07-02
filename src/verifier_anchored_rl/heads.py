@@ -1,7 +1,7 @@
 """Trainable Q-head and policy head over the frozen-LLM embedding.
 
 The framework's central learned object is an approximate action-value
-function ``Q_psi(s, a)`` over the seven-verb action set, plus a policy
+function ``Q_psi(s, a)`` over the six-verb action set, plus a policy
 ``pi_theta(a | s)`` used as the PUCT prior during search and as the
 fast-mode acting policy at deployment (paper section 4.5). Both heads
 read the same fixed-length state representation produced by the frozen
@@ -30,7 +30,7 @@ Architecture (depth-3 MLP with a shared trunk):
         |            |
         v            v
     PolicyHead    QHead
-    (256 -> 7)    (256 -> 7)
+    (256 -> NUM_VERBS)    (256 -> NUM_VERBS)
         |            |
         logits      q_values
 
