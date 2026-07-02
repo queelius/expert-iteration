@@ -1,6 +1,6 @@
 """The immutable reasoning forest.
 
-Slimmed model (new-design.md section 3): no Method node layer. SPLIT
+Slimmed model (design.md section 3): no Method node layer. SPLIT
 attaches child subgoals directly to the parent Goal; the connective is
 optional, non-gating metadata. solved/verified/holds are derived
 predicates, never control flow; the only hard gate in the system is the

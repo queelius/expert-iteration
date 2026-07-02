@@ -59,7 +59,7 @@ def test_hypothesis_witness_must_be_candidate_and_verified():
 
 def test_children_do_not_gate_or_grant_parent_solved():
     # Parent with both children solved is NOT solved without its own commit
-    # (structure is scaffolding, never control flow: new-design.md section 3.3).
+    # (structure is scaffolding, never control flow: design.md section 3.3).
     nodes = [
         Goal(0, "g", children=(1, 2), connective="conjunctive"),
         Goal(1, "g1"), Goal(2, "g2"),

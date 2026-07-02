@@ -49,7 +49,7 @@ def test_commit_rejects_goal_witness():
 
 
 def test_commit_parent_while_children_open_or_abandoned():
-    # Subgoals are optional scaffolding (new-design.md section 3.3): the root
+    # Subgoals are optional scaffolding (design.md section 3.3): the root
     # can be committed from its own verified hypothesis regardless of children.
     g = new_graph("g")
     g = split(g, 0, "conjunctive", ("a", "b")).graph         # children 1, 2

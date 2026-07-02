@@ -1,6 +1,6 @@
 """The verb algebra: total pure functions Graph -> Result.
 
-Slimmed per new-design.md: split attaches child subgoals directly to the
+Slimmed per design.md: split attaches child subgoals directly to the
 parent Goal and records the connective as non-gating metadata; commit
 witnesses are Fact or Hypothesis only (the verifier-vouched-witness rule).
 """

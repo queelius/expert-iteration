@@ -1,4 +1,4 @@
-"""The abs-value case analysis of new-design.md section 3.1, end to end.
+"""The abs-value case analysis of design.md section 3.1, end to end.
 
 Solve |x-3| + |x+2| = 7 by exhaustive case split. Exercises: SPLIT with
 direct children, per-case hypothesis discharge, a derived contradiction
