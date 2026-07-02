@@ -8,7 +8,7 @@ from verifier_anchored_rl.reductio.verify import MockVerifier
 def _solved_leaf_goal():
     # root goal "x=2"; a verified derived fact "x=2".
     g = new_graph("x=2")
-    g = compute(g, "x=2", premise_ids=()).graph              # node 1
+    g = compute(g, 0, "x=2", premise_ids=()).graph              # node 1
     g = verify(g, 1, "check", "x=2", MockVerifier((("x=2", True),))).graph  # node 2
     return g
 
@@ -23,7 +23,7 @@ def test_commit_goal_to_matching_verified_fact():
 
 def test_commit_rejects_unverified_fact():
     g = new_graph("x=2")
-    g = compute(g, "x=2", premise_ids=()).graph              # node 1, not verified
+    g = compute(g, 0, "x=2", premise_ids=()).graph              # node 1, not verified
     r = commit(g, 0, 1)
     assert isinstance(r, Err)
 
@@ -33,7 +33,7 @@ def test_commit_accepts_verified_fact_v1_enforces_truth_not_relevance():
     # may discharge a goal. Relevance (does it actually answer the goal) is the
     # agent's claim, with a structural entailment check deferred.
     g = new_graph("x=2")
-    g = compute(g, "y=9", premise_ids=()).graph              # unrelated derived fact, node 1
+    g = compute(g, 0, "y=9", premise_ids=()).graph              # unrelated derived fact, node 1
     g = verify(g, 1, "check", "y=9", MockVerifier((("y=9", True),))).graph
     r = commit(g, 0, 1)
     assert isinstance(r, Ok)

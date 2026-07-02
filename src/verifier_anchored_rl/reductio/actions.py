@@ -75,15 +75,22 @@ def form_hypothesis(graph: Graph, goal_id: NodeId, statement: str) -> Result:
     return Ok(_replace(g, updated))
 
 
-def compute(graph: Graph, statement: str, premise_ids: tuple[NodeId, ...]) -> Result:
+def compute(graph: Graph, goal_id: NodeId, statement: str,
+            premise_ids: tuple[NodeId, ...]) -> Result:
+    if not _exists(graph, goal_id):
+        return Err(f"no node with id {goal_id}")
+    goal = get(graph, goal_id)
+    if not isinstance(goal, Goal):
+        return Err(f"node {goal_id} is not a Goal")
     for pid in premise_ids:
         if not _exists(graph, pid):
             return Err(f"no premise with id {pid}")
         if not isinstance(get(graph, pid), (Fact, Hypothesis)):
             return Err(f"premise {pid} is not a Fact or Hypothesis")
-    g, _ = _append(graph, lambda nid: Fact(
+    g, fact_id = _append(graph, lambda nid: Fact(
         id=nid, statement=statement, source="derived", premises=tuple(premise_ids)))
-    return Ok(g)
+    updated = replace(get(g, goal_id), facts=goal.facts + (fact_id,))
+    return Ok(_replace(g, updated))
 
 
 _STATEMENT_KINDS = (Goal, Hypothesis, Fact)

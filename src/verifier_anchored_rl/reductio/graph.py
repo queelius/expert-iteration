@@ -22,6 +22,7 @@ class Goal:
     assumptions: tuple[str, ...] = ()
     children: tuple[NodeId, ...] = ()     # subgoals attached by SPLIT
     candidates: tuple[NodeId, ...] = ()   # candidate hypotheses
+    facts: tuple[NodeId, ...] = ()        # facts attached by compute / new_graph givens
     connective: str | None = None         # "conjunctive" | "exhaustive_case"; metadata only
 
 
@@ -77,7 +78,8 @@ def _replace(graph: Graph, node: Node) -> Graph:
 
 
 def new_graph(problem: str, givens: tuple[str, ...] = ()) -> Graph:
-    root = Goal(id=0, statement=problem)
+    fact_ids = tuple(range(1, 1 + len(givens)))
+    root = Goal(id=0, statement=problem, facts=fact_ids)
     nodes: tuple[Node, ...] = (root,)
     for i, stmt in enumerate(givens, start=1):
         nodes = nodes + (Fact(id=i, statement=stmt, source="given"),)

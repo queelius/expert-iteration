@@ -9,6 +9,7 @@ def test_new_graph_seeds_root_goal_and_givens():
     facts = [n for n in g.nodes if isinstance(n, Fact)]
     assert [f.statement for f in facts] == ["a=1", "b=2"]
     assert all(f.source == "given" for f in facts)
+    assert root.facts == (1, 2)      # givens attach to the root goal
 
 
 def test_graph_is_a_value_equal_and_hashable():
@@ -30,4 +31,5 @@ def test_goal_defaults_have_no_children_and_no_connective():
     root = get(g, 0)
     assert root.children == ()
     assert root.candidates == ()
+    assert root.facts == ()
     assert root.connective is None

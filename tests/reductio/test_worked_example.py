@@ -8,7 +8,7 @@ and the root COMMIT from a verified root hypothesis.
 
 from verifier_anchored_rl.reductio import (
     new_graph, split, form_hypothesis, compute, verify, commit, abandon,
-    get, solved, is_abandoned, MockVerifier,
+    get, solved, is_abandoned, MockVerifier, scope,
 )
 
 
@@ -32,7 +32,9 @@ def test_absolute_value_case_analysis_solves_root():
     # case x < -2: 1-2x = 7 leads to x = -3, verified.
     g = _discharge(g, case_a, "x=-3")
     # case -2 <= x < 3: 5 = 7 is a contradiction; the case is a dead end.
-    g = compute(g, "5=7", premise_ids=()).graph
+    g = compute(g, case_b, "5=7", premise_ids=()).graph
+    fact_id = len(g.nodes) - 1
+    assert fact_id in set(scope(g, case_b).node_ids)
     g = abandon(g, case_b).graph
     # case x >= 3: 2x-1 = 7 leads to x = 4, verified.
     g = _discharge(g, case_c, "x=4")

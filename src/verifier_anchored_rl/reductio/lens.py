@@ -17,7 +17,7 @@ class Subgraph:
 def _children(graph: Graph, node_id: NodeId) -> tuple[NodeId, ...]:
     n = get(graph, node_id)
     if isinstance(n, Goal):
-        return n.children + n.candidates
+        return n.children + n.candidates + n.facts
     return ()
 
 
