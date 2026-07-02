@@ -116,16 +116,21 @@ def _terminal_verdict(witness_statement: str, label: str) -> bool:
     Witnesses that can pass VERIFY are typically equations ("6*7 = 42");
     dataset labels are typically bare values ("42"). The statement is
     checked against the label directly first; if it is an equation, the
-    value it claims (the right-hand side) is checked as well. The
-    extraction is a deterministic string operation; the equation's own
-    truth was already the verifier's job at VERIFY time, and the guessing
-    bar is unchanged: the agent must still produce the correct value.
+    value it claims (the right-hand side) is checked as well. A syntactic
+    identity ("42 = 42") claims nothing and must be rejected. The extraction is
+    a deterministic string operation; the equation's own truth was already
+    the verifier's job at VERIFY time. Honesty note (spec section 5): the
+    broader class of contentless-but-true equations ("42 + 0 = 42") is the
+    answer-verification bar itself, the same bar the legacy free-text
+    commit had; closing it needs relevance checking, deferred in v1.
     """
     from .verifier_adapter import check_answer
     if check_answer(witness_statement, label).success:
         return True
     if "=" in witness_statement and "Eq" not in witness_statement:
-        rhs = witness_statement.rsplit("=", 1)[1]
+        lhs, rhs = witness_statement.rsplit("=", 1)
+        if lhs.strip() == rhs.strip():
+            return False    # a syntactic identity claims nothing
         return check_answer(rhs, label).success
     return False
 

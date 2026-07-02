@@ -143,3 +143,16 @@ def test_gate_predicates():
     assert not _verification_is_rewardable(g, 1, "42 = 42")     # tautology
     gv = verify(g, 1, "check", None, mdp.verifier).graph
     assert not _verification_is_rewardable(gv, 1, "6*7 = 42")   # dedup
+
+
+def test_terminal_verdict_rejects_tautological_witness():
+    # "42 = 42" verifies trivially but claims nothing: committing it must
+    # not earn +1 even when the guessed value matches the label.
+    mdp = _mdp()                                        # label "42"
+    s = mdp.initial_state()
+    g = form_hypothesis(s.graph, 0, "42 = 42").graph    # hyp 1
+    g = verify(g, 1, "check", None, mdp.verifier).graph
+    s = DeliberationState(g, 2)
+    s2, r = mdp.sample_transition(s, DeliberationAction(Verb.COMMIT, 0), _rng())
+    assert r == TERMINAL_FAILURE_REWARD
+    assert mdp.is_terminal(s2)

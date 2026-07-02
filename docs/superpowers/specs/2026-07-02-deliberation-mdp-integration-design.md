@@ -148,8 +148,14 @@ New module `src/verifier_anchored_rl/lenses.py`:
   value it claims (the equation's right-hand side), both via `check_answer`.
   The extraction is a deterministic string operation, the equation's own
   truth was already gated at `VERIFY` time, and the guessing bar is
-  unchanged (the agent must still produce the correct value). Subgoal commit
-  is reward-free bookkeeping.
+  unchanged (the agent must still produce the correct value). A witness that
+  is a syntactic identity ("42 = 42") claims nothing and is rejected at the
+  terminal check. Honesty note: the broader class of contentless-but-true
+  equations ("42 + 0 = 42") cannot be closed at the reward layer without
+  statement relevance or entailment checking, which is the deliberately
+  deferred v1 soundness line; the terminal bar is answer verification,
+  exactly the bar the legacy free-text commit had. Subgoal commit is
+  reward-free bookkeeping.
 - `ABANDON`: no LLM call; `reductio.actions.abandon`.
 
 **Masked-action fallback (kept from legacy):** on LLM failure or an illegal
