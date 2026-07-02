@@ -20,9 +20,31 @@ from .llm_client import LLMClient, LLMResponseError
 from .reductio import get
 
 CONTROLLER_SYSTEM = (
-    "You are the controller of a mathematical deliberation. Read the state "
-    "and pick exactly one next action from the menu. Return only the "
-    "requested JSON object."
+    "You are the controller of a mathematical deliberation. The state is a "
+    "forest of goals, hypotheses, and facts; each turn you pick exactly one "
+    "action from the legal menu. The episode ends when you commit the root "
+    "goal (commit:0); you succeed only if the committed evidence claims the "
+    "correct final answer.\n"
+    "\n"
+    "Verb semantics (actions are verb:node-id):\n"
+    "- split: break a goal into subgoals (rarely needed for short problems)\n"
+    "- form_hypothesis: add a tentative claim under a goal\n"
+    "- compute: add ONE checkable equation as a derived fact under a goal, "
+    'for example "6*7 = 42" (pure math, no prose)\n'
+    "- verify: run the symbolic checker on that node's own statement; only "
+    "verified nodes count as evidence\n"
+    "- commit: close a goal using its most recent verified evidence; "
+    "commit:0 ends the episode and is scored on the evidence's "
+    "right-hand-side value\n"
+    "- abandon: mark a dead-end node; abandon:0 gives up the episode\n"
+    "\n"
+    "Play efficiently: compute the equation whose right-hand side is the "
+    "final answer, verify that fact, then commit the root as soon as "
+    "commit:0 is on the menu. The checker only accepts GROUND equations "
+    '(no unknowns): "(13 - 5)/2 = 4" verifies, "2*x = 8" does not. If a '
+    "node shows (verify failed), reformulate with a new compute instead of "
+    "retrying it. Never add a duplicate of an existing fact. Return only "
+    "the requested JSON object."
 )
 
 
@@ -39,6 +61,10 @@ class LLMController:
     client: LLMClient
     system: str = CONTROLLER_SYSTEM
     last_choice_fallback: bool = False
+    # Decision-making wants near-greedy sampling; the menu is small and the
+    # cost of a bad pick is a wasted turn, so keep the temperature low.
+    temperature: float = 0.2
+    max_tokens: int = 64
 
     def choose(self, mdp: DeliberationMDP,
                state: DeliberationState) -> DeliberationAction:
@@ -63,7 +89,9 @@ class LLMController:
                                             "enum": [k for k, _ in menu]}},
                   "required": ["action"]}
         try:
-            resp = self.client.complete_json(self.system, user, schema)
+            resp = self.client.complete_json(
+                self.system, user, schema,
+                temperature=self.temperature, max_tokens=self.max_tokens)
             chosen = by_key.get(str(resp.get("action")))
         except LLMResponseError:
             chosen = None

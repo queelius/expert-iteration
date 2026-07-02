@@ -29,15 +29,23 @@ DEMO_PROBLEMS = [
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", choices=["echo", "http"], default="echo")
+    ap.add_argument("--backend", choices=["echo", "http", "openai"],
+                    default="echo",
+                    help="openai = https://api.openai.com/v1 with the key "
+                         "from --api-key-env")
     ap.add_argument("--base-url", default="http://localhost:11434/v1")
     ap.add_argument("--model", default=None)
     ap.add_argument("--controller-model", default=None,
                     help="teacher model; defaults to --model")
+    ap.add_argument("--api-key-env", default="OPENAI_API_KEY",
+                    help="environment variable holding the bearer token "
+                         "(used by http and openai backends when set)")
     ap.add_argument("--problems", type=Path, default=None,
                     help="JSONL file with {problem, answer} records")
     ap.add_argument("--out", type=Path, default=Path("trajectories.jsonl"))
     ap.add_argument("--depth-limit", type=int, default=16)
+    ap.add_argument("--max-problems", type=int, default=None,
+                    help="budget guard: run at most this many problems")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -45,16 +53,26 @@ def main() -> None:
         gen_client = EchoLLMClient()
         ctrl_client = EchoLLMClient()
     else:
+        import os
+        base_url = ("https://api.openai.com/v1" if args.backend == "openai"
+                    else args.base_url)
+        api_key = os.environ.get(args.api_key_env) or None
+        if args.backend == "openai" and not api_key:
+            raise SystemExit(
+                f"--backend openai needs a key in ${args.api_key_env}")
         gen_client = OpenAICompatibleLLMClient(
-            base_url=args.base_url, model=args.model)
+            base_url=base_url, model=args.model, api_key=api_key)
         ctrl_client = OpenAICompatibleLLMClient(
-            base_url=args.base_url,
-            model=args.controller_model or args.model)
+            base_url=base_url,
+            model=args.controller_model or args.model,
+            api_key=api_key)
 
     if args.problems is not None:
         problems = [json.loads(l) for l in args.problems.read_text().splitlines() if l.strip()]
     else:
         problems = DEMO_PROBLEMS
+    if args.max_problems is not None:
+        problems = problems[: args.max_problems]
 
     controller = LLMController(ctrl_client)
     rng = np.random.default_rng(args.seed)

@@ -16,7 +16,7 @@ from typing import Any
 
 from .deliberation_mdp import DeliberationState, Verb
 from .reductio import (
-    Fact, Goal, Hypothesis, get, is_abandoned, scope, solved,
+    Fact, Goal, Hypothesis, get, is_abandoned, is_verified, scope, solved,
 )
 from .reductio.graph import Graph, NodeId, VerifierCall
 
@@ -49,9 +49,29 @@ def _detail(graph: Graph, node) -> str:
             return f"{node.statement} connective={node.connective}"
         return node.statement
     if isinstance(node, (Hypothesis, Fact)):
-        return node.statement
+        return f"{node.statement}{_verify_marker(graph, node.id)}"
     if isinstance(node, VerifierCall):
         return f"target={node.target} success={node.success}"
+    return ""
+
+
+def _verify_marker(graph: Graph, node_id: NodeId) -> str:
+    """The node's verification status, rendered inline.
+
+    Verified-versus-tentative is the design's one load-bearing distinction
+    (design.md section 3.2), and a failed check must change the observation,
+    or a deterministic controller sees an identical state after a failed
+    VERIFY and repeats the same action forever. VerifierCall records are not
+    reachable by the scope traversal, so their outcome is surfaced here, on
+    the target's own line.
+    """
+    if is_verified(graph, node_id):
+        return " (verified)"
+    failures = sum(1 for n in graph.nodes
+                   if isinstance(n, VerifierCall) and n.target == node_id
+                   and not n.success)
+    if failures:
+        return f" (verify failed x{failures})"
     return ""
 
 
@@ -150,12 +170,15 @@ def _fields_description(verb: Verb, state: DeliberationState) -> str:
         opts = ", ".join(str(i) for i in ids) if ids else "(none yet)"
         return (
             "Produce a JSON object with these fields:\n"
-            '  - "statement": one checkable computation step as an equation, '
-            'e.g. "7*6 = 42" (pure math, no prose)\n'
+            '  - "statement": one checkable computation step as a GROUND '
+            "equation: numbers and operations only, NO variables or "
+            "unknowns, with the computed value on the right-hand side. "
+            'Good: "7*6 = 42", "(13 - 5)/2 = 4". '
+            'Bad (contains an unknown, will fail the check): "2*x = 8".\n'
             f'  - "premises": (optional) a list of ids among {{{opts}}} this '
             "step uses\n"
             "Example:\n"
-            '  {"statement": "7*6 = 42", "premises": []}'
+            '  {"statement": "(13 - 5)/2 = 4", "premises": []}'
         )
     raise ValueError(f"{verb} takes no LLM generation")
 

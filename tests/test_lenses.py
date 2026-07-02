@@ -88,3 +88,16 @@ def test_live_premise_ids_exclude_abandoned():
     g = form_hypothesis(g, 0, "h").graph          # hyp 2
     g = abandon(g, 2).graph
     assert _live_premise_ids(g) == [1]
+
+
+def test_render_view_marks_verified_and_failed_verification():
+    from verifier_anchored_rl.reductio import MockVerifier, compute, verify
+    g = new_graph("p")
+    g = compute(g, 0, "2+2=4", premise_ids=()).graph        # fact 1
+    g = compute(g, 0, "2*x=8", premise_ids=()).graph        # fact 2
+    g = verify(g, 1, "check", "2+2=4",
+               MockVerifier((("2+2=4", True),))).graph      # succeeds
+    g = verify(g, 2, "check", "nope", MockVerifier()).graph # fails
+    view = render_view(g, 0)
+    assert "2+2=4 (verified)" in view
+    assert "2*x=8 (verify failed x1)" in view
