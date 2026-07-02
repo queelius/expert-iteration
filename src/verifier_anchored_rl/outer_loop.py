@@ -249,10 +249,10 @@ def collect_iteration(
             #
             # Alignment note (mcts.py): _make_decision_node initialises
             # untried_actions = list(mdp.actions(state)) and _expand adds each
-            # action to root.children as a MathAction drawn from that same list.
-            # visit_count_policy returns a dict keyed by those exact MathAction
-            # objects, so pi.keys() is a subset of mdp.actions(state) and
-            # pi.get(a, 0.0) alignment is valid.
+            # action to root.children as a DeliberationAction drawn from that
+            # same list. visit_count_policy returns a dict keyed by those
+            # exact DeliberationAction objects, so pi.keys() is a subset of
+            # mdp.actions(state) and pi.get(a, 0.0) alignment is valid.
             full_actions = list(mdp.actions(state))
             k = len(full_actions)
             visit_probs = [float(pi.get(a, 0.0)) for a in full_actions]

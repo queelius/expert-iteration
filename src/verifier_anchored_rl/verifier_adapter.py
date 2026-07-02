@@ -1,7 +1,7 @@
 """Symbolic verifier for the verifier-anchored MDP.
 
-Five verifier verbs are exposed for ``INVOKE_VERIFIER`` actions, plus
-one terminal-answer check used by ``COMMIT_ANSWER``. Each function takes
+Five verifier verbs are exposed for ``VERIFY`` actions, plus one
+terminal-answer check used by ``COMMIT``. Each function takes
 string inputs (LLM-generated content) and returns a bool; all exceptions
 are caught and converted to ``False`` so the MDP transition never blows
 up on malformed verifier input.
@@ -196,7 +196,7 @@ _VERIFIERS: dict[VerifierVerb, Callable[[str, str | None], RichResult]] = {
 
 
 # -----------------------------------------------------------------------------
-# Terminal answer check (COMMIT_ANSWER)
+# Terminal answer check (COMMIT)
 # -----------------------------------------------------------------------------
 
 

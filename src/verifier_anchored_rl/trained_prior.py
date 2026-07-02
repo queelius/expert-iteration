@@ -1,8 +1,8 @@
 """Shared utilities for using a trained TrainableActor as a PUCT prior.
 
-Used by both ``experiments/run_llm_mcts_with_prior.py`` (which compares
+Used by both ``experiments/archive/run_llm_mcts_with_prior.py`` (which compares
 uniform vs trained priors on a fixed initial state) and
-``experiments/collect_distillation.py`` (which uses the trained prior to
+``experiments/archive/collect_distillation.py`` (which uses the trained prior to
 drive search during a fresh distillation round in expert iteration).
 
 The two pieces:
@@ -182,7 +182,7 @@ def make_trained_prior(
         raise ImportError("torch is required to use a trained prior")
 
     # pi depends on the state AND on which verbs are available, so the
-    # cache key includes both. In LLMContextMDP the available set is a
+    # cache key includes both. In DeliberationMDP the available set is a
     # deterministic function of the state, making the verb-set component
     # redundant there, but other GenerativeMDPs may pass action subsets.
     pi_cache: dict[tuple[str, frozenset[str]], Any] = {}

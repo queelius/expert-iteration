@@ -1,6 +1,6 @@
 """Merge and analyze B-sweep stability runs (publication-weight statistics).
 
-``b_sweep_stability.py`` writes one JSON per invocation, each containing
+``experiments/archive/b_sweep_stability.py`` writes one JSON per invocation, each containing
 per-cell ``pi_mcts_per_run`` lists. Cells are keyed by (problem, B); runs of
 the same cell collected in different invocations (different ``--base-seed``
 ranges) are concatenated here, so a K=6 pilot cell plus a K=14 extension

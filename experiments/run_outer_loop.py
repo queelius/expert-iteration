@@ -250,7 +250,7 @@ def main(argv=None) -> int:
         sys.stdout.flush()
 
     def mdp_factory(problem):
-        from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
+        from verifier_anchored_rl.deliberation_mdp import DeliberationMDP
         # Generate verbs via the constrained chat path (llm_client.complete_json
         # with schema-constrained decoding), NOT the encoder's raw-completion
         # path, which a small instruct model cannot drive (it masked every verb,
@@ -258,10 +258,12 @@ def main(argv=None) -> int:
         # StateActor for embed(s) = h_T. This is two forwards per decision-node
         # (embed + generate); folding generation back into the encoder's shared
         # prefill (one-forward) is a tracked follow-up.
-        return LLMContextMDP(
-            problem_statement=problem[0], expected_answer=problem[1],
-            llm_client=llm,
-            depth_limit=args.depth_limit, max_turns=args.max_turns)
+        # DeliberationMDP folds the old max_turns cap into depth_limit
+        # (is_terminal fires at state.turn >= depth_limit); the outer loop's
+        # own max_turns argument (below) remains a separate rollout-level cap.
+        return DeliberationMDP(
+            problem=problem[0], expected_answer=problem[1],
+            llm_client=llm, depth_limit=args.depth_limit)
 
     def on_decision(info):
         log(f"iter {info['iteration']} prob {info['iteration_problem_index']} "

@@ -10,15 +10,20 @@ training loop that distills MCTS-improved visit-count distributions back
 into the policy, and evaluation utilities for fast mode (no search) and
 search mode (MCTS at action selection).
 
-Phase 3 adds the LLM context MDP in ``llm_context_mdp``:
-``MathState``, ``MathAction``, the seven-verb ``Verb`` enum, the
-structured-marker serializer, and a fully implemented ``LLMContextMDP``
-whose ``sample_transition`` calls the LLM via the ``llm_client``
-abstraction (``MockLLMClient`` for tests, ``EchoLLMClient`` for
-zero-config smoke checks, ``OpenAICompatibleLLMClient`` for real
-vLLM/Ollama/llama.cpp HTTP backends). The symbolic verifier lives in
-``verifier`` (five INVOKE_VERIFIER sub-verbs plus ``check_answer`` for
-COMMIT_ANSWER). LLM-extension dependencies (``httpx``, ``sympy``) are
+Phase 3 adds the Deliberation MDP in ``deliberation_mdp``, over an
+immutable AND-OR proof forest (``reductio``): ``DeliberationState``,
+``DeliberationAction``, and a six-verb ``Verb`` enum (``SPLIT``,
+``FORM_HYPOTHESIS``, ``COMPUTE``, ``VERIFY``, ``COMMIT``, ``ABANDON``).
+``VERIFY``/``COMMIT``/``ABANDON`` never call the LLM, so the policy can
+neither author what is checked nor what it is checked against; the other
+three verbs generate content via the ``llm_client`` abstraction
+(``MockLLMClient`` for tests, ``EchoLLMClient`` for zero-config smoke
+checks, ``OpenAICompatibleLLMClient`` for real vLLM/Ollama/llama.cpp HTTP
+backends). ``lenses`` renders scoped, sanitized views and verb suffixes
+for each LLM call. The symbolic verifier lives in ``verifier_adapter``
+(``MathVerifier`` / ``check_answer``). ``llm_controller`` is the Rung-1
+LLM-as-controller runner, whose JSONL trajectory logs feed Phase-B
+behavior cloning. LLM-extension dependencies (``httpx``, ``sympy``) are
 optional and only required to exercise the LLM-backed path; install
 with ``pip install -e .[llm]``.
 
@@ -46,23 +51,20 @@ from .llm_client import (
     MockLLMClient,
     OpenAICompatibleLLMClient,
 )
-from .llm_context_mdp import (
-    Fact,
-    Hypothesis,
+from .deliberation_mdp import (
     INTERMEDIATE_VERIFIER_REWARD,
-    LLMContextMDP,
     MASKED_ACTION_REWARD,
-    MathAction,
-    MathState,
-    Subgoal,
     TERMINAL_FAILURE_REWARD,
     TERMINAL_SUCCESS_REWARD,
+    DeliberationAction,
+    DeliberationMDP,
+    DeliberationState,
     Verb,
-    VerifierCall,
     available_actions,
-    parse_state,
-    serialize_state,
 )
+from .lenses import global_prefix, render_view, sanitize
+from .llm_controller import EpisodeSummary, LLMController, run_episode
+from .verifier_adapter import MathVerifier, check_answer
 from .mcts import (
     ChanceNode,
     DecisionNode,
@@ -85,50 +87,52 @@ __version__ = "0.1.0"
 __all__ = [
     "ChanceNode",
     "DecisionNode",
+    "DeliberationAction",
+    "DeliberationMDP",
+    "DeliberationState",
     "EchoLLMClient",
     "EmbeddingClient",
     "EmbeddingError",
-    "ExpertIterationConfig",
     "Encoder",
-    "Fact",
-    "Hypothesis",
+    "EpisodeSummary",
+    "ExpertIterationConfig",
     "INTERMEDIATE_VERIFIER_REWARD",
     "IterationResult",
     "IterationStats",
     "LLMClient",
-    "LLMContextMDP",
+    "LLMController",
     "LLMResponseError",
     "MASKED_ACTION_REWARD",
     "MCTSConfig",
-    "MathAction",
-    "MathState",
+    "MathVerifier",
     "MockEmbeddingClient",
     "MockLLMClient",
     "OllamaEmbeddingClient",
     "OpenAICompatibleEmbeddingClient",
     "OpenAICompatibleLLMClient",
     "PolicyTarget",
-    "Subgoal",
+    "PrefillCache",
+    "StateActor",
     "TERMINAL_FAILURE_REWARD",
     "TERMINAL_SUCCESS_REWARD",
     "TabularPolicy",
     "TransformersEmbeddingClient",
     "TransformersLLMClient",
     "Verb",
-    "VerifierCall",
     "available_actions",
-    "PrefillCache",
-    "StateActor",
     "best_action",
+    "check_answer",
     "collect_iteration",
     "evaluate_policy",
     "evaluate_with_search",
+    "global_prefix",
     "mcts_search",
-    "parse_state",
     "policy_as_prior",
+    "render_view",
     "root_q_estimates",
+    "run_episode",
     "run_expert_iteration",
     "run_outer_loop",
-    "serialize_state",
+    "sanitize",
     "visit_count_policy",
 ]

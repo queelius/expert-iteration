@@ -13,56 +13,53 @@ from __future__ import annotations
 
 import pytest
 
-from verifier_anchored_rl.llm_context_mdp import (
-    Hypothesis,
-    MathState,
-    Subgoal,
+from verifier_anchored_rl.deliberation_mdp import (
+    DeliberationState,
     Verb,
-    _prompt_for,
-    _state_prefix,
-    _verb_suffix,
     available_actions,
-    serialize_state,
 )
+from verifier_anchored_rl.lenses import render_view, suffix
+from verifier_anchored_rl.reductio import form_hypothesis, new_graph
+
+_LLM_VERBS = (Verb.SPLIT, Verb.FORM_HYPOTHESIS, Verb.COMPUTE)
 
 
 # -----------------------------------------------------------------------------
-# Prompt split (no torch)
+# View/suffix split (no torch)
 # -----------------------------------------------------------------------------
 
 
-def _rich_state() -> MathState:
-    return MathState(
-        problem="Solve for x: 2x + 5 = 13.",
-        open_subgoals=(Subgoal(id="sg_root", statement="Produce the final answer."),),
-        hypotheses=(Hypothesis(id="hyp_1", statement="x = 4.", parent_subgoal="sg_root"),),
-        turn=1,
-    )
+def _rich_state() -> DeliberationState:
+    graph = new_graph("Solve for x: 2x + 5 = 13.")
+    result = form_hypothesis(graph, 0, "x = 4.")
+    return DeliberationState(result.graph, 1)
 
 
-def test_split_is_byte_identical_to_prompt_for():
+def test_view_is_verb_independent_at_a_fixed_target():
+    # The efficiency claim shared_forward.py depends on: at a fixed target,
+    # the (expensive) view is the same for every LLM-calling verb, and only
+    # the (cheap) suffix varies. This is what lets one prefill seed several
+    # verb generations.
     state = _rich_state()
-    for verb in available_actions(state):
-        assert _state_prefix(state) + _verb_suffix(verb, state) == _prompt_for(verb, state)
+    target = state.graph.root_id
+    legal_llm_verbs = [a.verb for a in available_actions(state)
+                       if a.target == target and a.verb in _LLM_VERBS]
+    assert legal_llm_verbs  # sanity: the root goal offers all three
 
+    views = {render_view(state.graph, target) for _ in legal_llm_verbs}
+    assert len(views) == 1  # view ignores verb
 
-def test_state_prefix_ends_at_sentinel():
-    state = _rich_state()
-    prefix = _state_prefix(state)
-    # The shared prefix ends exactly at the serialized state's sentinel, so
-    # h_T (the last prefix token) is the [STATE_END] position.
-    assert prefix.endswith("[STATE_END]")
-    assert serialize_state(state) in prefix
-
-
-def test_state_prefix_is_verb_independent():
-    state = _rich_state()
-    verbs = list(available_actions(state))
-    prefixes = {_state_prefix(state) for _ in verbs}  # prefix ignores verb
-    assert len(prefixes) == 1
     # The suffix, by contrast, varies with the verb.
-    suffixes = {_verb_suffix(v, state) for v in verbs}
-    assert len(suffixes) == len(verbs)
+    suffixes = {suffix(v, target, state) for v in legal_llm_verbs}
+    assert len(suffixes) == len(legal_llm_verbs)
+
+
+def test_suffix_names_the_verb_and_target():
+    state = _rich_state()
+    target = state.graph.root_id
+    text = suffix(Verb.FORM_HYPOTHESIS, target, state)
+    assert "Verb: FORM_HYPOTHESIS" in text
+    assert f"[id={target}]" in text
 
 
 # -----------------------------------------------------------------------------

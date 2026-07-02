@@ -34,19 +34,17 @@ import time
 
 import httpx
 
-from verifier_anchored_rl.llm_context_mdp import (
-    MathState,
-    Subgoal,
+from verifier_anchored_rl.deliberation_mdp import (
+    DEFAULT_SYSTEM_PROMPT,
+    DeliberationState,
     Verb,
-    _prompt_for,
-    _SYSTEM_PROMPT,
 )
+from verifier_anchored_rl.lenses import global_prefix, render_view, suffix
+from verifier_anchored_rl.reductio import new_graph
 
 
-CANONICAL_STATE = MathState(
-    problem="Compute 7 * 6.",
-    open_subgoals=(Subgoal(id="sg_root", statement="Produce the final answer."),),
-)
+CANONICAL_STATE = DeliberationState(new_graph("Compute 7 * 6."), 0)
+CANONICAL_TARGET = CANONICAL_STATE.graph.root_id
 
 
 def _chat_body(model: str, user: str, temperature: float, max_tokens: int) -> dict:
@@ -55,7 +53,7 @@ def _chat_body(model: str, user: str, temperature: float, max_tokens: int) -> di
         "messages": [
             {
                 "role": "system",
-                "content": f"{_SYSTEM_PROMPT}\n\nReply with a single JSON object only, no prose.",
+                "content": f"{DEFAULT_SYSTEM_PROMPT}\n\nReply with a single JSON object only, no prose.",
             },
             {"role": "user", "content": user},
         ],
@@ -75,7 +73,8 @@ def time_chat(
     timeout_s: float,
 ) -> dict:
     """Time verb-instantiator (chat completions, JSON-mode)."""
-    user = _prompt_for(Verb.FORM_HYPOTHESIS, CANONICAL_STATE)
+    user = (render_view(CANONICAL_STATE.graph, CANONICAL_TARGET)
+            + suffix(Verb.FORM_HYPOTHESIS, CANONICAL_TARGET, CANONICAL_STATE))
     body = _chat_body(model, user, temperature, max_tokens)
 
     print(f"  chat warmup ({model})...", flush=True)
@@ -147,9 +146,7 @@ def time_embed(
     timeout_s: float,
 ) -> dict:
     """Time embedding endpoint on the canonical serialized state."""
-    from verifier_anchored_rl.llm_context_mdp import serialize_state
-
-    text = serialize_state(CANONICAL_STATE)
+    text = global_prefix(CANONICAL_STATE)
 
     print(f"  embed warmup ({model})...", flush=True)
     with httpx.Client(timeout=timeout_s) as client:

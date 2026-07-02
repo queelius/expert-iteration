@@ -66,21 +66,17 @@ Python 3.11+; core deps are `numpy` + `pytest` only. No lint config; prefer
   `mcts.py`, `mdp.py`, ...): the validation anchor. Value iteration,
   expectimax, and MCTS triangulate on hand-computable MDPs; the LLM system
   must never regress these tests. Details in the archived pedagogical design.
-- **`llm_context_mdp.py` (legacy, 1600 lines)**: the pre-redesign monolith
-  (MathState, seven verbs, verb-only actions). It is scheduled for
-  replacement by an integration that consumes the reductio core; do not
-  extend it. It exports `Fact`/`Hypothesis`/`VerifierCall` names that
-  collide with reductio's: always import explicitly from the subpackage.
+- **`deliberation_mdp.py` + `lenses.py` + `verifier_adapter.py` +
+  `llm_controller.py`**: the LLM-context MDP over the reductio core.
+  Six `(verb, target)` verbs; `VERIFY`/`COMMIT`/`ABANDON` never call the
+  LLM (the policy can neither author what is checked nor what it is
+  checked against); statements are sanitized against marker injection;
+  terminal-only verifier reward. `llm_controller.py` is the Rung-1
+  LLM-as-controller runner whose JSONL logs feed Phase-B behavior cloning.
 - **`paper/`**: fresh LaTeX scaffold (article + natbib + latexmk). STUB
   discipline: `\stub{...}` marks content awaiting the integration or
   experimental runs; never present stubbed content as complete, and never
   resurrect numbers from the archived pilot.
-- **Integration flags** (from the 2026-07-02 final review; the LLMContextMDP
-  integration must resolve): facts attach to no goal, so the lens cannot
-  render a target's facts yet (needs a goal-to-fact edge or scan); the
-  verifier's `expected` argument must never be supplied by the policy
-  (self-verification hole); goal openness at commit belongs in the avail
-  mask; serializer statements need sanitizing against marker injection.
 
 ## Reward invariant (load-bearing)
 

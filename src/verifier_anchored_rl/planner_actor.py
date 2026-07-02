@@ -73,8 +73,8 @@ class PrefillCache:
         return prefill
 
     def clear(self) -> None:
-        """Empty the cache in place. Callers sharing this instance (e.g. an
-        LLMContextMDP and a StateActor holding the same cache) keep their
+        """Empty the cache in place. Callers sharing this instance (e.g. a
+        DeliberationMDP and a StateActor holding the same cache) keep their
         reference and see the cleared cache."""
         self._store.clear()
 

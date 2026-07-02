@@ -154,8 +154,8 @@ PROBLEM_GROUPS: dict[str, list[str]] = {
 
 SCRIPTED_VERB_SEQUENCE: Sequence[Verb] = (
     Verb.FORM_HYPOTHESIS,
-    Verb.INVOKE_VERIFIER,
-    Verb.COMMIT_ANSWER,
+    Verb.VERIFY,
+    Verb.COMMIT,
 )
 
 

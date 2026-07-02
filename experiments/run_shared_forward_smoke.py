@@ -27,17 +27,12 @@ import argparse
 import sys
 
 from verifier_anchored_rl import (
-    LLMContextMDP,
+    DeliberationMDP,
     TransformersLLMClient,
     available_actions,
 )
-from verifier_anchored_rl.llm_context_mdp import (
-    Verb,
-    _SYSTEM_PROMPT,
-    _state_prefix,
-    _verb_suffix,
-    _schema_for,
-)
+from verifier_anchored_rl.deliberation_mdp import DEFAULT_SYSTEM_PROMPT
+from verifier_anchored_rl.lenses import render_view, suffix
 from verifier_anchored_rl.shared_forward import SharedForwardEncoder
 
 try:
@@ -65,17 +60,22 @@ def main(argv=None):
     print(f"loaded {args.model} (hidden_size={enc.embed_dim})", flush=True)
 
     problem = PROBLEMS[args.problem]
-    mdp = LLMContextMDP(
-        problem_statement=problem["problem"],
+    mdp = DeliberationMDP(
+        problem=problem["problem"],
         expected_answer=problem["expected"],
         llm_client=llm,
         depth_limit=3,
     )
     state = mdp.initial_state()
 
-    # The shared prefix is the system preamble + state, ending at the
-    # [STATE_END] sentinel. Verbs append their short suffixes.
-    prefix_text = _SYSTEM_PROMPT + "\n\n" + _state_prefix(state)
+    # The shared prefix is the system preamble + the target-scoped view,
+    # ending where the verb suffix picks up (mirrors
+    # DeliberationMDP._generate: render_view(...) + suffix(...)). The first
+    # legal action's target anchors both the h_T equivalence check and the
+    # generation-equivalence check below.
+    action = next(iter(available_actions(state, depth_limit=mdp.depth_limit)))
+    verb, target = action.verb, action.target
+    prefix_text = DEFAULT_SYSTEM_PROMPT + "\n\n" + render_view(state.graph, target)
 
     # -- Property 1: h_T equivalence --
     print("\n-- h_T equivalence (shared prefill vs standalone forward) --", flush=True)
@@ -93,8 +93,7 @@ def main(argv=None):
     # Compared at the RAW TOKEN level (decoded text), not parsed JSON: the
     # cache-reuse property is about the generated tokens being identical,
     # independent of whether the small model's output is schema-valid.
-    verb = next(iter(available_actions(state)))
-    suffix_text = _verb_suffix(verb, state)
+    suffix_text = suffix(verb, target, state)
     print(f"\n-- greedy generation equivalence (verb={verb.value}) --", flush=True)
 
     cached_text, _ = enc.generate_text(
@@ -119,7 +118,8 @@ def main(argv=None):
     print(f"  => token-identical: {gen_ok}", flush=True)
 
     # -- FLOP saving: 1 state prefill + N suffixes vs N full re-prefills --
-    n_verbs = len(list(available_actions(state)))
+    n_verbs = len([a for a in available_actions(state, depth_limit=mdp.depth_limit)
+                   if a.target == target])
     n_prefix = prefill.n_prefix_tokens
     suffix_tok = enc.tokenizer(
         suffix_text, return_tensors="pt", add_special_tokens=False

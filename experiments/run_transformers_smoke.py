@@ -35,19 +35,15 @@ import time
 import numpy as np
 
 from verifier_anchored_rl import (
-    LLMContextMDP,
+    DeliberationMDP,
     MCTSConfig,
     TransformersEmbeddingClient,
     TransformersLLMClient,
-    mcts_search,
-    serialize_state,
-)
-from verifier_anchored_rl.llm_context_mdp import (
-    _SYSTEM_PROMPT,
     Verb,
-    _prompt_for,
-    _schema_for,
+    mcts_search,
 )
+from verifier_anchored_rl.deliberation_mdp import DEFAULT_SYSTEM_PROMPT
+from verifier_anchored_rl.lenses import global_prefix, render_view, schema_for, suffix
 
 try:
     from problems import PROBLEMS
@@ -62,7 +58,6 @@ def main(argv=None):
                    choices=list(PROBLEMS.keys()))
     p.add_argument("--num-simulations", type=int, default=3)
     p.add_argument("--temperature", type=float, default=0.7)
-    p.add_argument("--max-tokens", type=int, default=192)
     args = p.parse_args(argv)
 
     import torch
@@ -84,26 +79,26 @@ def main(argv=None):
               flush=True)
 
     problem = PROBLEMS[args.problem]
-    mdp = LLMContextMDP(
-        problem_statement=problem["problem"],
+    mdp = DeliberationMDP(
+        problem=problem["problem"],
         expected_answer=problem["expected"],
         llm_client=llm,
         depth_limit=3,
-        max_turns=8,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
     )
     state = mdp.initial_state()
+    root = state.graph.root_id
 
     # -- Property 2: matched-seed reproducibility of a single call --
+    # FORM_HYPOTHESIS is the simplest of the three LLM-calling verbs
+    # (VERIFY/COMMIT/ABANDON never call the LLM; see deliberation_mdp.py).
     print("\n-- seeded-generation reproducibility (temp "
           f"{args.temperature}, seed 42) --", flush=True)
-    schema = _schema_for(Verb.COMMIT_ANSWER, state)
-    user = _prompt_for(Verb.COMMIT_ANSWER, state)
+    schema = schema_for(Verb.FORM_HYPOTHESIS, root, state)
+    user = render_view(state.graph, root) + suffix(Verb.FORM_HYPOTHESIS, root, state)
     outs = []
     for i in range(3):
         t0 = time.time()
-        r = llm.complete_json(system=_SYSTEM_PROMPT, user=user, schema=schema,
+        r = llm.complete_json(system=DEFAULT_SYSTEM_PROMPT, user=user, schema=schema,
                               temperature=args.temperature,
                               max_tokens=64, seed=42)
         outs.append(r)
@@ -113,7 +108,7 @@ def main(argv=None):
 
     # -- Property 3: hidden-state embedding --
     print("\n-- hidden-state embedding (masked mean pool, L2) --", flush=True)
-    serialized = serialize_state(state)
+    serialized = global_prefix(state)
     t0 = time.time()
     emb = embedder.embed(serialized)
     norm = float(np.linalg.norm(emb))

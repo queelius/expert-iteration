@@ -1,6 +1,6 @@
 """Distill the trainable Q-head and policy head from an MCTS dataset.
 
-Loads the JSONL records produced by ``experiments/collect_distillation.py``
+Loads the JSONL records produced by ``experiments/archive/collect_distillation.py``
 and runs full-batch Adam to fit:
 
     L = policy_cross_entropy + q_loss_weight * q_mse

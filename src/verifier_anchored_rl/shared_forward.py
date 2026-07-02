@@ -25,8 +25,8 @@ Shape of one decision node:
   the generator both consume it.
 
 The module is generic over the text spans (a ``prefix_text`` and a
-``suffix_text``); the faithful spans for the LLM context MDP come from
-``llm_context_mdp._state_prefix`` / ``_verb_suffix``. The frozen-model
+``suffix_text``); the faithful spans for the Deliberation MDP come from
+``lenses.render_view`` / ``lenses.suffix``. The frozen-model
 forward is GPU-bound, so correctness of the cache reuse (hidden-state and
 greedy-generation equivalence against a fresh full prefill) is verified by
 ``experiments/run_shared_forward_smoke.py`` on the GPU box; the bookkeeping

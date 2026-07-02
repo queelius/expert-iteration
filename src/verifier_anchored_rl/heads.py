@@ -305,7 +305,7 @@ def encode_batch(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Pack a list of distillation records into a batch dict of tensors.
 
     Each record is expected to have the schema produced by
-    ``experiments/collect_distillation.py``:
+    ``experiments/archive/collect_distillation.py``:
 
     * ``embedding``: list[float] of length 2048
     * ``available_verbs``: list[str], values from ``Verb`` names

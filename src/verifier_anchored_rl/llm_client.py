@@ -110,8 +110,8 @@ class MockLLMClient:
     Example
     -------
     >>> client = MockLLMClient(script={
-    ...     ("DECOMPOSE",): {"target_id": "sg_1", "content": "..."},
-    ...     ("COMMIT_ANSWER",): {"target_id": None, "content": "42"},
+    ...     ("SPLIT",): {"connective": "conjunctive", "children": ["a", "b"]},
+    ...     ("FORM_HYPOTHESIS",): {"statement": "x = 4"},
     ... })
     """
 

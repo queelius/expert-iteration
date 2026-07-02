@@ -34,8 +34,8 @@ from pathlib import Path
 import httpx
 
 # Two representative verb schemas mirroring src/verifier_anchored_rl/
-# llm_context_mdp.py::_schema_for: a plain two-string object (COMPUTE_SUBEXPR)
-# and one carrying an enum (the harder case for constrained decoding). The spike
+# lenses.py::schema_for: a plain two-string object (COMPUTE) and one
+# carrying an enum (the harder case for constrained decoding). The spike
 # only needs realistic shapes, not the live state-dependent enums.
 SCHEMA_SIMPLE = {
     "type": "object",
