@@ -252,6 +252,9 @@ class OpenAICompatibleLLMClient:
     # outer_loop._flop_counters can read them uniformly across backends.
     generate_calls: int = field(default=0, compare=False, repr=False)
     generated_tokens: int = field(default=0, compare=False, repr=False)
+    # Billing counter: prompt-side tokens as reported by the server's usage
+    # payload. Not part of the FLOP-counter contract; used for cost accounting.
+    prompt_tokens: int = field(default=0, compare=False, repr=False)
     # Lock guards counter mutations: complete_json is called concurrently from
     # many collection-thread workers in collect_iteration_concurrent.
     _counter_lock: threading.Lock = field(
@@ -321,12 +324,13 @@ class OpenAICompatibleLLMClient:
                 content = payload["choices"][0]["message"]["content"]
                 parsed = _parse_json_lenient(content)
                 _validate_against_schema(parsed, schema)
-                completion_tokens = int(
-                    (payload.get("usage") or {}).get("completion_tokens", 0) or 0
-                )
+                usage = payload.get("usage") or {}
+                completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+                new_prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
                 with self._counter_lock:
                     self.generate_calls += 1
                     self.generated_tokens += completion_tokens
+                    self.prompt_tokens += new_prompt_tokens
                 return parsed
             except (httpx.HTTPError, KeyError, ValueError, LLMResponseError) as e:
                 last_err = e
