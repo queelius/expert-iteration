@@ -69,7 +69,7 @@ except ImportError:  # pragma: no cover - tests skip if torch missing
     nn = None  # type: ignore[assignment]
     F = None  # type: ignore[assignment]
 
-from .llm_context_mdp import Verb
+from .deliberation_mdp import Verb
 
 
 # -----------------------------------------------------------------------------

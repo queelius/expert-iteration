@@ -41,11 +41,9 @@ def test_prefill_cache_lru_evicts_oldest():
 
 
 def _toy_mdp():
-    from verifier_anchored_rl.llm_client import EchoLLMClient
-    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
+    from verifier_anchored_rl.deliberation_mdp import DeliberationMDP
 
-    return LLMContextMDP(problem_statement="2+2", expected_answer="4",
-                         llm_client=EchoLLMClient(), depth_limit=3, max_turns=4)
+    return DeliberationMDP(problem="2+2", expected_answer="4", depth_limit=3)
 
 
 def test_state_actor_prior_sums_to_one_over_actions():
@@ -71,8 +69,8 @@ def test_state_actor_leaf_value_is_max_target_q_over_available():
     pytest.importorskip("torch")
     import torch
     from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.deliberation_mdp import available_actions
     from verifier_anchored_rl.heads import VERB_NAME_TO_INDEX
-    from verifier_anchored_rl.llm_context_mdp import available_actions
     from verifier_anchored_rl.planner_actor import StateActor
 
     enc = FakeEncoder(embed_dim=16)
@@ -86,7 +84,7 @@ def test_state_actor_leaf_value_is_max_target_q_over_available():
     h = sa.embed(state).unsqueeze(0)
     with torch.no_grad():
         qt = actor.target_q(h)[0]
-    expected = max(float(qt[VERB_NAME_TO_INDEX[v.value]]) for v in avail)
+    expected = max(float(qt[VERB_NAME_TO_INDEX[v.verb.value]]) for v in avail)
     assert abs(sa.leaf_value(state) - expected) < 1e-6
 
 
@@ -269,8 +267,8 @@ def test_embed_drops_kv_cache_and_offloads_hidden_to_cpu():
     pytest.importorskip("torch")
     import torch
     from verifier_anchored_rl.architecture import HiddenStateActor
-    from verifier_anchored_rl.llm_client import EchoLLMClient
-    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP, _state_prefix
+    from verifier_anchored_rl.deliberation_mdp import DeliberationMDP
+    from verifier_anchored_rl.lenses import global_prefix
     from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
     from verifier_anchored_rl.shared_forward import StatePrefill
 
@@ -289,13 +287,12 @@ def test_embed_drops_kv_cache_and_offloads_hidden_to_cpu():
     enc = KVHoldingEncoder()
     cache = PrefillCache()
     sa = StateActor(enc, HiddenStateActor(embed_dim=8), cache, depth_limit=3)
-    mdp = LLMContextMDP(problem_statement="2+2", expected_answer="4",
-                        llm_client=EchoLLMClient(), depth_limit=3, max_turns=4)
+    mdp = DeliberationMDP(problem="2+2", expected_answer="4", depth_limit=3)
     state = mdp.initial_state()
 
     h = sa.embed(state)
     assert tuple(h.shape) == (8,)
     # The cached StatePrefill must no longer pin the KV cache or prefix ids.
-    stored = cache.get_or_encode(_state_prefix(state), enc)  # cache hit
+    stored = cache.get_or_encode(global_prefix(state), enc)  # cache hit
     assert stored.cache is None and stored.prefix_ids is None
     assert enc.calls == 1  # the hit did not re-encode

@@ -44,7 +44,7 @@ except ImportError:  # pragma: no cover - heads tests will catch
 
 from .embedding_client import EmbeddingClient, EmbeddingError
 from .heads import NUM_VERBS, VERB_NAME_TO_INDEX, TrainableActor
-from .llm_context_mdp import serialize_state
+from .lenses import global_prefix
 
 
 # -----------------------------------------------------------------------------
@@ -191,7 +191,7 @@ def make_trained_prior(
         n = len(actions)
         if n == 0:
             return []
-        serialized = serialize_state(state)
+        serialized = global_prefix(state)
         verb_names = frozenset(
             action.verb.value
             for action in actions

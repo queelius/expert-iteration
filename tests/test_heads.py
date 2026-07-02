@@ -26,7 +26,7 @@ from verifier_anchored_rl.heads import (
     policy_cross_entropy,
     q_mse,
 )
-from verifier_anchored_rl.llm_context_mdp import Verb
+from verifier_anchored_rl.deliberation_mdp import Verb
 
 
 # -----------------------------------------------------------------------------
@@ -36,16 +36,15 @@ from verifier_anchored_rl.llm_context_mdp import Verb
 
 def test_verb_order_matches_enum_definition_order():
     expected = [
-        Verb.DECOMPOSE,
-        Verb.COMPUTE_SUBEXPR,
+        Verb.SPLIT,
         Verb.FORM_HYPOTHESIS,
-        Verb.CHECK_CASE,
-        Verb.INVOKE_VERIFIER,
-        Verb.BACKTRACK,
-        Verb.COMMIT_ANSWER,
+        Verb.COMPUTE,
+        Verb.VERIFY,
+        Verb.COMMIT,
+        Verb.ABANDON,
     ]
     assert VERB_ORDER == expected
-    assert NUM_VERBS == 7
+    assert NUM_VERBS == 6
 
 
 def test_actor_forward_returns_correct_shapes():
@@ -68,8 +67,8 @@ def test_actor_pi_returns_distribution_over_available():
     model = TrainableActor(embed_dim=32, hidden_dim=32, repr_dim=16)
     x = torch.randn(2, 32)
     mask = torch.tensor(
-        [[True, True, False, False, True, False, False],
-         [False, True, True, False, False, True, False]],
+        [[True, True, False, False, True, False],
+         [False, True, True, False, False, True]],
         dtype=torch.bool,
     )
     pi = model.pi(x, mask)
@@ -199,9 +198,9 @@ def test_q_loss_drives_q_values_toward_target_with_optimization():
 def test_encode_batch_handles_minimal_record():
     rec = {
         "embedding": [0.0] * 32,
-        "available_verbs": ["FORM_HYPOTHESIS", "DECOMPOSE"],
-        "pi_mcts": {"FORM_HYPOTHESIS": 0.6, "DECOMPOSE": 0.4},
-        "q_mcts": {"FORM_HYPOTHESIS": 0.1, "DECOMPOSE": 0.05},
+        "available_verbs": ["form_hypothesis", "split"],
+        "pi_mcts": {"form_hypothesis": 0.6, "split": 0.4},
+        "q_mcts": {"form_hypothesis": 0.1, "split": 0.05},
     }
     batch = encode_batch([rec])
 
@@ -211,8 +210,8 @@ def test_encode_batch_handles_minimal_record():
     assert batch["available_mask"].shape == (1, NUM_VERBS)
     assert batch["q_target_mask"].shape == (1, NUM_VERBS)
 
-    fh = VERB_NAME_TO_INDEX["FORM_HYPOTHESIS"]
-    dc = VERB_NAME_TO_INDEX["DECOMPOSE"]
+    fh = VERB_NAME_TO_INDEX["form_hypothesis"]
+    dc = VERB_NAME_TO_INDEX["split"]
     # pi_target rows sum to 1 over available positions.
     assert abs(float(batch["pi_target"][0].sum()) - 1.0) < 1e-5
     assert batch["pi_target"][0, fh].item() == pytest.approx(0.6)
@@ -233,13 +232,13 @@ def test_encode_batch_handles_pi_mcts_missing_some_available_verbs():
     get pi_target=0 (and re-normalization handles the rest)."""
     rec = {
         "embedding": [0.0] * 16,
-        "available_verbs": ["FORM_HYPOTHESIS", "DECOMPOSE", "BACKTRACK"],
-        "pi_mcts": {"FORM_HYPOTHESIS": 0.7, "DECOMPOSE": 0.3},  # BACKTRACK missing
-        "q_mcts": {"FORM_HYPOTHESIS": 0.2, "DECOMPOSE": 0.1},
+        "available_verbs": ["form_hypothesis", "split", "abandon"],
+        "pi_mcts": {"form_hypothesis": 0.7, "split": 0.3},  # abandon missing
+        "q_mcts": {"form_hypothesis": 0.2, "split": 0.1},
     }
     batch = encode_batch([rec])
-    bt = VERB_NAME_TO_INDEX["BACKTRACK"]
-    # BACKTRACK in mask but with 0 prob target.
+    bt = VERB_NAME_TO_INDEX["abandon"]
+    # abandon in mask but with 0 prob target.
     assert batch["available_mask"][0, bt]
     assert batch["pi_target"][0, bt].item() == 0.0
     # Row still sums to 1.
@@ -252,9 +251,9 @@ def test_encode_batch_handles_multiple_records():
     recs = [
         {
             "embedding": [float(i)] * 8,
-            "available_verbs": ["FORM_HYPOTHESIS"],
-            "pi_mcts": {"FORM_HYPOTHESIS": 1.0},
-            "q_mcts": {"FORM_HYPOTHESIS": float(i) / 10},
+            "available_verbs": ["form_hypothesis"],
+            "pi_mcts": {"form_hypothesis": 1.0},
+            "q_mcts": {"form_hypothesis": float(i) / 10},
         }
         for i in range(4)
     ]
@@ -278,9 +277,9 @@ def test_encode_batch_rejects_null_embedding_records():
         {
             "problem_key": "p", "seed": 0, "turn": 0,
             "embedding": None,
-            "available_verbs": ["DECOMPOSE"],
-            "pi_mcts": {"DECOMPOSE": 1.0},
-            "q_mcts": {"DECOMPOSE": 0.5},
+            "available_verbs": ["split"],
+            "pi_mcts": {"split": 1.0},
+            "q_mcts": {"split": 0.5},
         }
     ]
     with pytest.raises(ValueError, match="no embedding"):

@@ -95,7 +95,7 @@ class StateActor:
         self.depth_limit = depth_limit
 
     def embed(self, state: Any) -> Any:
-        from .llm_context_mdp import _state_prefix
+        from .lenses import global_prefix as _state_prefix
 
         prefill = self.cache.get_or_encode(_state_prefix(state), self.encoder)
         # The heads need only h_T. The encoder's StatePrefill also pins the KV
@@ -142,13 +142,26 @@ class StateActor:
             for j in idxs:
                 mask[0, j] = True
             pi = self.actor.pi(h, mask)  # masked softmax, 0 off the mask
-        return [float(pi[0, j]) for j in idxs]
+        raw = [float(pi[0, j]) for j in idxs]
+        # The heads are verb-indexed (one slot per Verb), but ``actions`` is
+        # over (verb, target) pairs: several actions can share a verb slot
+        # (e.g. ABANDON is legal on every open node). Those actions get the
+        # SAME raw per-verb mass above, so summing raw over-counts a shared
+        # verb once per action sharing it. Renormalizing keeps the documented
+        # contract (this is a probability distribution over `actions`, always
+        # summing to 1) instead of silently returning an unnormalized vector;
+        # same pattern already used by trained_prior.make_trained_prior.
+        total = sum(raw)
+        if total <= 0:
+            n = len(actions)
+            return [1.0 / n] * n if n else []
+        return [p / total for p in raw]
 
     def leaf_value(self, state: Any) -> float:
         import torch
 
+        from .deliberation_mdp import available_actions
         from .heads import VERB_NAME_TO_INDEX
-        from .llm_context_mdp import available_actions
 
         avail = list(available_actions(state, depth_limit=self.depth_limit))
         if not avail:
@@ -160,7 +173,7 @@ class StateActor:
             # online-Q wording in method.tex Section 3.7; to be reconciled in
             # the paper. train.py docstring documents the same design decision.
             qt = self.actor.target_q(h)[0]
-        return max(float(qt[VERB_NAME_TO_INDEX[v.value]]) for v in avail)
+        return max(float(qt[VERB_NAME_TO_INDEX[v.verb.value]]) for v in avail)
 
 
 __all__ = ["Encoder", "PrefillCache", "StateActor"]

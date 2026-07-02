@@ -14,7 +14,7 @@ def _build(embed_dim=16):
     from tests.fakes import FakeEncoder
     from verifier_anchored_rl.architecture import HiddenStateActor
     from verifier_anchored_rl.llm_client import EchoLLMClient
-    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
+    from verifier_anchored_rl.deliberation_mdp import DeliberationMDP
     from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
     from verifier_anchored_rl.replay import ReplayBuffer
     from verifier_anchored_rl.train import Trainer
@@ -28,9 +28,8 @@ def _build(embed_dim=16):
     trainer = Trainer(actor, opt, buf, sync_interval=3)
 
     def mdp_factory(problem):
-        return LLMContextMDP(problem_statement=problem[0],
-                             expected_answer=problem[1],
-                             llm_client=EchoLLMClient(), depth_limit=3, max_turns=4)
+        return DeliberationMDP(problem=problem[0], expected_answer=problem[1],
+                               llm_client=EchoLLMClient(), depth_limit=3)
 
     return enc, actor, sa, buf, trainer, mdp_factory
 
@@ -395,6 +394,7 @@ def test_collect_iteration_concurrent_matches_sequential_record_count():
     import pytest
     pytest.importorskip("torch")
     import numpy as np
+    import torch
     from verifier_anchored_rl.mcts import MCTSConfig
     from verifier_anchored_rl.outer_loop import (
         collect_iteration, collect_iteration_concurrent,
@@ -409,7 +409,13 @@ def test_collect_iteration_concurrent_matches_sequential_record_count():
     collect_iteration(problems, mf1, sa1, cfg1, buf1, np.random.default_rng(1),
                       tau=1.0, max_turns=4)
 
-    # Concurrent: per-trajectory seeds, thread pool.
+    # Concurrent: per-trajectory seeds, thread pool. Under DeliberationMDP a
+    # trajectory can terminate early (root ABANDON), so unlike the legacy
+    # fixed-max_turns MDP, n_decisions is sensitive to the actor's random
+    # init, not just the worker count. Pin the torch seed before each _build()
+    # (same idiom as test_resume_from_iteration_checkpoint_matches_uninterrupted_run
+    # below) so the worker-count comparison holds the actor weights fixed.
+    torch.manual_seed(0)
     enc2, actor2, sa2, buf2, tr2, mf2 = _build()
     cfg2 = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
                       prior_fn=sa2.prior, value_fn=sa2.leaf_value)
@@ -421,6 +427,7 @@ def test_collect_iteration_concurrent_matches_sequential_record_count():
     assert counts["n_decisions"] == len(buf2)
     assert len(buf2) > 0
     # Determinism across pool sizes: same base_seed + workers=1 gives same count.
+    torch.manual_seed(0)
     enc3, actor3, sa3, buf3, tr3, mf3 = _build()
     cfg3 = MCTSConfig(num_simulations=6, c_puct=1.5, discount=1.0,
                       prior_fn=sa3.prior, value_fn=sa3.leaf_value)

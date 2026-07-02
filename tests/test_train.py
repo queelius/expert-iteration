@@ -102,14 +102,14 @@ def test_sample_from_record_matches_encode_batch():
     record = {
         "problem_key": "p", "seed": 0, "turn": 0,
         "embedding": [0.1] * 8,
-        "available_verbs": ["DECOMPOSE", "COMMIT_ANSWER"],
-        "pi_mcts": {"DECOMPOSE": 0.7, "COMMIT_ANSWER": 0.3},
-        "q_mcts": {"DECOMPOSE": 0.5},
+        "available_verbs": ["split", "commit"],
+        "pi_mcts": {"split": 0.7, "commit": 0.3},
+        "q_mcts": {"split": 0.5},
     }
     s = sample_from_record(record)
     assert s.hidden.shape == (8,)
     assert s.available_mask.sum().item() == 2
-    assert s.q_target_mask.sum().item() == 1  # only DECOMPOSE had a Q estimate
+    assert s.q_target_mask.sum().item() == 1  # only "split" had a Q estimate
 
 
 # -----------------------------------------------------------------------------
@@ -218,6 +218,7 @@ def test_trainer_run_fires_on_step_callback():
     import numpy as np
     import torch
     from verifier_anchored_rl.architecture import HiddenStateActor
+    from verifier_anchored_rl.heads import NUM_VERBS
     from verifier_anchored_rl.replay import ReplayBuffer, ReplaySample
     from verifier_anchored_rl.train import Trainer
 
@@ -227,10 +228,10 @@ def test_trainer_run_fires_on_step_callback():
     for _ in range(4):
         buf.add(ReplaySample(
             hidden=torch.randn(8, generator=g),
-            available_mask=torch.ones(7, dtype=torch.bool),
-            q_target=torch.randn(7, generator=g),
-            q_target_mask=torch.ones(7, dtype=torch.bool),
-            pi_target=torch.softmax(torch.randn(7, generator=g), dim=-1),
+            available_mask=torch.ones(NUM_VERBS, dtype=torch.bool),
+            q_target=torch.randn(NUM_VERBS, generator=g),
+            q_target_mask=torch.ones(NUM_VERBS, dtype=torch.bool),
+            pi_target=torch.softmax(torch.randn(NUM_VERBS, generator=g), dim=-1),
         ))
     opt = torch.optim.Adam(actor.parameters(), lr=1e-2)
     trainer = Trainer(actor, opt, buf, sync_interval=100)

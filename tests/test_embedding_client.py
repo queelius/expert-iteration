@@ -162,10 +162,8 @@ def test_trained_prior_uniform_fallback_is_consistent_across_calls():
     state returns exactly uniform (no partial trained mixing)."""
     torch = pytest.importorskip("torch")
     from verifier_anchored_rl.heads import TrainableActor
-    from verifier_anchored_rl.llm_context_mdp import MathAction, Verb
+    from verifier_anchored_rl.deliberation_mdp import DeliberationAction, DeliberationMDP, Verb
     from verifier_anchored_rl.trained_prior import EmbeddingCache, make_trained_prior
-    from verifier_anchored_rl import LLMContextMDP
-    from verifier_anchored_rl.llm_client import MockLLMClient
 
     class _AlwaysFail:
         def embed(self, text):
@@ -177,9 +175,11 @@ def test_trained_prior_uniform_fallback_is_consistent_across_calls():
     model = TrainableActor(embed_dim=8, hidden_dim=16, repr_dim=8)
     prior_fn = make_trained_prior(model, cache, smoothing=0.02)
 
-    mdp = LLMContextMDP(problem_statement="P", llm_client=MockLLMClient())
+    mdp = DeliberationMDP(problem="P", expected_answer="")
     state = mdp.initial_state()
-    actions = [MathAction(verb=Verb.DECOMPOSE), MathAction(verb=Verb.FORM_HYPOTHESIS)]
+    root = state.graph.root_id
+    actions = [DeliberationAction(Verb.SPLIT, root),
+               DeliberationAction(Verb.FORM_HYPOTHESIS, root)]
 
     for _ in range(3):
         priors = prior_fn(state, actions)
@@ -193,17 +193,17 @@ def test_trained_prior_raises_on_embedder_checkpoint_dim_mismatch():
     an opaque matmul shape error mid-search."""
     torch = pytest.importorskip("torch")
     from verifier_anchored_rl.heads import TrainableActor
-    from verifier_anchored_rl.llm_context_mdp import MathAction, Verb
+    from verifier_anchored_rl.deliberation_mdp import DeliberationAction, DeliberationMDP, Verb
     from verifier_anchored_rl.trained_prior import EmbeddingCache, make_trained_prior
-    from verifier_anchored_rl import LLMContextMDP
-    from verifier_anchored_rl.llm_client import MockLLMClient
 
     cache = EmbeddingCache(MockEmbeddingClient(embedding_dim=768))
     model = TrainableActor(embed_dim=2048, hidden_dim=16, repr_dim=8)
     prior_fn = make_trained_prior(model, cache)
 
-    mdp = LLMContextMDP(problem_statement="P", llm_client=MockLLMClient())
+    mdp = DeliberationMDP(problem="P", expected_answer="")
     state = mdp.initial_state()
-    actions = [MathAction(verb=Verb.DECOMPOSE), MathAction(verb=Verb.FORM_HYPOTHESIS)]
+    root = state.graph.root_id
+    actions = [DeliberationAction(Verb.SPLIT, root),
+               DeliberationAction(Verb.FORM_HYPOTHESIS, root)]
     with pytest.raises(ValueError, match="does not match the .*embed_dim"):
         prior_fn(state, actions)

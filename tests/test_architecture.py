@@ -32,7 +32,7 @@ def test_masked_policy_zeros_unavailable_and_sums_to_one():
     actor = HiddenStateActor(embed_dim=64)
     h = torch.randn(3, 64)
     mask = torch.tensor(
-        [[True, True, False, False, False, False, False]] * 3, dtype=torch.bool
+        [[True, True, False, False, False, False]] * 3, dtype=torch.bool
     )
     pi = actor.pi(h, mask)
     assert torch.allclose(pi.sum(dim=-1), torch.ones(3), atol=1e-6)

@@ -36,15 +36,13 @@ def test_text_embedder_drops_into_state_actor():
     pytest.importorskip("torch")
     from verifier_anchored_rl.architecture import HiddenStateActor
     from verifier_anchored_rl.planner_actor import PrefillCache, StateActor
-    from verifier_anchored_rl.llm_client import EchoLLMClient
-    from verifier_anchored_rl.llm_context_mdp import LLMContextMDP
+    from verifier_anchored_rl.deliberation_mdp import DeliberationMDP
     from verifier_anchored_rl.embedder import TextEmbedder
 
     emb = TextEmbedder(_FakeEmbeddingClient(dim=16), embed_dim=16)
     actor = HiddenStateActor(embed_dim=16)
     sa = StateActor(emb, actor, PrefillCache(), depth_limit=3)
-    mdp = LLMContextMDP(problem_statement="2+2", expected_answer="4",
-                        llm_client=EchoLLMClient(), depth_limit=3, max_turns=4)
+    mdp = DeliberationMDP(problem="2+2", expected_answer="4", depth_limit=3)
     state = mdp.initial_state()
     actions = list(mdp.actions(state))
     prior = sa.prior(state, actions)

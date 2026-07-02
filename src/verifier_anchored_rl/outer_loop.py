@@ -152,7 +152,7 @@ def collect_iteration(
     ``on_trajectory_end(done)`` fires after each completed trajectory with the
     1-based count of trajectories finished this iteration.
     """
-    from .llm_context_mdp import available_actions
+    from .deliberation_mdp import available_actions
 
     n_traj = 0
     n_dec = 0
@@ -183,7 +183,7 @@ def collect_iteration(
             q = root_q_estimates(root)
             record = {
                 "embedding": state_actor.embed(state).detach().cpu().tolist(),
-                "available_verbs": [a.value for a in avail],
+                "available_verbs": [a.verb.value for a in avail],
                 "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
                 "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
                 # Provenance tags for offline de-duplication on crash/resume.
@@ -295,7 +295,7 @@ def collect_iteration_concurrent(
 
     import numpy as np
 
-    from .llm_context_mdp import available_actions
+    from .deliberation_mdp import available_actions
     from .mcts import mcts_search, root_q_estimates, visit_count_policy
 
     log_lock = threading.Lock()
@@ -316,7 +316,7 @@ def collect_iteration_concurrent(
             q = root_q_estimates(root)
             rec = {
                 "embedding": state_actor.embed(state).detach().cpu().tolist(),
-                "available_verbs": [a.value for a in avail],
+                "available_verbs": [a.verb.value for a in avail],
                 "pi_mcts": {a.verb.value: float(p) for a, p in pi.items()},
                 "q_mcts": {a.verb.value: float(v) for a, v in q.items()},
                 # Provenance tags for offline de-duplication on crash/resume.
