@@ -1,0 +1,135 @@
+\section{Introduction}
+\label{sec:introduction}
+
+\paragraph{Motivation.}
+A central trend in large language model deployment is the explicit allocation
+of test-time compute to deliberation. Modern reasoning systems such as
+OpenAI's o1 line \citep{openai2024o1} and the public scaling analyses of
+\citet{snell2024scaling} demonstrate that, for verifiable problems,
+additional inference-time computation can yield accuracy gains comparable to
+those produced by orders-of-magnitude increases in pretraining scale. At the
+same time, small open-weight models, on the order of one to seven billion
+parameters, lag far behind frontier reasoning models on mathematical and
+programmatic benchmarks such as GSM8K \citep{cobbe2021gsm8k} and MATH
+\citep{hendrycks2021math}, even when given generous decoding budgets. The
+gap is widest precisely where it should be most closable: on problems whose
+solutions can be checked by a non-LLM verifier such as a symbolic algebra
+system, a unit-test harness, or a proof assistant. Process-level
+verifier supervision has been shown to outperform outcome-only supervision
+on MATH \citep{lightman2024verify}, evidence that verifier signals carry
+usable learning content at fine granularity. Whenever a cheap and
+trustworthy verifier exists, the loop from candidate solution to scalar
+reward is also short and dense, and, because the reward is a deterministic
+check rather than a learned critic, it sidesteps the reward-hacking surface
+that a learned proxy opens under optimization
+\citep{skalse2022reward, gao2023scaling}. This is the classical setting in
+which reinforcement learning excels.
+
+We therefore frame the problem squarely as reinforcement learning. The agent
+interacts with an environment whose dynamics are induced by a base language
+model and whose terminal reward is supplied by an external verifier. Learning
+proceeds by approximate $Q$-learning over sampled transitions, in the
+direct lineage of \citet{sutton2018reinforcement} and the deep $Q$-learning
+techniques of \citet{mnih2015human}. The natural question is then whether a
+small base model, paired with a learned action-value function trained against
+verifier-anchored Bellman targets, can close a meaningful fraction of the gap
+to much larger reasoning models on a fixed compute axis. This paper is the
+methodological prerequisite to answering that question.
+
+\paragraph{Position.}
+This is a methodology paper that presents a plan, not results. We make the
+framework precise enough to be evaluated as a contribution in its own right, and
+we pre-register the experimental design so that the eventual benchmark study
+will not be confused with post-hoc rationalization. We also report a preliminary
+feasibility probe (Section~\ref{sec:pilot}) that exercised the full pipeline
+end-to-end; the probe predates the current action space, so we report it only as
+evidence that every component is implementable and as the source of several
+methodological precautions the plan inherits, not as a benchmark result and not
+as a number the framework's claims rest on. Concretely, we present a
+reinforcement-learning framework specialized for verifiable LLM-induced context
+Markov decision processes, an architecture that uses a shared frozen language
+model as both encoder and stochastic transition model, a reward structure that
+quarantines learned aesthetic signals away from the Bellman target, an explicit
+role for tree search as a policy improvement operator rather than as the central
+learning algorithm, and a pre-registered evaluation plan with falsifiable
+hypotheses against standardized benchmarks.
+
+The reframing relative to prior MCTS-centric work is deliberate. In the
+AlphaZero tradition \citep{silver2017alphagozero, silver2018alphazero} and its
+expert-iteration ancestor \citep{anthony2017thinking}, tree search is the
+narrative center and the learned policy is its student. In our setting the
+center is the agent and its action-value function $\Qpsi(s, a)$. Tree search
+is one of several mechanisms for producing better samples and stronger
+training targets. This shift in emphasis has practical consequences: it makes
+non-search baselines such as $\epsilon$-greedy and softmax exploration first-class
+citizens, it clarifies what the verifier is for, and it makes the test-time
+search knob optional rather than load-bearing.
+
+\paragraph{Contributions.}
+We make six contributions:
+\begin{enumerate}[leftmargin=*]
+  \item A reinforcement-learning framework that casts LLM deliberation on
+        verifiable tasks as an approximate $Q$-learning problem over an
+        induced context MDP, with a structured state schema
+        (Section~\ref{sec:method-state}) that makes the Markov bet explicit
+        and a canonical \textsc{Verify} action that is part of
+        the agent's action space rather than a post-hoc parser pass.
+  \item An architecture that uses a single frozen base language model as both
+        encoder and stochastic transition model, with a small adapter and a
+        multi-head parametric action-value network $\Qpsi(s, a)$ over a fixed
+        verb set (Section~\ref{sec:method-architecture}). The choice of a
+        multi-head $Q$ over a fixed action set, rather than a scoring head over
+        $(s, a)$ embeddings, is justified by the available action cardinality
+        and by the gradient-routing properties of the architecture.
+  \item A reward-design principle that separates verifier-anchored Bellman
+        targets from learned-aesthetic signals
+        (Section~\ref{sec:method-reward}). Verifier outcomes form the external
+        reward and the Bellman backup; learned signals such as
+        reasoning-quality classifiers or deception detectors may enter only as
+        search priors, never as reward, reducing the Goodhart attack surface.
+  \item Monte Carlo Tree Search as a sample-efficient policy improvement
+        operator (Section~\ref{sec:method-mcts}), producing stronger training
+        targets $\Qmcts(s, a)$ and a visit-count policy $\pimcts$ that are
+        distilled into the parametric $Q$ and policy heads. The same operator
+        serves as a test-time-compute knob at inference: a fast greedy mode
+        evaluates $\Qpsi$ once per state, while a search mode invokes MCTS
+        when latency permits. Search is therefore an optional accelerator,
+        not the central learning algorithm.
+  \item A pre-registered evaluation plan
+        (Section~\ref{sec:experimental-plan}) that defines the baseline grid,
+        the compute axis, and the headline compute-versus-accuracy frontier
+        figure before any training begins, with falsifiable hypotheses and an
+        explicit threat model for compute leaks in test-time-compute claims.
+  \item A preliminary feasibility probe (Section~\ref{sec:pilot}) that exercised
+        every component of the framework end-to-end and established that the
+        expert-iteration loop is implementable, while surfacing the
+        methodological precautions the pre-registered study inherits as
+        monitoring requirements: train/held-out structural discipline, per-class
+        composition tracking, a pairwise-recommended-verb target-stability
+        diagnostic with the budget set by the slowest-converging family, and
+        honest per-decision compute accounting with an observable, resumable run
+        harness. The probe predates the current action space, so it contributes
+        feasibility evidence and methodology, not benchmark numbers.
+\end{enumerate}
+
+\paragraph{Paper structure.}
+Section~\ref{sec:background} develops the reinforcement-learning background:
+Markov decision processes, the Bellman optimality equation, tabular and
+approximate $Q$-learning with target networks, exploration policies, and MCTS
+as a policy improvement operator in the AlphaZero tradition, ending with the
+LLM-induced context MDP framing. Section~\ref{sec:method} presents the
+framework in detail: the state schema, the action space including the verifier
+action, the shared-encoder architecture, the role of MCTS in producing
+training targets and at inference, the reward structure, the training loop
+combining replay-based approximate $Q$-learning with expert-iteration
+distillation, and the two inference modes.
+Section~\ref{sec:experimental-plan} specifies the experimental design and the
+hypotheses to be tested. Section~\ref{sec:pilot} reports the preliminary
+feasibility probe: what it exercised end-to-end, the methodological lessons that
+survive the action-space redesign, and the design implications carried forward
+into the pre-registered study.
+Section~\ref{sec:related-work} positions the contribution against prior work
+in classical RL, verifier-supervised reasoning, test-time-compute scaling,
+MCTS-augmented language models, and small-model self-improvement.
+Section~\ref{sec:discussion} discusses limitations, extensions, and threats
+to validity. Section~\ref{sec:conclusion} concludes.

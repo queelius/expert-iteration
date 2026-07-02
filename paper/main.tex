@@ -11,80 +11,41 @@
 
 % ---------- Math ----------
 \usepackage{amsmath, amssymb, amsthm, mathtools}
-\usepackage{bm}
 
-% ---------- Graphics and color ----------
+% ---------- Graphics, color, tables ----------
 \usepackage{graphicx}
 \usepackage{xcolor}
-\usepackage{tikz}
-
-% ---------- Tables ----------
 \usepackage{booktabs}
 \usepackage{array}
-
-% ---------- Lists ----------
 \usepackage{enumitem}
 
-% ---------- Algorithms and code ----------
+% ---------- Algorithms ----------
 \usepackage{algorithm}
 \usepackage{algpseudocode}
-\usepackage{listings}
-\lstset{
-  basicstyle=\ttfamily\small,
-  breaklines=true,
-  frame=single,
-  xleftmargin=\parindent,
-  language=Python,
-  showstringspaces=false,
-}
 
-% ---------- URLs and hyperlinks ----------
-\usepackage[hyphens]{url}
+% ---------- Links and citations ----------
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
-
-% ---------- Bibliography ----------
 \usepackage[numbers, sort&compress]{natbib}
+\usepackage[capitalize]{cleveref}
 
-% ---------- Theorem environments ----------
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{lemma}[theorem]{Lemma}
+% ---------- Draft status marker ----------
+% Scaffold discipline: sections marked [STUB] await the LLMContextMDP
+% integration (method mechanics) or experimental runs (results). Do not
+% present stubbed content as complete. Source of truth for the method is
+% design.md at the repository root.
+\newcommand{\stub}[1]{\textcolor{red!70!black}{[STUB: #1]}}
 
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}
-
-% ---------- Custom commands (notation kept consistent with design.md) ----------
-\newcommand{\Qpsi}{Q_{\psi}}
-\newcommand{\Qstar}{Q^{\ast}}
-\newcommand{\Vstar}{V^{\ast}}
-\newcommand{\Qmcts}{\widehat{Q}_{\mathrm{MCTS}}}
-\newcommand{\pimcts}{\pi_{\mathrm{MCTS}}}
-\newcommand{\ptheta}{p_{\theta}}
-\newcommand{\Aset}{\mathcal{A}}
-\newcommand{\Sset}{\mathcal{S}}
-\newcommand{\Mset}{\mathcal{M}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\given}{\,|\,}
-\newcommand{\softmax}{\mathrm{softmax}}
-\newcommand{\PUCT}{\mathrm{PUCT}}
-
-% ---------- Title block ----------
-\title{Verifier-Anchored Reinforcement Learning for Small Language Model Deliberation}
+\title{Verifier-Anchored Reinforcement Learning:\\
+A Tiny Learned Controller Orchestrating a Frozen Language Model\\
+over a Structured Reasoning State}
 
 \author{
   Alexander Towell\\
-  Department of Computer Science\\
   Southern Illinois University Edwardsville\\
-  \texttt{atowell@siue.edu}\\
-  ORCID: \href{https://orcid.org/0000-0001-6443-9897}{0000-0001-6443-9897}
+  \texttt{atowell@siue.edu}
 }
 
-\date{\today}
+\date{Draft scaffold, \today. Results pending.}
 
 \begin{document}
 
@@ -93,19 +54,15 @@
 \input{sections/abstract}
 
 \input{sections/introduction}
-\input{sections/background}
-\input{sections/method}
-\input{sections/experimental_plan}
-\input{sections/pilot_results}
 \input{sections/related_work}
+\input{sections/method}
+\input{sections/training}
+\input{sections/experimental_setup}
+\input{sections/results}
 \input{sections/discussion}
 \input{sections/conclusion}
 
 \bibliographystyle{plainnat}
 \bibliography{references}
-
-\appendix
-\input{sections/appendix_implementation}
-\input{sections/appendix_pilot}
 
 \end{document}

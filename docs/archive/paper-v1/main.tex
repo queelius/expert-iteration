@@ -1,0 +1,111 @@
+\documentclass[11pt,letterpaper]{article}
+
+% ---------- Page geometry ----------
+\usepackage[margin=1in]{geometry}
+
+% ---------- Encoding and fonts ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ---------- Math ----------
+\usepackage{amsmath, amssymb, amsthm, mathtools}
+\usepackage{bm}
+
+% ---------- Graphics and color ----------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+
+% ---------- Tables ----------
+\usepackage{booktabs}
+\usepackage{array}
+
+% ---------- Lists ----------
+\usepackage{enumitem}
+
+% ---------- Algorithms and code ----------
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  xleftmargin=\parindent,
+  language=Python,
+  showstringspaces=false,
+}
+
+% ---------- URLs and hyperlinks ----------
+\usepackage[hyphens]{url}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+% ---------- Bibliography ----------
+\usepackage[numbers, sort&compress]{natbib}
+
+% ---------- Theorem environments ----------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+% ---------- Custom commands (notation kept consistent with design.md) ----------
+\newcommand{\Qpsi}{Q_{\psi}}
+\newcommand{\Qstar}{Q^{\ast}}
+\newcommand{\Vstar}{V^{\ast}}
+\newcommand{\Qmcts}{\widehat{Q}_{\mathrm{MCTS}}}
+\newcommand{\pimcts}{\pi_{\mathrm{MCTS}}}
+\newcommand{\ptheta}{p_{\theta}}
+\newcommand{\Aset}{\mathcal{A}}
+\newcommand{\Sset}{\mathcal{S}}
+\newcommand{\Mset}{\mathcal{M}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\given}{\,|\,}
+\newcommand{\softmax}{\mathrm{softmax}}
+\newcommand{\PUCT}{\mathrm{PUCT}}
+
+% ---------- Title block ----------
+\title{Verifier-Anchored Reinforcement Learning for Small Language Model Deliberation}
+
+\author{
+  Alexander Towell\\
+  Department of Computer Science\\
+  Southern Illinois University Edwardsville\\
+  \texttt{atowell@siue.edu}\\
+  ORCID: \href{https://orcid.org/0000-0001-6443-9897}{0000-0001-6443-9897}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\input{sections/abstract}
+
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/method}
+\input{sections/experimental_plan}
+\input{sections/pilot_results}
+\input{sections/related_work}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\input{sections/appendix_implementation}
+\input{sections/appendix_pilot}
+
+\end{document}

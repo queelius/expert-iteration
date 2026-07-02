@@ -1,0 +1,1014 @@
+\section{Method}
+\label{sec:method}
+
+% =========================================================================
+% Core section. Target length for first draft: ~5-6 pages.
+% Mirrors design.md \S21 (Concrete Specialization), but written for a
+% research-paper audience rather than as a handoff document.
+% =========================================================================
+
+\subsection{Overview}
+\label{sec:method-overview}
+
+The method is approximate $Q$-learning over a verifier-anchored context
+MDP, with MCTS used as a policy improvement operator that supplies
+stronger training targets during expert iteration and as a test-time
+compute knob at inference. The central learnable object is a parametric
+action-value function $\Qpsi(s, a)$ over structured context states; a
+shared policy head $\ptheta(a \given s)$ supplies a categorical prior
+for search and a sampling distribution for fast acting. The MDP is
+defined by Sections~\ref{sec:method-state}--\ref{sec:method-actions}
+(state representation and action set);
+Section~\ref{sec:method-architecture} specifies the parametric heads
+that approximate $\Qpsi$ and $\ptheta$;
+Section~\ref{sec:method-reward} fixes the reward function;
+Section~\ref{sec:method-training} states the approximate $Q$-learning
+update with MCTS-supplied targets; Section~\ref{sec:method-mcts}
+describes how MCTS produces the locally improved estimates $\Qmcts$ and
+$\pimcts$ used as those targets; and Section~\ref{sec:method-inference}
+states the two inference modes (fast $\Qpsi$ argmax, search-refined
+MCTS) that the trained heads support.
+
+\paragraph{What is borrowed and what is novel.}
+The learning algorithm is approximate $Q$-learning
+\citep{mnih2015human, sutton2018reinforcement}; the use of MCTS as a
+policy improvement operator that produces training targets is expert
+iteration \citep{anthony2017thinking, silver2017alphagozero,
+silver2018alphazero}; and the bifurcation of the search tree into
+decision and chance (afterstate) nodes, which lets the sampled chance
+node estimate the inner Bellman expectation in a stochastic environment,
+is borrowed from Stochastic MuZero
+\citep{antonoglou2022stochastic}. The novel ingredients are
+(i) the verifier-anchored context MDP itself
+(Section~\ref{sec:method-state}); (ii) the shared-encoder, multi-head-$Q$
+architecture, in which one frozen LLM serves as both encoder and
+generator so a single forward yields the state embedding and the
+verb-instantiator's continuation rather than running two models
+(Section~\ref{sec:method-architecture}); and (iii) the
+\textsc{Verify} action that makes checker calls a first-class
+move within the MDP rather than a post-hoc filter
+(Section~\ref{sec:method-actions}). The chance-node $Q$-estimate
+$\Qmcts(s, a)$ is used as a direct Bellman target in place of
+single-sample targets (Section~\ref{sec:method-mcts}); the afterstate
+mechanism is borrowed, and what is specific to our setting is its
+application to the non-enumerable LLM-induced transition, where the
+sampled chance node is the only available estimator of that expectation.
+
+\subsection{Structured Context State}
+\label{sec:method-state}
+
+The context MDP's state representation occupies a middle ground between
+two failure modes. A state that is too unstructured (a raw token
+sequence) gives the $Q$- and policy heads no inductive bias to exploit,
+and makes any tree reuse impossible: two trajectories that arrive at
+semantically equivalent situations never share state. A state that is
+too compressed (a single learned embedding) loses interpretability and
+cannot express the action-availability constraints that prevent the
+agent from, say, invoking the verifier on a hypothesis that does not
+exist. Our representation is a fixed structural shell whose slot
+contents are LLM-generated text. The slots fix the kinds of entities the
+agent can manipulate; the LLM fills in the specifics. The same
+representation is consumed by the parametric heads
+(Section~\ref{sec:method-architecture}), by the availability predicate
+of Section~\ref{sec:method-actions}, and by MCTS when it samples
+trajectories to refine local estimates (Section~\ref{sec:method-mcts}).
+
+\begin{definition}[Math state]
+\label{def:mathstate}
+A \emph{math state} $s \in \Sset$ is a tuple
+\[
+  s = \bigl(\,P,\; F,\; G_{\textsc{open}},\; G_{\textsc{closed}},\;
+            H,\; V,\; c,\; A,\; d\,\bigr),
+\]
+where $P \in \Sigma^{*}$ is the immutable problem statement, $F$ is a tuple
+of \texttt{Fact} records, $G_{\textsc{open}}$ and $G_{\textsc{closed}}$ are
+tuples of \texttt{Subgoal} records (open and closed), $H$ is a tuple of
+\texttt{Hypothesis} records, $V$ is the verifier-call log, $c \in
+\{\textsf{None}\} \cup \Sigma^{*}$ is the committed answer (if any), $A$ is
+a tuple of identifiers naming explicitly abandoned hypotheses or subgoals,
+and $d \in \mathbb{N}$ is the turn count.
+\end{definition}
+
+Concretely, each record type carries a stable identifier so that actions and
+parent pointers can address it; the full \texttt{Fact}, \texttt{Subgoal},
+\texttt{Hypothesis}, and \texttt{VerifierCall} dataclass definitions are
+listed in Appendix~\ref{app:state-listings}.
+
+\paragraph{The fact-versus-hypothesis distinction.}
+The schema's most load-bearing element is the separation of \texttt{Fact}
+from \texttt{Hypothesis}. A \texttt{Fact} is either a problem-given premise,
+a derivation accepted as part of the reasoning trace, or a derivation that
+has additionally been promoted by a successful \texttt{VerifierCall}. A
+\texttt{Hypothesis} is a tentative claim that has not been (or could not be)
+verified by the available checker. Without this distinction, the agent
+cannot tell ``I have proven this'' from ``I think this is true,'' and the
+\textsc{Verify} action (Section~\ref{sec:method-actions}) loses its
+operational meaning. The distinction also exposes a structurally
+interesting learnable behavior: spend a verifier call to promote a
+hypothesis to a fact precisely when the chain of reasoning depends on it.
+
+\paragraph{Recursive structure.}
+The fields \texttt{parent\_hypothesis}, \texttt{children}, and
+\texttt{follow\_up\_to} are forward-compatibility hooks for
+\emph{structural decomposition}: a hypothesis may refine another
+hypothesis, a subgoal may have nested sub-subgoals, and a verifier call may
+follow up on an earlier one. The collections (\texttt{hypotheses},
+\texttt{open\_subgoals}, \texttt{verifier\_log}) remain flat tuples; the
+tree structure is implicit in the identifier references rather than
+carried by nested data. Two consequences follow. First, the state encoder
+(Section~\ref{sec:method-architecture}) does not require a graph neural
+network or a tree-recursive cell; serializing the flat list with depth
+markers (\texttt{[HYPOTHESIS id=hyp\_3 depth=2 parent=hyp\_1]}) lets the
+frozen LLM's self-attention handle the tree natively. Second, the action
+space stays categorical over a small fixed verb set
+(Section~\ref{sec:method-actions}); the identifier of the action's target
+is supplied by the verb-instantiator as part of its generated content.
+
+We distinguish productive recursion (\emph{structural decomposition}: a
+hypothesis splits into sub-hypotheses each addressing a sub-problem the
+verifier can check) from unproductive recursion (\emph{meta-criticism}: a
+critique of a critique, with no terminal verifier signal beneath). Phase 1
+leaves the recursive fields at their defaults and so cannot produce
+either; phase 2 activates them and relies on the verifier-anchored reward,
+plus a per-hypothesis \texttt{tree\_depth\_limit} (default $3$ to $4$), to
+suppress the unproductive case. Developing this distinction at depth,
+and replacing the global depth limit with per-node decomposition
+decisions, is deferred to a successor project on structured action
+spaces.
+
+\paragraph{Markov bet.}
+The state is intended to satisfy the Markov property: all information
+needed for future decisions lives in the slots, and the
+parsed-from-LLM-text record is the agent's authoritative view. In
+practice, the parser that maps LLM output into structured records is
+lossy: an LLM sentence describing a derivation strategy may not survive
+projection into \texttt{Fact.derivation}. The Markov claim is therefore a
+design commitment and a debugging discipline rather than a theorem. When
+a $Q$-value disagrees with expectation, the parser is the first suspect,
+not the head.
+
+\paragraph{Canonicalization.}
+Two trajectories that reach semantically equivalent states (the same set
+of facts and subgoals, discovered in different orders) typically yield
+different schema instances under the natural trajectory ordering. MCTS
+tree reuse benefits when such states hash identically, but
+canonicalization requires a normalizer: topological ordering of facts by
+derivation depth, SymPy normal forms on statements, sorted subgoal
+identifiers. We defer canonicalization to phase 2; the first version
+trades the reuse benefit for simpler debugging.
+
+\subsection{Action Space}
+\label{sec:method-actions}
+
+The context MDP's action space confronts a similar tension to the state
+representation. An action space that is too open (free-form text actions
+generated directly by the LLM) gives the $Q$-head no fixed categorical
+output set to score, breaks PUCT's reliance on a fixed action set, and
+forces the policy head to score arbitrary candidates against arbitrary
+candidates rather than learn a stable categorical distribution. An
+action space that is too narrow (a rigid procedural workflow such as
+\emph{classify-then-decompose-then-propose-then-critique-then-commit})
+bakes a fixed deliberation order into the dynamics and prevents the
+agent from learning to skip stages, revisit hypotheses, or invent
+micro-loops. Our choice is a small fixed set of coarse verbs whose
+targets and content are generated by the LLM as an action-conditioned
+continuation. The verb gives the $Q$-head a small categorical output
+set, the policy head a categorical distribution to learn, and MCTS
+something categorical to branch on; the LLM-generated content lets the
+action's effect adapt to the state.
+
+\begin{definition}[Action: a verb applied to a target]
+\label{def:actionset}
+An action is a pair $a = (\textsc{verb}, \tau)$: a categorical \emph{verb}
+drawn from a small fixed set, together with a \emph{target} identifier
+$\tau$ naming the node of the state the verb operates on (absent for the
+few verbs that introduce free-standing content). The six core verbs are
+\textsc{Split}, \textsc{FormHypothesis}, \textsc{ComputeSubexpr},
+\textsc{Verify}, \textsc{Commit}, and \textsc{Abandon}; an optional
+reward-free \textsc{Critique} supports LLM self-assessment. The policy
+factors accordingly into a categorical head over the verbs and a pointer
+head over the live target identifiers; the verb-instantiator
+(Section~\ref{sec:method-architecture}) supplies any free-form content as
+a continuation of the serialized state. Each verb is a \emph{lens}: it
+renders a scoped, grounded-local view of the target's neighborhood for the
+frozen generator and writes the generated content back locally to that node
+and its subtree.
+\end{definition}
+
+The verbs and their effects:
+
+\begin{itemize}[leftmargin=*, itemsep=0.2em]
+  \item \textsc{Split}: decompose a goal into children combined either
+        conjunctively (subgoals, all of which must be solved) or, as an
+        exhaustive case analysis, disjunctively (the cases together with an
+        exhaustiveness obligation that is itself reified as a goal). The
+        connective is recorded on the produced edge and consumed by
+        \textsc{Commit}'s aggregation.
+  \item \textsc{FormHypothesis}: introduce a tentative claim, a candidate
+        solution addressing a goal.
+  \item \textsc{ComputeSubexpr}: perform a symbolic or numeric computation
+        step; the result enters as a \texttt{Fact} with
+        \texttt{source = "derived"}.
+  \item \textsc{Verify}: call the symbolic checker on a chosen hypothesis or
+        derived fact; the call is appended to \texttt{verifier\_log} and, on
+        success, the target is promoted to a verified fact. \textsc{Verify}
+        is the only reward-bearing verb (Section~\ref{sec:method-reward}).
+  \item \textsc{Commit}: close a goal by promoting a discharging witness (a
+        verified fact, a solved decomposition, or a verified hypothesis) to
+        its solution. \textsc{Commit} is recursive: committing the root goal
+        is terminal and yields the verifier's verdict, while committing a
+        subgoal is reward-free bookkeeping that records its solution for the
+        parent.
+  \item \textsc{Abandon}: close a goal or hypothesis negatively. This is a
+        forward prune that marks the node abandoned and retains its subtree
+        as a checked dead end, never a rollback to a prior state.
+  \item \textsc{Critique} (optional, reward-free): an LLM self-assessment of
+        a hypothesis against its goal. It adds information the policy may use
+        to decide whether to commit, abandon, or refine, but never adds
+        reward, so the symbolic verifier remains the sole reward source.
+\end{itemize}
+
+\textsc{Split} unifies conjunctive decomposition and case analysis under one
+connective-tagged verb; compression of a closed subtree is handled by how the
+lens renders it rather than by a verb. The \emph{Phase-1} implementation
+realizes a conservative subset: a verb-only categorical action whose target
+and content are sampled by the frozen generator from a global, unscoped view,
+with verified-fact promotion and the terminal commit already in place. The
+\emph{designed target} is the full $(\textsc{verb}, \tau)$ factorization with a
+pointer head over identifiers and per-verb scoped lenses; the two are
+distinguished wherever the difference matters below.
+
+\paragraph{State-conditioned availability.}
+Not every verb is meaningful in every state. We define an availability
+predicate $\mathrm{avail}: \Sset \times \Aset \to \{0, 1\}$ that masks
+invalid actions before PUCT:
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Verb & Available when \\
+\midrule
+\textsc{Split}           & $|G_{\textsc{open}}| > 0$ and $d < d_{\max}$ \\
+\textsc{FormHypothesis}  & $|G_{\textsc{open}}| > 0$ and $d < d_{\max}$ \\
+\textsc{ComputeSubexpr}  & always \\
+\textsc{Verify}          & $|H| > 0$ or $\exists f \in F:
+                           f.\texttt{source} = \texttt{"derived"}$ \\
+\textsc{Commit}          & a discharging witness exists for some open goal \\
+\textsc{Abandon}         & $|H| > 0$ or $|G_{\textsc{open}}| > 0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The state schema (Section~\ref{sec:method-state}) makes these predicates
+trivial to evaluate. At each decision node, the policy logits for
+unavailable verbs are masked to $-\infty$ before the softmax, and the
+$Q$-head's unavailable entries are excluded from the PUCT argmax; under the
+designed $(\textsc{verb}, \tau)$ factorization the same mask additionally
+restricts the pointer head to type-valid targets.
+
+\paragraph{The \textsc{Verify} design choice.}
+\textsc{Verify} is the action that converts ``LLM formats output,
+symbolic solver checks'' from a post-hoc parser pass into a first-class
+deliberation move. The agent decides when to spend a verifier call;
+intermediate results land in \texttt{verifier\_log} and become part of
+the state. Three benefits follow. First, the verifier becomes a
+learnable resource the policy can budget: a state in which the agent
+has done substantial derivation work but has not invoked the verifier
+carries implicit risk, and the policy can learn to call the verifier
+when the expected information gain justifies the cost. Second, the
+verifier log provides a structurally informative feature for the policy
+head: trajectories with many successful intermediate verifier calls
+correlate with eventual correctness. Third, the verifier can be invoked
+on intermediate hypotheses rather than only the committed answer,
+turning the binary terminal signal into a series of verifier-anchored
+checkpoints, each of which can carry a small intermediate reward
+(Section~\ref{sec:method-reward}) without introducing the Goodhart
+concerns that attend learned-aesthetic signals.
+
+\paragraph{The root \textsc{Commit} format constraint.}
+The terminal root \textsc{Commit} requires strict-format output: the produced text
+must parse for the terminal verifier (a boxed numeric expression for
+GSM8K, a SymPy-evaluable expression for MATH, a Lean tactic for formal
+proof tasks). Two implementations are possible:
+
+\begin{enumerate}[leftmargin=*, itemsep=0.2em]
+  \item \emph{Constrained decoding}: regex- or grammar-guided sampling
+        \citep{willard2023outlines}. The format is guaranteed by
+        construction; no retries.
+  \item \emph{Retry with correction}: sample, parse, and on failure
+        resample with a corrective prompt that includes the parse
+        error.
+\end{enumerate}
+
+Path 1 is preferred when the chosen LLM and decoding framework support
+it; path 2 is a portable fallback. The choice affects the
+verb-instantiator (Section~\ref{sec:method-architecture}) but not the
+$Q$-head or the action set: the root \textsc{Commit} is a single verb
+regardless of how its content is produced.
+
+\paragraph{Alternatives and migration path.}
+We adopt the small fixed verb set as the conservative phase 1
+starting point: the verb-instantiator supplies enough action-content
+variation that MCTS still explores meaningfully, and the small fixed
+action set keeps the multi-head $Q$ architecture
+(Section~\ref{sec:method-architecture}) simple. Two alternative
+action-space designs that recur in the LLM-MCTS literature (verb-times-slot
+pairs and progressive widening with LLM-proposed candidates), and the
+bounded migration path to the latter in phase 2, are discussed in
+Appendix~\ref{app:action-alternatives}.
+
+\subsection{Architecture: Shared LLM and Trainable Heads}
+\label{sec:method-architecture}
+
+The architecture of the approximate $Q$-learning system confronts a
+third design tension. An external encoder (such as a sentence-transformer
+trained on general text) introduces \emph{representation drift}: the
+encoder's notion of state similarity need not match what the generator
+considers the same context, so the $Q$-head can see two distinct states
+where the generator would produce identical continuations. Full
+fine-tuning of the LLM is expensive in compute and memory and conflates
+two sources of improvement that we want to keep separate: the learning
+loop and the raw representational capacity of the language model. The
+middle path we adopt (Figure~\ref{fig:architecture}) uses one frozen LLM
+as both encoder and generator, with a small task-tuned adapter and three
+lightweight heads sharing the LLM's hidden state. Because encoder and
+generator are the same model, representation drift is bounded by
+construction; because the LLM is frozen, any measured improvement during
+training is attributable to the heads and the search procedure.
+
+\begin{figure}[t]
+\centering
+\input{figures/architecture}
+\caption{Architecture overview: frozen LLM as shared encoder and
+  generator; adapter MLP; multi-head $Q$; policy head; verb-instantiator.
+  Solid arrows show data flow; the dashed arrow indicates KV-cache reuse
+  between the embedding forward and the verb-instantiator's continuation
+  generation.}
+\label{fig:architecture}
+\end{figure}
+
+\paragraph{Serialization.}
+A math state $s$ is rendered into a token sequence by a deterministic
+template using explicit structural markers (\texttt{[PROBLEM]},
+\texttt{[FACT \ldots]}, \texttt{[HYPOTHESIS \ldots]},
+\texttt{[VERIFIER\_CALL \ldots]}, and a closing \texttt{[STATE\_END]}
+sentinel); the full template is given in
+Appendix~\ref{app:state-listings}. Two properties of this template
+matter. First, the structural markers
+give the LLM's self-attention stable positional anchors, so per-slot
+information is recoverable from the pooled hidden state even though no
+slot-specific encoding is performed explicitly. Second, depth-indexed
+identifiers (\texttt{depth=2 parent=hyp\_1}) render the implicit tree
+structure from Section~\ref{sec:method-state} as a flat token sequence
+that causal self-attention can resolve without a tree-aware encoder.
+Abandoned entities are filtered out, and only the immutable problem
+prefix is shared across steps within a trajectory.
+
+\paragraph{Frozen LLM forward.}
+Let $\mathrm{serialize}: \Sset \to \Sigma^{*}$ denote the template
+function and $\mathrm{tokenize}: \Sigma^{*} \to \mathbb{N}^{T}$ the
+LLM's tokenizer. The frozen LLM produces a hidden state at each token
+position. We define the state embedding as the hidden state at the
+position of the $\texttt{[STATE\_END]}$ sentinel:
+
+\begin{equation}
+\label{eq:embed}
+\mathrm{embed}(s) \;=\; h_{T} \;\in\; \R^{d_h},
+\qquad
+h_{1{:}T} \;=\; \mathrm{LLM}\bigl(\mathrm{tokenize}(\mathrm{serialize}(s))\bigr),
+\end{equation}
+
+where $T$ is the index of $\texttt{[STATE\_END]}$ and $d_h$ is the LLM's
+hidden dimension (typically $2048$ to $4096$ for the $1$-to-$7$ billion
+parameter base models we consider). Causal self-attention guarantees
+that $h_{T}$ has integrated the entire prefix, and decoder-only LLMs
+are trained to make this position's hidden state informative for
+next-token prediction. We exploit this directly: the same $h_{T}$ that
+the LLM would use to predict the next token serves as our state
+embedding for the heads. The immutable problem prefix is KV-cached
+across steps within a trajectory, so the per-step incremental cost is
+only the new tokens introduced by the latest action (a single new
+hypothesis, fact, or verifier-call record, typically).
+
+\paragraph{Adapter MLP.}
+The LLM's hidden state $h \in \R^{d_h}$ is compressed by a small adapter:
+
+\begin{equation}
+\label{eq:adapter}
+\phi: \R^{d_h} \to \R^{m},
+\qquad
+\phi(h) \;=\; W_{2}\,\sigma(W_{1} h + b_{1}) + b_{2},
+\end{equation}
+
+with $m = 256$ and $\sigma$ the GELU activation. The adapter does three
+things. First, $m \ll d_h$ reduces head parameter counts by a factor of
+$d_h / m \approx 10$, which matters during repeated MCTS rollouts. Second,
+the adapter gives the heads a task-tuned representation without
+unfreezing the LLM: it absorbs the projection that turns a
+next-token-prediction hidden state into a useful $Q$-input. Third, the
+adapter is the natural place to begin unfreezing in phase 2 (e.g.,
+adding LoRA \citep{hu2022lora} on the LLM's last transformer layers),
+since the adapter has already absorbed much of the task-specific
+representational work and there is less for the LLM weights to learn.
+
+\paragraph{Multi-head $Q$.}
+The $Q$-head produces $K = 7$ scalar outputs in one forward pass:
+
+\begin{equation}
+\label{eq:qhead}
+\Qpsi(s, \cdot) \;=\; W_{Q}\,\sigma\bigl(U_{Q}\,\phi(h)\bigr) + b_{Q} \;\in\; \R^{K},
+\end{equation}
+
+with $\Qpsi(s, a_{k})$ the $k$-th component. Backpropagation on a
+transition $(s, a_{k}, r, s')$ updates only the parameters in row $k$
+of $W_{Q}$ along with the shared body; the other six heads receive
+zero gradient from that sample. Heads specialize without being
+separate networks, and a single LLM forward yields all action values
+needed at a decision node. At inference, fast mode
+(Section~\ref{sec:method-inference}) returns
+$\arg\max_{a \in \mathrm{avail}(s)} \Qpsi(s, a)$.
+
+\paragraph{Policy head.}
+The policy head shares the adapter with $Q$ and produces $K$ logits.
+Letting $\mathrm{avail}(s) \subseteq \Aset$ denote the available
+actions at $s$,
+
+\begin{equation}
+\label{eq:policy}
+\ptheta(a \given s) \;=\;
+\frac{\exp\bigl(\ell_{\theta}(s, a)\bigr) \cdot \mathbf{1}[a \in \mathrm{avail}(s)]}
+     {\sum_{a' \in \mathrm{avail}(s)} \exp\bigl(\ell_{\theta}(s, a')\bigr)},
+\end{equation}
+
+with logits $\ell_{\theta}(s, \cdot) = W_{\pi}\,\sigma(U_{\pi}\,\phi(h))$.
+The mask removes unavailable actions exactly, so the softmax normalizer
+is computed only over feasible actions; assigning them probability zero
+through a renormalization is mathematically equivalent to assigning
+them logit $-\infty$ and is more numerically stable in practice.
+
+\paragraph{Verb-instantiator.}
+The verb-instantiator produces the free-form content and target
+identifier of the chosen action. It is implemented as continuation
+generation from the $\texttt{[STATE\_END]}$ sentinel: after the LLM
+has consumed the serialized state, the next tokens it generates
+(conditioned on a small verb-specific prompt prefix) become the
+action's content. Because the verb-instantiator continues from the
+same KV cache that produced $\mathrm{embed}(s)$, two outputs are
+obtained from a single LLM forward pass: the hidden state for the
+heads, and the next-token logits for content generation. The total
+LLM compute per decision node is one forward, not two.
+
+A small verb-specific prompt distinguishes between, say, ``produce a
+decomposition of \texttt{hyp\_3}'' and ``invoke the verifier on
+\texttt{hyp\_3} with verb \texttt{factor}.'' These prompts are fixed
+templates parameterized by the chosen verb and the target identifier
+selected by the policy.
+
+\paragraph{Target $Q$ network.}
+Approximate $Q$-learning is unstable when the Bellman target chases
+its own moving estimate. Following the standard DQN remedy
+\citep{mnih2015human}, we maintain a target network $Q_{\bar{\psi}}$
+that is a frozen copy of $\Qpsi$ (and the adapter), synchronized
+every $N_{\mathrm{sync}}$ optimizer steps. Bellman targets use $Q_{\bar{\psi}}$:
+
+\begin{equation}
+\label{eq:bellmantarget}
+y \;=\; r + \gamma \max_{a' \in \mathrm{avail}(s')} Q_{\bar{\psi}}(s', a'),
+\end{equation}
+
+and the $Q$-loss is $\sum (\Qpsi(s, a) - y)^{2}$ over the replay
+batch. The adapter is synchronized along with the $Q$-head because
+both contribute to the Bellman target. The policy head is not part
+of the target copy and trains directly toward the visit-count
+distribution $\pimcts(\cdot \given s)$
+(Section~\ref{sec:method-training}).
+
+\paragraph{Phase 1 freezing rationale.}
+In phase 1 the LLM is frozen entirely. Only the adapter, $Q$-head,
+policy head, and the small verb-specific prompt prefixes train.
+The total trainable parameter count is below five million across all
+heads, two to three orders of magnitude smaller than the frozen LLM.
+Three consequences worth flagging: optimizer state and memory
+footprint are dominated by the heads rather than the LLM, so a
+modest GPU suffices even with a $7$B-parameter base model; any
+measured improvement during training is attributable to the heads
+and the search procedure rather than capability gains in the LLM,
+which is the comparison framing needed for
+Section~\ref{sec:experimental-plan}; and when a $Q$-value disagrees
+with expectation, the LLM is not in the suspect set (it is fixed),
+narrowing debugging to the adapter, the heads, the serialization
+template, or the parser. Phase 2 optionally unfreezes the last one
+or two transformer layers via LoRA \citep{hu2022lora}; this is a
+separate experiment whose contribution is measured against the
+frozen baseline.
+
+This architecture is realized end-to-end in the pilot: the shared-encoder
+implementation runs the frozen base model in process on a $1.5$B substrate,
+reads $\mathrm{embed}(s) = h_T$ from the same weights that generate verb
+content, and confirms the one-forward-per-decision prefill in practice
+(Section~\ref{sec:pilot-closedloop}).
+
+\subsection{MCTS as a Policy Improvement Operator}
+\label{sec:method-mcts}
+
+The parametric $\Qpsi$ and $\ptheta$ from approximate $Q$-learning are
+useful, but on a fresh state $s$ they encode only the average behavior
+accumulated across the training distribution; they have not yet
+allocated any compute specifically to $s$. MCTS produces locally
+improved estimates by sampling the environment more intelligently than
+the behavior policy would, using $\Qpsi(s, a)$ as a leaf evaluator and
+$\ptheta(a \given s)$ as a PUCT prior to bias which trajectories get
+expanded. The outputs of one search from $s$ are the locally refined
+estimates $\Qmcts(s, a)$ and $\pimcts(a \given s)$ defined in
+Equations~(\ref{eq:qmcts}) and~(\ref{eq:pimcts}) below. These serve two
+purposes: during training they replace single-sample Bellman targets
+with averages over many trajectories whose actions were chosen by
+search rather than by the behavior policy (Section~\ref{sec:method-training});
+at inference they refine the head estimate at a state on which extra
+compute is being spent (Section~\ref{sec:method-inference}). The MCTS
+variant we use sits between two extremes. The bifurcation of the tree
+into decision and chance (afterstate) nodes is borrowed from Stochastic
+MuZero \citep{antonoglou2022stochastic}, which introduced the afterstate
+node as the device for planning with a learned model in a stochastic
+environment; we adopt it rather than invent it. The bifurcation matters
+because the chance-node mean value is exactly the empirical estimator of
+the inner expectation
+$\E_{s' \sim P(\cdot \given s, a)}[r + \gamma V^{\ast}(s')]$ in the
+Bellman optimality equation, and collapsing decision and chance nodes
+into a single node type would fold that statistic into the decision node
+and discard the very quantity that converges to $Q^{\ast}(s, a)$. A fully
+model-based MCTS that enumerates $P(s' \given s, a)$ exactly is also
+unavailable to us: the LLM-induced transition is not enumerable, since
+$s'$ is determined by the verb-instantiator's continuation tokens and
+the parser that lifts those tokens into the schema of
+Section~\ref{sec:method-state}. This non-enumerability is what makes the
+borrowed mechanism specific to our setting: the sampled chance node is
+the only available estimator of the Bellman inner expectation, since
+neither enumeration nor a closed-form transition model is on offer. The
+middle path is therefore chance-node bifurcation with sampled transitions
+and per-edge reward backup, with explicit decision and chance nodes, the
+LLM used only as a sampler of $s' \sim P(\cdot \given s, a)$, and returns
+accumulated from the leaf inward so that each ancestor receives the return
+computed from its own vantage point.
+
+\paragraph{Node types.}
+The search tree alternates between two node types:
+
+\begin{itemize}[leftmargin=*, itemsep=0.2em]
+  \item \emph{Decision nodes} hold a state $s$ and per-verb children
+        (one chance node per action $a \in \Aset$ that the
+        availability predicate admits). They record $N(s)$, the visit
+        count.
+  \item \emph{Chance nodes} hold a state-action pair $(s, a)$ and a
+        list of child decision nodes (one per sampled next state). They
+        record $N(s, a)$, the visit count; $W(s, a)$, the accumulated
+        return; and the prior $\ptheta(a \given s)$.
+\end{itemize}
+
+The chance-node split is the structure that lets $W(s, a) / N(s, a)$
+converge to the inner Bellman expectation as the number of simulations
+grows.
+
+\paragraph{The four-phase loop.}
+Each simulation executes four phases.
+
+\begin{enumerate}[leftmargin=*, itemsep=0.2em]
+  \item \emph{Selection.} Starting at the root decision node, descend
+        the tree by applying PUCT at each decision node and sampling a
+        transition at each chance node. Continue until reaching either
+        an unexpanded chance node, a leaf decision node, or a terminal
+        state.
+  \item \emph{Expansion.} If the descent stopped at a decision node
+        that has not yet been expanded, instantiate one chance-node
+        child per available action, query the heads
+        (Section~\ref{sec:method-architecture}) once to obtain
+        $\Qpsi(s, \cdot)$ and $\ptheta(\cdot \given s)$, and seed each
+        new chance node with the prior.
+  \item \emph{Simulation.} From the newly added decision node, obtain
+        a leaf evaluation. Phase 1 uses the $V$-style estimate
+        $\widehat{V}(s) = \max_{a \in \mathrm{avail}(s)} \Qpsi(s, a)$
+        directly; no separate rollout policy is required, in keeping
+        with the AlphaZero pattern \citep{silver2017alphagozero}. A
+        rollout-based simulation is a phase-2 option if the head
+        estimate proves too noisy.
+  \item \emph{Backup.} Propagate the return from the leaf back through
+        the path, accumulating per-edge rewards as it climbs. The
+        precise update is described next.
+\end{enumerate}
+
+\paragraph{PUCT selection.}
+At each decision node, the next action is chosen by the PUCT rule
+\citep{silver2017alphagozero}, using the learned policy as prior and
+masking unavailable actions:
+
+\begin{equation}
+\label{eq:puct}
+a^{\ast}
+\;=\;
+\arg\max_{a \in \mathrm{avail}(s)}
+\Bigl[\,
+\widehat{Q}(s, a)
+\;+\;
+c_{\PUCT} \cdot \ptheta(a \given s) \cdot \frac{\sqrt{N(s)}}{1 + N(s, a)}
+\,\Bigr],
+\end{equation}
+
+with $a \notin \mathrm{avail}(s)$ assigned PUCT score $-\infty$ before
+the argmax. The exploitation term $\widehat{Q}(s, a)$ is the chance node's
+empirical mean $W(s, a) / N(s, a)$ once the node has been visited and the
+head estimate $\Qpsi(s, a)$ otherwise. The exploration term
+$\ptheta(a \given s)$ comes from the
+policy head and steers early-visit allocation toward actions the
+policy distillation has identified as promising. The exploration
+constant $c_{\PUCT}$ controls the relative weight; we take $c_{\PUCT}
+\in [1.0, 1.5]$ as a starting range (Section~\ref{sec:method-training}).
+
+\paragraph{Per-edge reward backup.}
+For an MDP with intermediate rewards, the standard pattern of
+``propagate one terminal scalar to every ancestor'' is incorrect even
+when the leaf is terminal: each ancestor's chance node should accumulate
+the return computed from its own position, including the discounted
+contribution of every reward that follows on its branch. Let the path
+visited during one simulation be a sequence of $(\text{chance}_t,
+r_{t+1})$ pairs, where $\text{chance}_t$ is the chance node entered at
+step $t$ and $r_{t+1}$ is the reward observed on the transition
+$s_t \xrightarrow{a_t} s_{t+1}$. Let $\widehat{V}(s_L)$ be the leaf
+evaluation. Returns are backed up by reverse accumulation:
+
+\begin{equation}
+\label{eq:backup}
+G \;\gets\; \widehat{V}(s_L);
+\qquad
+\text{for } t = L-1, L-2, \ldots, 0:
+\quad
+G \;\gets\; r_{t+1} + \gamma\, G,
+\qquad
+\text{update } \text{chance}_t \text{ with } G.
+\end{equation}
+
+The chance-node update is
+$W(s_t, a_t) \gets W(s_t, a_t) + G$ and
+$N(s_t, a_t) \gets N(s_t, a_t) + 1$, with the parent decision node's
+visit count incremented in step. This pattern is the obvious
+discretization of the Bellman recursion: the inner expectation that
+appears at $(s_t, a_t)$ is estimated by averaging returns $G$ that
+themselves embed the discounted Bellman recursion further down the
+branch. Collapsing the per-edge backup to a constant terminal scalar
+biases every ancestor's $Q$-estimate by the difference between the
+correct return and that terminal scalar.
+
+\begin{remark}[Chance-node consistency]
+\label{rem:mcts-consistency}
+Under the UCT convergence conditions of \citet{kocsis2006bandit}
+(sufficient exploration of every descendant, bounded rewards, and the
+sample-size conditions required for the tail-bound argument), the
+chance-node mean value $W(s, a) / N(s, a)$ estimates the inner expectation
+$\E_{s' \sim P(\cdot \given s, a)}[\, r + \gamma \widehat{V}(s') \,]$ formed
+from the leaf evaluator $\widehat{V}$; this coincides with the Bellman
+expectation $\E_{s' \sim P(\cdot \given s, a)}[\, r + \gamma V^{\ast}(s') \,]$
+only in the limit where the leaf evaluator is itself exact. Our
+chance-node estimator inherits the same conditions; we do not re-derive
+convergence here. Two practical caveats apply. First, MCTS rollout
+estimators are biased at finite sample sizes: the leaf-value estimator
+from random rollouts (or, in our setting, from $\widehat{V}(s_L)$ as
+returned by the head $\Qpsi$) is consistent only in the limit, and at
+the small simulation budgets typical of real deployment the chance-node
+mean has nonzero bias that depends on the leaf evaluator's own bias and
+on the selection rule's exploration regime. Second, the PUCT prior used
+here is a deliberate departure from the original UCT bound and changes
+the relevant constants; the adapted bound for PUCT-with-priors is what
+the AlphaZero family relies on in practice but is not what the
+\citet{kocsis2006bandit} theorem proves. We treat Section~\ref{sec:exp-ablations}
+(the sanity-check ablations) as the operative test of the estimator's
+practical adequacy on our verifiable-math tasks, rather than as a proof of the
+asymptotic statement.
+\end{remark}
+
+\paragraph{Distillation targets.}
+After $B$ simulations from a root state $s$, MCTS yields two improved
+estimates that serve as supervised targets for the heads. The visit-count
+policy is
+
+\begin{equation}
+\label{eq:pimcts}
+\pimcts(a \given s)
+\;=\;
+\frac{N(s, a)^{1/\tau}}{\sum_{b \in \mathrm{avail}(s)} N(s, b)^{1/\tau}},
+\end{equation}
+
+with $\tau > 0$ a temperature parameter
+(Section~\ref{sec:method-training}). The chance-node $Q$-estimate is
+
+\begin{equation}
+\label{eq:qmcts}
+\Qmcts(s, a) \;=\; \frac{W(s, a)}{N(s, a)},
+\qquad a \in \mathrm{avail}(s).
+\end{equation}
+
+Both targets come from the same MCTS rollout, so trajectory collection
+is shared between policy and $Q$ training. The two targets are
+complementary: $\Qmcts(s, a)$ is a scalar regression target for the
+$Q$-head's approximate $Q$-learning update; $\pimcts(\cdot \given s)$
+is a categorical distribution that the policy head matches via
+cross-entropy (Section~\ref{sec:method-training}). Using
+$\Qmcts(s, a)$ in place of the single-sample Bellman target
+$r + \gamma \max_{a'} Q_{\bar\psi}(s', a')$ is what makes MCTS a policy
+improvement operator in this method: the same approximate $Q$-learning
+algorithm runs, but its targets average over a search-guided distribution
+of trajectories rather than over the behavior policy. Distilling visit
+counts back into the policy prior closes the expert-iteration loop in
+the style of AlphaZero \citep{silver2017alphagozero, silver2018alphazero}.
+
+\subsection{Reward Structure}
+\label{sec:method-reward}
+
+Reward design admits two familiar failure modes. A purely verifier-anchored
+signal (a terminal binary call to a non-LLM checker, no intermediate
+shaping) is objective but sparse, and on harder problems the agent
+explores trajectories whose terminal reward is almost always zero,
+yielding little learning signal per episode. A learned-aesthetic signal
+(a reasoning-quality classifier, a deception detector, a stylistic
+critic) is dense but introduces a Goodhart attack surface: the policy
+will, over enough updates, learn to satisfy the classifier at the
+classifier's resolution rather than to satisfy the underlying objective.
+The middle path we adopt is to admit only verifier-anchored signals as
+Bellman targets, and to reserve learned-aesthetic signals for the MCTS
+prior, where they bias exploration but cannot rewrite the value
+function.
+
+\paragraph{Principle.}
+A signal enters the reward channel (and thus a Bellman target) only if
+it corresponds to an objective proposition checkable by a non-LLM
+program: a unit test passes, SymPy reports equality between a
+canonicalized answer and the ground truth, a Lean lemma type-checks, a
+numerical equality holds within tolerance. Learned classifiers (a
+reasoning-quality scorer trained on human ratings; a deception detector
+trained on adversarial trajectories) do not qualify, regardless of how
+well they correlate with human judgment in offline evaluation.
+
+\paragraph{First-version reward (terminal-only).}
+Phase 1 uses a sparse terminal reward and lets MCTS supply credit
+assignment to earlier actions, in the AlphaZero pattern
+\citep{silver2017alphagozero}:
+
+\begin{equation}
+\label{eq:rewardterminal}
+r_T \;=\;
+\begin{cases}
++1 & \text{if } \mathrm{verifier}(c, P) = \texttt{correct}, \\
+\phantom{+}0 & \text{if depth limit reached without commit}, \\
+-1 & \text{if } \mathrm{verifier}(c, P) = \texttt{incorrect},
+\end{cases}
+\qquad r_t = 0 \text{ for } t < T,
+\end{equation}
+
+with $c$ the committed answer (the contents of the
+$\texttt{committed\_answer}$ slot when \textsc{Commit} fires) and
+$P$ the problem statement. Per-edge backup (Equation~\ref{eq:backup})
+distributes the terminal signal to ancestor chance nodes weighted by
+$\gamma$; combined with PUCT-driven selection, this is sufficient to
+produce nontrivial $Q$-estimates at intermediate states even with the
+binary terminal signal.
+
+\paragraph{Intermediate verifier-anchored rewards (fallback).}
+If terminal sparsity becomes a blocker on harder benchmarks (small base
+models that score near zero on AIME, say), we introduce small positive
+rewards for verifier-anchored intermediate events. The simplest such
+event is a successful \textsc{Verify} that promotes a
+hypothesis to a verified fact: $r_t = +0.1$ on the transition that
+sets $f.\texttt{source} = \texttt{"verified"}$. The reward remains
+objective (the verifier's success bit is a deterministic non-LLM
+output), additive, and bounded, and the cumulative bonus is capped by
+the depth limit. Crucially, the intermediate signal does not introduce
+the Goodhart attack surface attached to learned classifiers because
+the underlying check is the actual objective, applied at a smaller
+granularity.
+
+\paragraph{The Goodhart argument.}
+The asymmetry between verifier-anchored and learned-aesthetic signals
+is structural, and it instantiates a result established formally in the
+reward-hacking literature \citep{skalse2022reward, gao2023scaling}: an
+optimizer run against a learned proxy converges on the proxy's defects,
+and the gap between proxy and true objective widens under optimization
+\citep{gao2023scaling}. In our terms, verifier-anchored signals close
+the \emph{intrinsic} Goodhart gap by construction (the signal is a
+deterministic program, not a learned proxy off whose training
+distribution a policy can wander), while the \emph{extrinsic} gap (the
+formally specified verifier failing to capture the full intended
+objective) remains and is treated as a threat to validity
+(Section~\ref{sec:exp-threats}) rather than assumed away. The full
+intrinsic-versus-extrinsic taxonomy, with worked examples, is developed
+in Section~\ref{sec:disc-verifier}, which this subsection defers to.
+
+\paragraph{Channel decomposition deferred.}
+The channel-decomposed reward sketched in the design notes
+($R = w_{\text{correct}} R_{\text{correctness}} +
+w_{\text{safe}} R_{\text{safety}} + \cdots$) is overkill for the
+verifiable-math setting, where a single correctness channel suffices.
+Channel decomposition becomes relevant when the domain expands to
+open-ended deliberation, dialogue, or tool use, where ``the right
+answer'' is no longer a single Boolean and reward must trade off
+competing desiderata. That extension is out of scope for phase 1; the
+present framework is structured so that adding channels later is a
+local change to the reward function and a head-shape change on the
+$Q$-network, not a redesign of the loop.
+
+\subsection{Training Loop}
+\label{sec:method-training}
+
+The learning algorithm is approximate $Q$-learning
+\citep{mnih2015human, sutton2018reinforcement} with MCTS-supplied
+targets. The $Q$-loss is the standard approximate-$Q$-learning
+mean-squared Bellman error; what is novel is the use of MCTS chance-node
+estimates $\Qmcts(s, a)$ as the target in place of single-sample
+Bellman targets $r + \gamma \max_{a'} Q_{\bar\psi}(s', a')$. The
+policy distillation loss $\mathcal{L}_\pi$ is a complementary
+expert-iteration step \citep{anthony2017thinking, silver2017alphagozero}
+that turns the search-derived visit-count distribution $\pimcts$ into a
+sharpened categorical prior, which in turn drives more informative
+search in the next round. Each outer iteration therefore alternates
+trajectory collection (via MCTS using the current heads as priors and
+value estimates) and head updates (approximate $Q$-learning plus policy
+distillation). Algorithm~\ref{alg:outer-loop} summarizes the loop; the
+remainder of this subsection states the loss functions precisely,
+describes the replay buffer, and lists the hyperparameters that matter
+most in the verifiable-math setting.
+
+\begin{algorithm}[t]
+\caption{Outer training loop}
+\label{alg:outer-loop}
+\begin{algorithmic}[1]
+\State Initialize $\Qpsi$, $\ptheta$, target $Q_{\bar\psi} \gets \Qpsi$
+\For{iteration $= 1, 2, \ldots$}
+  \State Collect trajectories via MCTS with $\Qpsi$, $\ptheta$ as priors
+  \State Compute $\Qmcts(s, a)$ and $\pimcts(\cdot \given s)$ for each
+         visited node
+  \State Add samples to replay buffer
+  \For{minibatch step $= 1, \ldots, M$}
+    \State Sample $(s, a, r, s')$ batch
+    \State $\mathcal{L}_Q \gets \sum (\Qpsi(s, a) - \Qmcts(s, a))^2$
+    \State $\mathcal{L}_\pi \gets - \sum_s \sum_a \pimcts(a \given s)
+           \log \ptheta(a \given s)$
+    \State Step optimizer on $\mathcal{L}_Q + \lambda \mathcal{L}_\pi$
+  \EndFor
+  \State Every $N_{\mathrm{sync}}$ steps: $Q_{\bar\psi} \gets \Qpsi$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Loss functions.}
+The two heads train jointly against MCTS targets. Let $\mathcal{B}$
+denote a minibatch sampled from the replay buffer; the $Q$-loss is
+mean-squared error against the chance-node estimate
+(Equation~\ref{eq:qmcts}),
+
+\begin{equation}
+\label{eq:lossq}
+\mathcal{L}_Q(\psi)
+\;=\;
+\sum_{(s, a) \in \mathcal{B}}
+\bigl(\, \Qpsi(s, a) - \Qmcts(s, a) \,\bigr)^{2},
+\end{equation}
+
+and the policy loss is the cross-entropy between the masked head
+distribution (Equation~\ref{eq:policy}) and the visit-count
+distribution (Equation~\ref{eq:pimcts}),
+
+\begin{equation}
+\label{eq:losspi}
+\mathcal{L}_\pi(\theta)
+\;=\;
+-\sum_{s \in \mathcal{B}} \sum_{a \in \mathrm{avail}(s)}
+\pimcts(a \given s)\, \log \ptheta(a \given s).
+\end{equation}
+
+The combined objective is
+
+\begin{equation}
+\label{eq:losstotal}
+\mathcal{L}_{\text{total}}(\psi, \theta)
+\;=\;
+\mathcal{L}_Q(\psi) + \lambda\, \mathcal{L}_\pi(\theta),
+\end{equation}
+
+with $\lambda$ a scalar that balances the two heads (starting value
+$\lambda = 1$; the policy loss is on a different scale than the $Q$
+regression but in practice $\lambda \in [0.5, 2]$ has worked across
+similar setups). The adapter receives gradient from both heads, so
+$\psi$ and $\theta$ share representation through the adapter and
+specialize only in their head-specific final layers.
+
+\paragraph{Replay buffer.}
+Collected transitions are stored in a replay buffer keyed by the
+chance-node tuple $(s, a, r, s', \Qmcts(s, a),
+\pimcts(\cdot \given s))$. Sampling priority is proportional to the
+TD error $|\Qpsi(s, a) - \Qmcts(s, a)|$ at the time of last visit, in
+the style of prioritized DQN. Buffer entries are evicted on a
+first-in-first-out basis subject to a capacity cap; stale entries do
+not break correctness because $\Qmcts$ values are stored with the
+sample rather than recomputed from the current heads.
+
+\paragraph{Phase 1 backprop scope.}
+Gradients flow only through the adapter, the $Q$-head, the policy
+head, and the verb-instantiator's verb-specific prompt prefixes; the
+LLM is frozen. The freezing rationale and its compute-attribution
+consequences are stated in Section~\ref{sec:method-architecture}.
+
+\paragraph{Hyperparameters worth flagging.}
+Three hyperparameters carry disproportionate weight in early
+experiments. The discount factor $\gamma$ is set in $[0.99, 1.0]$;
+because committed episodes are short (at most $d_{\max} \approx 20$
+turns) and the only nonzero reward is terminal in phase 1, the
+discounting effect is mild and $\gamma = 1$ is a defensible starting
+choice that simplifies the per-edge backup. The PUCT exploration
+constant $c_{\PUCT}$ starts in $[1.0, 1.5]$, with higher values when
+the policy prior is still close to uniform (early training) and lower
+values once the prior has sharpened. The visit-count temperature
+$\tau$ in Equation~(\ref{eq:pimcts}) is annealed: high $\tau$ early
+(near $\tau \approx 1.5$) smooths the policy target and encourages
+exploration during distillation; later iterations anneal toward
+$\tau = 1$ (proportional to raw visit counts) and then below $1$ for
+sharper, more deterministic targets. The target-network sync interval
+$N_{\mathrm{sync}}$ is on the order of one thousand optimizer steps; faster sync
+destabilizes the Bellman target, slower sync wastes gradient signal.
+We list these starting values as the operative reference; the final
+configuration is tuned on the validation split of the smallest
+benchmark before the headline runs begin.
+
+This loop is now implemented: its closed-loop realization and honest
+per-decision compute accounting are reported in
+Section~\ref{sec:pilot-closedloop}, where the loop is the approximate
+$Q$-learning of this subsection with MCTS supplying the targets.
+
+\subsection{Inference Modes}
+\label{sec:method-inference}
+
+The same trained $\Qpsi$ and $\ptheta$ support two inference modes that
+differ only in the search budget. A single nonnegative integer $B$
+selects between them; $B = 0$ is the fast mode (the trained $Q$-policy
+acted on directly) used for ordinary queries, and $B > 0$ is the search
+mode (MCTS-refined inference, using the same $\Qpsi$ and $\ptheta$ as
+leaf evaluator and PUCT prior) used when the caller is willing to spend
+additional compute for higher accuracy. The two modes are not separate
+algorithms; they are the same learned actor evaluated with different
+amounts of search applied on top. This is the test-time compute knob:
+the caller chooses where on the compute-versus-accuracy frontier to
+operate, without retraining and without changing the model.
+
+\paragraph{Fast mode ($B = 0$).}
+Fast mode uses the $Q$-head directly. At each decision node, the next
+action is the availability-masked argmax,
+
+\begin{equation}
+\label{eq:fastmode}
+\pi_0(s) \;=\; \arg\max_{a \in \mathrm{avail}(s)} \Qpsi(s, a),
+\end{equation}
+
+so a single LLM forward per decision (one embedding pass plus one
+verb-instantiator continuation) suffices. Latency and cost are
+constant in the depth of deliberation, bounded only by $d_{\max}$ and
+the per-step LLM forward.
+
+\paragraph{Search mode ($B > 0$).}
+Search mode runs PUCT-based MCTS for $B$ simulations from the current
+state and samples (or argmaxes over) the resulting visit-count
+distribution,
+
+\begin{equation}
+\label{eq:searchmode}
+\pi_B(a \given s) \;=\; \pimcts(a \given s; B),
+\end{equation}
+
+with $\pimcts$ defined as in Equation~(\ref{eq:pimcts}). The $B$
+parameter is the test-time compute knob: small $B$ refines the head
+estimate locally; large $B$ performs extended deliberation. Reported
+inference compute should include all LLM forwards executed during the
+$B$ simulations, not only the root-level forwards, to make the
+compute-versus-accuracy comparison honest
+(Section~\ref{sec:experimental-plan}).
+
+\paragraph{Why fast mode works at all.}
+Fast mode is competitive precisely because the policy and $Q$-heads
+were distilled from MCTS targets during training. If training has
+converged, the $Q$-head approximates the chance-node Bellman estimate
+$\Qmcts$ at the training-time simulation budget, and the policy head
+approximates $\pimcts$. Fast mode therefore evaluates a policy that
+is, in expectation, close to the search policy at the training-time
+$B$, but at constant inference cost. The empirical question we put on
+record (Section~\ref{sec:experimental-plan}) is how far this
+approximation gets the model on each benchmark, and how much
+additional headroom $B > 0$ opens at matched compute.
+
+\paragraph{Persistent search trees (future extension).}
+For anytime deliberation, the search tree built for one query can
+prime the next. If a caller asks the system to ``think harder,'' the
+existing chance-node statistics, sampled transitions, and leaf
+evaluations remain valid as long as the root state is unchanged; an
+additional $B'$ simulations refines the same tree rather than starting
+over. Carrying state across turns of a multi-turn deliberation
+(rerooting the tree on a child after a committed action; reusing
+subtrees that survive the rerooting) is the natural generalization.
+We list this as a future extension; phase 1 restarts the tree per
+query, which keeps the implementation simpler and the comparison to
+$B = 0$ cleaner.

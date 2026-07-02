@@ -1,27 +1,20 @@
 \begin{abstract}
-We present a reinforcement-learning framework for training small language
-models to reason on verifiable problems. The agent performs approximate
-$Q$-learning over an LLM-induced context Markov decision process: states are
-structured contexts, actions are a small set of coarse cognitive verbs the
-model realizes as text, transitions are sampled from the model's responses,
-and reward is anchored by a non-LLM verifier (a symbolic solver, unit-test
-harness, or proof checker) rather than a learned critic. The action-value
-function $\Qpsi(s, a)$ is a multi-head $Q$-network over the hidden state of a
-frozen base model. Monte Carlo Tree Search enters not as the core learning
-algorithm but as a policy-improvement operator: it produces locally improved
-estimates $\Qmcts(s, a)$ and visit-count policies $\pimcts$ that serve as
-stronger training targets for expert iteration, and it doubles as a
-test-time-compute knob at inference. Keeping reward verifier-anchored rather
-than learned reduces the Goodhart attack surface. We give the framework, the
-architecture, and a pre-registered experimental plan with falsifiable
-hypotheses (a fixed baseline grid, a FLOP-accounted compute axis that charges
-every LLM forward inside the search, and a Holm-Bonferroni-corrected criterion
-committed before training). We do not report benchmark numbers: this is the
-plan, not results. A preliminary feasibility probe established that the loop is
-implementable end-to-end and surfaced the methodological precautions the plan
-inherits (train/held-out discipline, per-class composition tracking, a
-pairwise-recommended-verb target-stability diagnostic, and honest per-decision
-compute accounting with an observable, resumable run harness); that probe
-predates the current action space and its specific numbers are superseded. The
-large-scale benchmark claim is deferred to the pre-registered study.
+Reasoning models in the o1 and DeepSeek-R1 mold apply reinforcement learning
+to a language model's own weights so that it emits a better chain of thought,
+token by token. We study the complementary design point: the language model is
+\emph{frozen}, and reinforcement learning trains a small \emph{external}
+controller (a few million parameters: a verb head, a pointer head, and a Q
+head) that orchestrates it. The controller's actions are typed pairs
+$(\textit{verb}, \textit{target})$ applied to a structured, nested reasoning
+forest of goals, hypotheses, and verified facts; each action is a
+\emph{lens} that renders only a grounded-local slice of the state into the
+frozen model's context and writes the output back locally. A symbolic
+verifier is the sole reward source: no reward model, no learned process
+reward, no LLM judge. The controller is trained by off-policy value-based
+Q-learning with Monte Carlo returns from the verifier terminal, warm-started
+by behavior cloning from an LLM-as-controller teacher; Monte Carlo Tree
+Search enters only as an optional, strictly additive accelerator and a
+test-time compute knob. We pre-register a compute-versus-accuracy evaluation
+on verifiable math benchmarks against FLOP-matched sampling and
+orchestration baselines. \stub{headline empirical result, pending runs}
 \end{abstract}

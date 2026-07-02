@@ -1,0 +1,73 @@
+\section{Training: Value-Based RL as the Spine}
+\label{sec:training}
+
+\subsection{Off-policy Q-learning core}
+\label{sec:training-core}
+
+The core is approximate Q-learning over sampled transitions
+$(s, a, r, s')$ with $a = (\textit{verb}, \textit{target})$:
+\[
+y \;=\; r \;+\; \gamma \max_{(\textit{v}', \textit{t}') \in A(s')}
+Q_{\mathrm{target}}(s', \textit{v}', \textit{t}'),
+\qquad
+\mathcal{L}_Q = \big(Q(s, \textit{verb}, \textit{target}) - y\big)^2,
+\]
+with a replay buffer and a periodically synced target network. The acting
+policy is derived from $Q$ by a masked softmax at temperature $\tau$, and
+the verb and pointer heads are trained to match it. A learned $Q$ is the
+natural object in this setting: it folds the expensive expectation over LLM
+transitions into a cheap action value, so at deployment the controller
+selects an action without sampling any LLM transition to look ahead.
+Off-policy learning is load-bearing: the same buffer accepts random
+exploration, teacher trajectories (\cref{sec:training-ladder}), and
+search-generated experience (\cref{sec:training-mcts}) with no change to
+the update. Under terminal-only reward, one-step bootstrapping is fragile;
+we regress on n-step and Monte Carlo returns from the verifier terminal,
+which requires no search in the loop.
+
+\subsection{The three-rung ladder}
+\label{sec:training-ladder}
+
+Learning a policy over a variable, growing action space under sparse reward
+is the highest-risk element of the design; a training ladder removes the
+cold start. Two LLM roles are distinct throughout: the \emph{generator} (the
+small frozen LLM that produces content under the lens; the deployed model)
+and the \emph{controller-teacher} (an LLM, possibly much larger, used only
+at training time to pick $(\textit{verb}, \textit{target})$ actions).
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=1pt]
+\item \textbf{LLM-as-controller.} The teacher picks actions; the small
+frozen generator fills content under the lens; the verifier checks. This
+validates the full interface before any training and produces bootstrap
+trajectories. The teacher orchestrates the \emph{small} generator during
+collection, so trajectories reflect the content the deployed generator can
+actually produce: decision quality from the teacher, state distribution from
+the generator.
+\item \textbf{Behavior-cloning warm start.} The verb and pointer heads are
+trained to imitate the teacher's actions over the global state embedding.
+\item \textbf{RL fine-tune.} The off-policy core of
+\cref{sec:training-core} runs from the warm-started heads, consuming both
+teacher and self-generated experience.
+\end{enumerate}
+
+This is distillation of a different object than in o1/R1-style pipelines:
+the big model's weights are never touched and its chain of thought is never
+the product; what is distilled is its \emph{policy over typed operations},
+into a controller small enough to be negligible at deployment.
+
+\subsection{MCTS as a strictly additive option}
+\label{sec:training-mcts}
+
+Because the core is off-policy, Monte Carlo Tree Search contributes in two
+purely additive ways: as a better behavior policy (search-guided
+exploration adds higher-quality rows to the same buffer) and as a source of
+better targets (chance-node estimates $\hat{Q}_{\mathrm{MCTS}}(s,a)$ replace
+one-step bootstraps; visit-count distributions replace softmax-over-Q as
+policy targets). Distillation from visit counts, the spine of classical
+expert iteration, is here exactly this add-on: the MCTS-on variant of the
+same losses, evaluated as an ablation. At deployment, a budget
+$B \in \{0, 1, 2, \dots\}$ selects between acting from the learned heads
+directly ($B{=}0$) and running $B$ PUCT simulations from the current state
+with the learned $Q$ and policy as priors, which is the system's test-time
+compute knob. \stub{final hyperparameters: buffer size, n-step length,
+target-sync period, $\tau$ schedule, $c_{\mathrm{puct}}$}

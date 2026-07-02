@@ -1,0 +1,58 @@
+\section{Experimental Setup (Pre-Registered)}
+\label{sec:experimental-setup}
+
+The headline result is a compute-versus-accuracy frontier on verifiable math
+benchmarks, beginning with GSM8K \citep{gsm8k} and progressing to MATH
+\citep{math}. The baseline grid below and the compute metrics are committed
+before training and will not be adjusted post hoc.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}llp{0.45\linewidth}@{}}
+\toprule
+Row & System & Role \\
+\midrule
+B0 & Base LLM, greedy decode & raw capability floor \\
+B1 & Base LLM, best-of-$N$, FLOP-matched & cheap deliberation \\
+LC & LLM-as-controller (teacher picks actions, small model generates) & the orchestration baseline \\
+B2 & Learned controller, $B{=}0$ (no search) & fast mode \\
+B3 & Learned controller, $B$ small (light MCTS) & light search \\
+B4 & Learned controller, $B$ large (heavy MCTS) & heavy search \\
+B5 & Larger reasoning model, greedy decode & capability ceiling \\
+\bottomrule
+\end{tabular}
+\caption{Pre-registered baseline grid. The LC row exists because the frozen
+LLM handed the whole structured state may pick good actions zero-shot; the
+learned controller's claim is made against it on compute, not necessarily on
+raw accuracy.}
+\label{tab:grid}
+\end{table}
+
+\paragraph{Compute accounting.} Three metrics are reported together for
+every row: total inference FLOPs per problem, total LLM forward passes per
+problem, and wall-clock seconds at fixed hardware. All MCTS rollouts and all
+LLM calls count. The known failure mode this guards against is the compute
+leak: reporting only the small model's FLOPs while spending many tokens
+elsewhere.
+
+\paragraph{Win condition, stated in advance.} The learned controller is not
+required to out-perform the LLM-as-controller row in fast-mode accuracy. It
+earns its keep on the compute frontier (an under-5M-parameter network at
+$B{=}0$ versus an LLM forward pass per action choice) and as the search
+prior. A sanity ablation (random Q head, uniform policy, fixed MCTS) must be
+visibly worse than the trained rows, confirming that training rather than
+the scaffold does the work.
+
+\paragraph{Models and infrastructure.} The generator is a small base model
+that has not been post-trained on reasoning data, so that deliberative
+behavior is attributable to the loop rather than to prior post-training.
+\stub{final model choices (candidates: Qwen2.5-1.5B-Base class), teacher
+model, serving stack, seeds, dataset splits, and decoding parameters}
+
+\paragraph{Ablations.} Pre-registered: (i) MCTS-off versus MCTS-on training
+(the additive-accelerator claim); (ii) pointer head versus verb-only action
+space (the credit-assignment claim); (iii) lens-scoped versus full-context
+generation at matched budgets (the lens claim); (iv) encoder rungs of
+\cref{sec:method-controller}; (v) \textsc{Critique} on/off; (vi) gated
+intermediate \textsc{Verify} reward on/off.

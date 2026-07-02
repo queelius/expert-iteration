@@ -1,0 +1,53 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented a reinforcement-learning framework for training small
+language models to deliberate on verifiable problems, in which the central
+learnable object is a parametric action-value function $\Qpsi(s, a)$ over
+an LLM-induced context MDP, MCTS serves as a policy improvement operator
+that supplies stronger Bellman targets $\Qmcts(s, a)$ during training and
+as an optional test-time-compute knob at inference, and reward enters only
+through verifier-anchored signals so that the Goodhart attack surface
+associated with learned-aesthetic critics is closed by construction. The
+six contributions are an approximate-$Q$-learning framing for the
+verifiable context MDP, a shared-encoder architecture with a frozen base
+model and trainable multi-head $Q$ and policy heads, a reward principle
+that quarantines learned signals away from Bellman backups, an explicit
+role for MCTS as a sample-efficient policy improvement operator and a
+test-time-compute knob rather than as the central learning algorithm,
+a pre-registered experimental plan whose baseline grid and headline
+frontier figure are fixed before any training begins, and a preliminary
+feasibility probe that exercised the framework's integration end-to-end
+before the benchmark study begins.
+
+The probe (Section~\ref{sec:pilot}) established feasibility rather than a
+result. It predates the current action space, so we report no accuracy or
+agreement number from it; what it contributes is the demonstration that every
+component of the framework can be implemented and the expert-iteration loop run
+end-to-end, together with the methodological precautions the pre-registered
+study inherits as monitoring requirements. Those precautions are concrete:
+train/held-out problems must share structural shape but never surface content;
+per-round training-set composition and per-class held-out accuracy must be
+reported alongside any multi-round result; target stability must be measured as
+pairwise recommended-verb agreement across independent searches from a fixed
+state, stratified by problem family, with the heavy-search budget set by the
+slowest-converging family; and the compute axis must charge every LLM forward
+inside the search, with the run harness persisting the separated learning
+signals per iteration.
+
+By pre-registering the baseline grid, the compute axis, and the
+falsification criteria (Section~\ref{sec:experimental-plan}), we
+constrain the eventual results section to test the framework rather than
+to fit to it: a frontier that fails to clear the best-of-$N$ baseline at
+matched compute is reported as such, not retrofitted into a different
+claim. The pre-registered falsifiable hypothesis is precisely that the
+heavy-search B4 curve lies strictly above the best-of-$N$ B1 curve at
+matched inference compute on the benchmarks where both produce signal
+(Section~\ref{sec:exp-frontier}); the larger reasoning model B5 is a
+reference point, not a target, and the distance between B4 and B5
+calibrates how much of the headline gap the loop has closed rather than
+serving as a bar the framework must clear. Whether B4 clears B1, and how
+far it narrows the B4-to-B5 distance, is the question the implementation
+will answer. The pilot has shown that the framework's mechanics are
+not vacuous; whether they generalize to standardized benchmarks under the
+pre-registered protocol is the next empirical question.
