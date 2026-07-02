@@ -66,7 +66,11 @@ def main() -> None:
                                   llm_client=gen_client)
             summary = run_episode(
                 mdp, controller, rng,
-                log_fn=lambda rec: fh.write(json.dumps(rec) + "\n"))
+                log_fn=lambda rec: fh.write(json.dumps(rec) + "\n"),
+                episode_id=i,
+                meta={"backend": args.backend, "model": args.model,
+                      "controller_model": args.controller_model or args.model,
+                      "seed": args.seed, "problem_index": i})
             print(f"[{i}] reward={summary.reward:+.2f} "
                   f"turns={summary.turns} llm_calls={summary.llm_calls} "
                   f"problem={p['problem']!r}")

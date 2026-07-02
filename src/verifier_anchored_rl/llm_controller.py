@@ -38,6 +38,7 @@ def _menu(mdp: DeliberationMDP, state: DeliberationState
 class LLMController:
     client: LLMClient
     system: str = CONTROLLER_SYSTEM
+    last_choice_fallback: bool = False
 
     def choose(self, mdp: DeliberationMDP,
                state: DeliberationState) -> DeliberationAction:
@@ -66,6 +67,7 @@ class LLMController:
             chosen = by_key.get(str(resp.get("action")))
         except LLMResponseError:
             chosen = None
+        self.last_choice_fallback = chosen is None
         return chosen if chosen is not None else menu[0][1]
 
 
@@ -77,7 +79,8 @@ class EpisodeSummary:
 
 
 def run_episode(mdp: DeliberationMDP, controller: LLMController, rng,
-                log_fn: Callable[[dict], None] | None = None
+                log_fn: Callable[[dict], None] | None = None, *,
+                episode_id: int = 0, meta: dict | None = None
                 ) -> EpisodeSummary:
     state = mdp.initial_state()
     total = 0.0
@@ -92,6 +95,7 @@ def run_episode(mdp: DeliberationMDP, controller: LLMController, rng,
         total += reward
         if log_fn is not None:
             log_fn({
+                "episode": episode_id,
                 "problem": mdp.problem,
                 "turn": state.turn,
                 "state_render": global_prefix(state),
@@ -99,6 +103,16 @@ def run_episode(mdp: DeliberationMDP, controller: LLMController, rng,
                 "chosen": f"{action.verb.value}:{action.target}",
                 "reward": reward,
                 "terminal": mdp.is_terminal(next_state),
+                "fallback": controller.last_choice_fallback,
             })
         state = next_state
+    if log_fn is not None:
+        log_fn({
+            "episode": episode_id,
+            "summary": True,
+            "total_reward": total,
+            "turns": state.turn,
+            "llm_calls": calls,
+            "meta": meta or {},
+        })
     return EpisodeSummary(reward=total, turns=state.turn, llm_calls=calls)

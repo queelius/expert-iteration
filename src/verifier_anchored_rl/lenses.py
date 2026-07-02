@@ -107,7 +107,8 @@ def global_prefix(state: DeliberationState) -> str:
 
 
 def _live_premise_ids(graph: Graph) -> list[NodeId]:
-    return [n.id for n in graph.nodes if isinstance(n, (Fact, Hypothesis))]
+    return [n.id for n in graph.nodes
+            if isinstance(n, (Fact, Hypothesis)) and not is_abandoned(graph, n.id)]
 
 
 def suffix(verb: Verb, target: NodeId, state: DeliberationState) -> str:

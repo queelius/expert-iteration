@@ -21,6 +21,7 @@ def test_controller_choice_is_constrained_to_legal_menu():
     controller = LLMController(client)
     action = controller.choose(mdp, mdp.initial_state())
     assert action == DeliberationAction(Verb.FORM_HYPOTHESIS, 0)
+    assert controller.last_choice_fallback is False
 
 
 def test_controller_falls_back_to_first_legal_on_bad_choice():
@@ -40,11 +41,36 @@ def test_run_episode_terminates_and_logs_jsonl():
     controller = LLMController(EchoLLMClient())   # picks the first menu entry
     buf = io.StringIO()
     summary = run_episode(mdp, controller, np.random.default_rng(0),
-                          log_fn=lambda rec: buf.write(json.dumps(rec) + "\n"))
+                          log_fn=lambda rec: buf.write(json.dumps(rec) + "\n"),
+                          episode_id=7, meta={"backend": "echo"})
     assert summary.turns <= 3
     lines = [json.loads(l) for l in buf.getvalue().splitlines()]
-    assert len(lines) == summary.turns
-    for rec in lines:
-        assert {"problem", "turn", "state_render", "legal", "chosen",
-                "reward", "terminal"} <= set(rec)
-    assert lines[-1]["terminal"] is True
+    decisions = [rec for rec in lines if not rec.get("summary")]
+    assert len(decisions) == summary.turns
+    for rec in decisions:
+        assert {"episode", "problem", "turn", "state_render", "legal",
+                "chosen", "reward", "terminal", "fallback"} <= set(rec)
+        assert rec["episode"] == 7
+    assert decisions[-1]["terminal"] is True
+    summary_rec = lines[-1]
+    assert summary_rec["summary"] is True
+    assert summary_rec["episode"] == 7
+    assert {"total_reward", "turns", "llm_calls", "meta"} <= set(summary_rec)
+    assert summary_rec["turns"] == summary.turns
+    assert summary_rec["llm_calls"] == summary.llm_calls
+    assert summary_rec["total_reward"] == summary.reward
+    assert summary_rec["meta"] == {"backend": "echo"}
+
+
+def test_controller_marks_fallback_on_llm_error():
+    class _Boom:
+        def complete_json(self, *a, **k):
+            from verifier_anchored_rl.llm_client import LLMResponseError
+            raise LLMResponseError("nope")
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=4,
+                          llm_client=EchoLLMClient())
+    controller = LLMController(_Boom())
+    state = mdp.initial_state()
+    action = controller.choose(mdp, state)
+    assert action == mdp.actions(state)[0]
+    assert controller.last_choice_fallback is True

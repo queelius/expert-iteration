@@ -336,13 +336,16 @@ verb, optional: six core verbs plus one optional. Per-verb rationale:
   renders as the closed subtree's verdict). `COMMIT` is recursive but terminal
   only at the root: the structural fact `target == root` is what makes a commit
   terminal and verifier-gated, so there is no separate "final answer" verb.
-  Subgoal commits are reward-free bookkeeping.
+  Subgoal commits are reward-free bookkeeping. The witness is environment-selected
+  (the most recent discharging one); COMMIT, like VERIFY and ABANDON, makes no
+  LLM call.
 - **`ABANDON`** walks away from an unproductive branch: no outcome is claimed, no
   verdict is recorded, and the retained history leaves the branch revisitable. It
   is not negative closure; a branch resolved by contradiction is closed with
   `COMMIT`. It is kept as an emittable verb, not just search control, because at
   inference budget $B = 0$ (Section 8) the deployed model runs no search and must
-  be able to express "this branch is unproductive, move on."
+  be able to express "this branch is unproductive, move on." A root ABANDON
+  terminates the episode with reward zero: giving up is not a wrong answer.
 - **No `SUMMARIZE` verb**: compressing a closed subtree to its statement and
   verdict is a deterministic rendering property of the lens (Section 4.3).
 - **`CRITIQUE`** is an optional, reward-free LLM self-assessment of a hypothesis

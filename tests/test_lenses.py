@@ -80,3 +80,11 @@ def test_schema_shapes():
     import pytest
     with pytest.raises(ValueError):
         schema_for(Verb.VERIFY, 2, s)       # no-LLM verbs have no schema
+
+
+def test_live_premise_ids_exclude_abandoned():
+    from verifier_anchored_rl.lenses import _live_premise_ids
+    g = new_graph("p", givens=("a=1",))
+    g = form_hypothesis(g, 0, "h").graph          # hyp 2
+    g = abandon(g, 2).graph
+    assert _live_premise_ids(g) == [1]

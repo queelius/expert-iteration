@@ -53,9 +53,11 @@ def _is_open_goal(graph: Graph, node_id: NodeId) -> bool:
 
 
 def _witnesses(graph: Graph, goal: Goal) -> tuple[NodeId, ...]:
-    """Discharging witnesses of a goal, ascending by id (most recent last)."""
-    out = [wid for wid in goal.candidates if is_verified(graph, wid)]
-    out += [wid for wid in goal.facts if holds(graph, wid)]
+    """Discharging, non-abandoned witnesses of a goal, ascending by id (most recent last)."""
+    out = [wid for wid in goal.candidates
+           if is_verified(graph, wid) and not is_abandoned(graph, wid)]
+    out += [wid for wid in goal.facts
+            if holds(graph, wid) and not is_abandoned(graph, wid)]
     return tuple(sorted(out))
 
 

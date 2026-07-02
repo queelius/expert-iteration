@@ -77,3 +77,13 @@ def test_depth_limit_masks_everything():
     s = DeliberationState(new_graph("p"), 5)
     assert available_actions(s, depth_limit=5) == ()
     assert _acts(s, depth_limit=6)               # one turn left: non-empty
+
+
+def test_abandoned_witness_cannot_discharge():
+    g = new_graph("p")
+    g = form_hypothesis(g, 0, "ans").graph        # hyp 1
+    g = verify(g, 1, "check", "ans", MockVerifier((("ans", True),))).graph
+    g = abandon(g, 1).graph                       # verified, then abandoned
+    root = get(g, 0)
+    assert _witnesses(g, root) == ()
+    assert (Verb.COMMIT, 0) not in _acts(DeliberationState(g, 0))
