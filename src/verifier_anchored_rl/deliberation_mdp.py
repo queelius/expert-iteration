@@ -246,6 +246,56 @@ class DeliberationMDP:
         g = result.graph if hasattr(result, "graph") else state.graph
         return DeliberationState(g, state.turn + 1), 0.0
 
-    def _do_llm_verb(self, state, action, rng):
-        # Wired in Task 6; until then LLM verbs take the masked fallback.
-        return self._masked(state)
+    # -- the three LLM verbs ---------------------------------------------------
+
+    def _generate(self, state: DeliberationState, verb: Verb,
+                  target: NodeId, rng) -> dict:
+        """One constrained generation from view ++ suffix, either backend."""
+        from .lenses import render_view, schema_for, suffix
+        view = render_view(state.graph, target)
+        tail = suffix(verb, target, state)
+        schema = schema_for(verb, target, state)
+        seed = int(rng.integers(2 ** 31 - 1)) if rng is not None else None
+        if self.encoder is not None:
+            prefill = self.encoder.encode(view)
+            payload, _n_tokens = self.encoder.instantiate_json(
+                prefill, tail, schema, seed=seed)
+            return payload
+        if self.llm_client is None:
+            raise RuntimeError(
+                "DeliberationMDP needs an llm_client or an encoder for "
+                f"{verb.name}")
+        return self.llm_client.complete_json(
+            self.system_prompt, view + tail, schema, seed=seed)
+
+    def _do_llm_verb(self, state: DeliberationState,
+                     action: DeliberationAction, rng
+                     ) -> tuple[DeliberationState, float]:
+        from .lenses import sanitize
+        from .llm_client import LLMResponseError
+        from .reductio import compute as _r_compute
+        from .reductio import form_hypothesis as _r_form
+        from .reductio import split as _r_split
+        try:
+            payload = self._generate(state, action.verb, action.target, rng)
+        except (LLMResponseError, RuntimeError):
+            return self._masked(state)
+        try:
+            if action.verb is Verb.SPLIT:
+                children = tuple(sanitize(str(c))
+                                 for c in payload["children"] if str(c).strip())
+                result = _r_split(state.graph, action.target,
+                                  str(payload["connective"]), children)
+            elif action.verb is Verb.FORM_HYPOTHESIS:
+                result = _r_form(state.graph, action.target,
+                                 sanitize(str(payload["statement"])))
+            else:  # Verb.COMPUTE
+                premises = tuple(int(p) for p in payload.get("premises", ()) or ())
+                result = _r_compute(state.graph, action.target,
+                                    sanitize(str(payload["statement"])),
+                                    premises)
+        except (KeyError, TypeError, ValueError):
+            return self._masked(state)
+        if not hasattr(result, "graph"):        # reductio Err
+            return self._masked(state)
+        return DeliberationState(result.graph, state.turn + 1), 0.0
