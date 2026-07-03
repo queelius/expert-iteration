@@ -267,9 +267,9 @@
       quadratics (f3) & 75\% & 100\% \\
       absolute value (f1a/f1b) & 40 / 35\% & 100\% \\
       piecewise (f2a/f2b) & 31 / 15\% & 100\% \\
-      word problems (f7) / counting (f8) & 5\% / 5\% & 98\% / 100\% \\
+      casework-v1 as shipped (the five above, 240) & \alert{39.2\%} & 100\% \\
       \midrule
-      casework-v1 (240) & \alert{39.2\%} & 100\% \\
+      held-out: word problems (f7) / counting (f8) & 5\% / 5\% & 98\% / 100\% \\
       \bottomrule
     \end{tabular}
   \end{center}
@@ -289,19 +289,19 @@
 % ---------------------------------------------------------------- next steps
 \begin{frame}{Next steps}
   \begin{enumerate}
-    \item \textbf{Design-true collection} (probe running): hosted teacher
-          decides, \emph{local} Qwen-1.5B writes all content, so
-          trajectories reflect the deployed state distribution
+    \item \textbf{Design-true collection}: hosted teacher decides,
+          \emph{local} Qwen-1.5B writes content. First probe 0/20: strict
+          payload schemas mask 55--63\% of the small model's typed-verb
+          output; lenient coercion at that boundary is in progress
     \item \textbf{Phase B}: per-node encoder + pointer head,
           behavior-cloning warm-start on rung-1 trajectories, then
-          $Q$-learning fine-tune against the verifier; the probes'
-          controller failures are its labeled negatives
+          $Q$-learning fine-tune against the verifier
     \item \textbf{The decisive comparison}: Qwen-1.5B + trained controller
           vs the same model prompted directly; the target is
           \alert{39.2\%} on casework-v1, and the approach succeeds or
           fails on that margin
-    \item \textbf{Standard benchmarks later}: GSM8K/MATH enter as
-          evaluation targets once the casework loop shows progress
+    \item \textbf{Standard benchmarks later}: GSM8K/MATH follow once the
+          casework loop shows progress
   \end{enumerate}
   \medskip
   \begin{block}{One-sentence summary}
