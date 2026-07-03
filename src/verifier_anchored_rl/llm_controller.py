@@ -79,15 +79,16 @@ CONTROLLER_SYSTEM_STRUCTURED = (
     "restriction, a domain, a sign); that branch contributes nothing.\n"
     "\n"
     "Play the structure, then close it out. The winning line:\n"
-    "1. split the root ONCE into its cases (a goal that already has "
+    "1. Split the root ONCE into its cases (a goal that already has "
     "case-children is not offered split again).\n"
-    "2. For each case (child goal id N): compute its solution as a GROUND "
+    "2. For each case (a child goal): compute its solution as a GROUND "
     'equation, for example the case "4x - 16 = 4" is solved by the ground '
-    'fact "(4 + 16)/4 = 5"; verify that fact; then commit:N to CLOSE the '
-    "case. A case with a (verified) fact is finished by commit:N, never by "
-    "computing more.\n"
-    "3. Abandon (abandon:N) a case whose solution violates a stated "
-    "condition (a range restriction, a domain, a sign).\n"
+    'fact "(4 + 16)/4 = 5"; verify that fact; then pick that case goal\'s '
+    "commit action from the menu to CLOSE the case. A case with a "
+    "(verified) fact is finished by committing it, never by computing "
+    "more.\n"
+    "3. Pick a case goal's abandon action when its solution violates a "
+    "stated condition (a range restriction, a domain, a sign).\n"
     "4. Once every case is committed or abandoned, add ONE root-level "
     "compute (compute:0) that establishes the final answer from the case "
     'values: for a sum, "5 + 3 = 8"; for the largest, "max(5, 3) = 5"; for '
@@ -95,13 +96,14 @@ CONTROLLER_SYSTEM_STRUCTURED = (
     '"max(6, 6) = 6". Verify it, then commit:0. Every episode must end in '
     "commit:0; never let it run out of turns.\n"
     "\n"
-    "Efficiency rules. A compute whose statement duplicates a fact already "
-    "on the SAME goal is REJECTED and the turn is wasted; if the fact you "
-    "need already shows (verified), act on it: commit that case or move to "
-    "the root aggregation. The checker only accepts GROUND equations (no "
-    'unknowns): "(13 - 5)/2 = 4" verifies, "4x - 16 = 4" and "2*x = 8" do '
-    "not. If a node shows (verify failed), reformulate with a new compute "
-    "instead of retrying it. Return only the requested JSON object."
+    "Efficiency rules. Your action MUST be copied verbatim from the legal "
+    "menu. A compute whose statement duplicates a fact already on the SAME "
+    "goal is REJECTED and the turn is wasted; if the fact you need already "
+    "shows (verified), act on it: commit that case or move to the root "
+    "aggregation. The checker only accepts GROUND equations (no unknowns): "
+    '"(13 - 5)/2 = 4" verifies, "4x - 16 = 4" and "2*x = 8" do not. If a '
+    "node shows (verify failed), reformulate with a new compute instead of "
+    "retrying it. Return only the requested JSON object."
 )
 
 
