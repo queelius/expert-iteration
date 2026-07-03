@@ -1,0 +1,136 @@
+\section{Preliminary Findings from the Rung-1 Campaign}
+\label{sec:preliminary}
+
+Before any controller is trained, the LLM-as-controller rung (LC in
+\cref{tab:grid}) was run live, instrumented, and iterated under a
+controlled-experiment discipline: one manipulation per experiment, the
+outcome measure and its reading registered before the run, every
+trajectory and every raw controller reply logged. This section reports
+what that formative campaign measured. Its numbers are small-$n$
+(20-episode probes unless stated), they shaped the method of
+\cref{sec:method}, and they calibrate the instruments for the
+pre-registered grid, which remains unrun; nothing here is a headline
+claim.
+
+\subsection{The orchestration baseline on GSM8K}
+\label{sec:prelim-gsm8k}
+
+With gpt-4.1-mini serving as both controller-teacher and generator, 500
+GSM8K training problems yielded a 70.8\% solve rate (354/500) across
+3{,}906 logged decisions. The same model prompted directly, scored by the
+same symbolic check, solves 94.4\% of the same problems, and the overlap
+is one-sided: the harness rescued 3 problems the direct prompt missed,
+the direct prompt solved 121 the harness lost. Decomposing those 121
+losses: in 45, the generator had produced the correct value and the
+controller discarded it (looped past it without committing, or committed
+unverified intermediate evidence); most of the remainder are turn-budget
+exhaustion driven by the same control failures. Structural verbs
+essentially never fired (\textsc{Split} plus \textsc{Abandon} were 0.5\%
+of decisions): GSM8K is linearly solvable, so the optimal policy is a
+chain and the forest never earns its keep. Two conclusions: the
+orchestration tax is real and mostly control-side, and eliciting the
+structured action space requires a distribution that demands structure.
+
+\subsection{A structure-demanding dataset}
+\label{sec:prelim-casework}
+
+Casework (published with full provenance; 300 problems in v1) is a
+synthetic family of case-analysis problems built in reverse: the solution
+structure is sampled first, the statement rendered around it, and every
+label re-derived independently (SymPy for equation families, exhaustive
+enumeration for counting families) before a record ships. Answers are
+single integers by construction: multi-solution problems ask a scalar
+question about the solution set (the sum, the largest, the survivor), so
+the casework is required for correctness while the terminal check stays a
+single comparison. On this distribution the structural verbs went from
+0.5\% of decisions to 12--23\%, with \textsc{Split} in 20 of 20 probe
+episodes and \textsc{Abandon} firing on the dead-case families.
+
+\subsection{Information versus capability}
+\label{sec:prelim-obs}
+
+The central formative result is a $2\times2$: controller capability
+(gpt-4.1-mini versus gpt-4.1, roughly $40\times$ price) crossed with
+observation design (flat id-ordered rendering versus the tree rendering
+of \cref{sec:method}), on the same 20 casework problems.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Solved / 20 & flat render & tree render + annotations \\
+\midrule
+mini teacher & 1 & 4--5 \\
+gpt-4.1 teacher & 1 & 4 \\
+\bottomrule
+\end{tabular}
+\caption{Observation design dominates controller capability. The render
+effect replicates across both models; the capability effect is null in
+both columns.}
+\label{tab:2x2}
+\end{table}
+
+The mechanism was identifiable from trajectories: under the flat render a
+controller cannot tell which goal owns which fact or whether a commit is
+dischargeable, so it re-computes verified facts and attempts illegal
+commits regardless of how capable it is. The remaining failure axes were
+then eliminated one at a time, each by a single-manipulation probe with a
+pre-registered reading: prompt engineering (two iterations, including one
+that measured its own bug), controller capability ($40\times$, null),
+controller completion budget ($64 \to 192$ tokens: the unparseable-reply
+count was unchanged, killing a truncation hypothesis), and step
+granularity (a substitution-verified solve-claim form of
+\textsc{Compute}, specified, built, and ablated: 4/20 versus a 4--5/20
+control, not adopted). What survives is the residual: roughly 10 correct
+sequential decisions are needed per win and teacher-LLM per-step protocol
+fidelity is the binding constraint. Notably, the dominant residual errors
+(menu-ignoring illegal action intents; repetition after rejection) are
+impossible or directly penalized for the trained controller: a pointer
+head is a softmax over the legal menu, and value-based training
+extinguishes actions that earn the masked-action penalty. The teacher's
+logged mistakes are labeled negatives for exactly that training.
+
+\subsection{Calibration on the deployment-class generator}
+\label{sec:prelim-calibration}
+
+Direct-prompt baselines on the casework families, identical scoring:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Family & Qwen2.5-1.5B-instruct & gpt-4.1-mini \\
+\midrule
+quadratic roots (f3) & 75\% & 100\% \\
+absolute value, both live (f1a) & 40\% & 100\% \\
+absolute value, side condition (f1b) & 35\% & 100\% \\
+piecewise, dead branch (f2a) & 31\% & 100\% \\
+piecewise, both live (f2b) & 15\% & 100\% \\
+tiered-pricing word problems (f7) & 5\% & 98\% \\
+integer counting (f8) & 5\% & 100\% \\
+\midrule
+casework-v1 train (240) & 39.2\% & 100\% \\
+\bottomrule
+\end{tabular}
+\caption{The generator families span a measured difficulty ladder on the
+deployment-class model while remaining trivial for a mini-tier API model.
+Dead-case problems are disproportionately hard for the small model (33\%
+versus 43\% on live-case problems), consistent with domain-restriction
+discipline being the failure axis the \textsc{Abandon} verb targets.}
+\label{tab:ladder}
+\end{table}
+
+Two consequences. First, the difficulty question for the decisive
+comparison had been aimed at the wrong model: no knob of the generator
+challenges a mini-tier API model (279/280 across seven configurations),
+but the deployment-class generator sits at the low edge of the useful
+band on the shipped dataset, and the family ladder makes harder mixes a
+weighting exercise rather than new dataset work. Second, the target is
+now concrete: the trained controller orchestrating Qwen2.5-1.5B must beat
+39.2\% on casework-v1 to demonstrate value over the same frozen model
+prompted directly. About 14\% of the small model's direct replies were
+unusable (no parseable answer); these score as failures for the direct
+baseline and preview the masked-action rate the harness must absorb in
+the generator role.

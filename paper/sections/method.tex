@@ -98,9 +98,32 @@ subtrees render as statement plus verdict. Because both the read and the
 write are scoped to the target's neighborhood, acting on a subgoal is
 identical to stepping a smaller MDP rooted there: locality, modularity, and
 recursion are one property, derived from the action interface.
-\stub{final composition of the default view (the goal-to-fact attachment)
-and the per-verb avail masks are being settled in the integration; specify
-exactly once wired}
+
+\paragraph{The rendered observation carries the structure explicitly.}
+Four properties of the serialization proved load-bearing in the formative
+campaign (\cref{sec:preliminary}) and are part of the method, not
+implementation detail. (i) The forest is rendered \emph{as a tree}:
+children are indented under their parent and every non-root node carries a
+\texttt{parent=} tag, so the ownership relation between a goal and its
+evidence is present in the observation rather than recoverable only from
+node-creation order. (ii) An open goal with a discharging witness is
+annotated \texttt{(evidence: node $N$ verified)}, naming the exact node a
+\textsc{Commit} would use. (iii) A rejected (masked) action produces an
+explicit rejection notice in the next controller input; without it the
+observation after a masked action is near-identical to the one before it,
+and a low-temperature controller repeats the same choice indefinitely.
+(iv) The turn counter shows the horizon (\texttt{TURN 7/16}). The formative
+evidence for (i) is stark: under a flat id-ordered rendering of the same
+state, a $40\times$ larger controller gained nothing (1/20 versus 1/20 on
+case-analysis problems), while restoring the tree structure at fixed
+controller capability improved outcomes four- to five-fold. No controller,
+at any capability, can act on structure the observation erases; the same
+serialization feeds the learned encoder, so the finding transfers to the
+trained controller by construction. Two structural guards accompany the
+render: an exhaustive \textsc{Split} names its full case set in one call,
+so a goal that already has children is not re-splittable, and a
+\textsc{Compute} whose statement duplicates a fact already attached to the
+same goal is masked rather than appended.
 
 \subsection{The controller: factored heads over a pluggable encoder}
 \label{sec:method-controller}

@@ -44,11 +44,23 @@ prior. A sanity ablation (random Q head, uniform policy, fixed MCTS) must be
 visibly worse than the trained rows, confirming that training rather than
 the scaffold does the work.
 
-\paragraph{Models and infrastructure.} The generator is a small base model
-that has not been post-trained on reasoning data, so that deliberative
-behavior is attributable to the loop rather than to prior post-training.
-\stub{final model choices (candidates: Qwen2.5-1.5B-Base class), teacher
-model, serving stack, seeds, dataset splits, and decoding parameters}
+\paragraph{Models and infrastructure.} The generator is a small model in
+the Qwen2.5-1.5B class; the working instantiation of the Rung-1 campaign
+(\cref{sec:preliminary}) is Qwen2.5-1.5B-instruct served locally via an
+OpenAI-compatible endpoint, with gpt-4.1-mini as the controller-teacher
+(a $40\times$ larger teacher was measured to add nothing;
+\cref{sec:prelim-obs}). \stub{whether the headline runs use the base or
+instruct variant (base isolates the loop's contribution from reasoning
+post-training), seeds, dataset splits, and decoding parameters}
+
+\paragraph{Datasets and instruments.} Alongside GSM8K and MATH, the
+evaluation uses casework, a published synthetic dataset with per-record
+provenance whose labels are verified by construction plus an independent
+re-derivation, and whose families span a measured 5--75\% difficulty
+ladder on the deployment-class generator
+(\cref{sec:prelim-calibration}). Every formative experiment is logged in
+a repository ledger with the manipulation, measure, and reading
+registered before the run.
 
 \paragraph{Ablations.} Pre-registered: (i) MCTS-off versus MCTS-on training
 (the additive-accelerator claim); (ii) pointer head versus verb-only action

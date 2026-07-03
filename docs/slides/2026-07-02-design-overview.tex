@@ -349,24 +349,52 @@
   \end{block}
 \end{frame}
 
+% ---------------------------------------------------------------- ladder
+\begin{frame}{The measured difficulty ladder, and the target}
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{@{}lcc@{}}
+      \toprule
+      Direct prompt, same scoring & Qwen2.5-1.5B (deployment) & gpt-4.1-mini \\
+      \midrule
+      quadratics (f3) & 75\% & 100\% \\
+      absolute value (f1a/f1b) & 40 / 35\% & 100\% \\
+      piecewise (f2a/f2b) & 31 / 15\% & 100\% \\
+      word problems (f7) / counting (f8) & 5\% / 5\% & 98\% / 100\% \\
+      \midrule
+      casework-v1 (240) & \alert{39.2\%} & 100\% \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \smallskip
+  One generator spans 5--75\% on the deployment model while staying
+  trivial for the mini tier (harder mixes are a \emph{weighting}
+  exercise); dead-case problems are the small model's weak axis (33\% vs
+  43\%), exactly what \verbword{abandon} targets.
+  \begin{block}{The decisive comparison, now concrete}
+    Qwen2.5-1.5B + trained controller must beat \alert{39.2\%} on
+    casework-v1. Every teacher-side alternative (prompts, $40\times$
+    capability, completion budget, solve-claim steps) measured null; the
+    trained controller is the remaining lever.
+  \end{block}
+\end{frame}
+
 % ---------------------------------------------------------------- next steps
 \begin{frame}{Next steps}
   \begin{enumerate}
-    \item \textbf{Casework collection at teacher scale}: the probes used
-          gpt-4.1-mini (deployment-scale) as the teacher; the design calls
-          for a \emph{strong} teacher. Decide: stronger-teacher probe, or a
-          solve-claim extension to \verbword{compute} (a spec'd invariant
-          change), or bank the structural data as is
-    \item \textbf{Design-true regime}: hosted teacher + \emph{local} small
-          generator (Qwen 1.5B/3B); measure the small model's failed-action
-          rate before large collection
+    \item \textbf{Design-true collection} (probe running): hosted teacher
+          decides, \emph{local} Qwen-1.5B writes all content, so
+          trajectories reflect the deployed model's state distribution;
+          then the full behavior-cloning collection
     \item \textbf{Phase B}: per-node encoder + pointer head,
           behavior-cloning warm-start on rung-1 trajectories, then
-          $Q$-learning fine-tune against the verifier; the casework probes'
-          controller failures are its negative examples
-    \item \textbf{The decisive comparison}: small generator + trained
-          controller vs the \emph{same} small model prompted directly; the
-          approach succeeds or fails on that margin
+          $Q$-learning fine-tune against the verifier; the probes'
+          controller failures (illegal intents, repetition after
+          rejection) are its labeled negatives
+    \item \textbf{The decisive comparison}: Qwen-1.5B + trained controller
+          vs the same model prompted directly; the target is
+          \alert{39.2\%} on casework-v1, and the approach succeeds or
+          fails on that margin
   \end{enumerate}
   \medskip
   \begin{block}{One-sentence summary}
