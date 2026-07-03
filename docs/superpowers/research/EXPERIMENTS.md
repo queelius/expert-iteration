@@ -74,17 +74,22 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   design-true-regime prerequisite, no OpenAI cost); f7/f8 stay in the
   generator as calibrated-and-ready families.
 
-### E13: solve-claim COMPUTE ablation (after the spec + build)
+### E13: solve-claim COMPUTE ablation - RESOLVED 07-03: DO NOT ADOPT
 - Manipulation: solve-claim COMPUTE on vs off, same teacher (mini), same
-  interface, same 20 problems.
-- Hypothesis: the ground-re-expression dance is the largest single tax
-  (E10 conclusion 3); letting COMPUTE claim "x = 5" with substitution
-  verification shortens the winning line ~1/3 and removes the failure mode
-  probes 3-5 exposed.
-- Measure: solve rate; median turns; masked-action count.
-- Reading: on-arm solve >= 2x off-arm => adopt; no difference => the tax
-  is elsewhere (protocol length per se), revisit granularity more broadly.
-- Cost: ~$0.15.
+  interface, same 20 problems. Control arms: v6 (5/20), v7 (4/20).
+- Pre-registered reading: on-arm >= 2x off-arm (>= 9/20) => adopt; no
+  difference => the tax is protocol length per se.
+- **Result: 4/20, identical to control.** The mechanism works (solve-claim
+  facts landed and verified; f1a went 0-1 -> 2 wins) but the plateau is
+  unmoved; fallbacks rose to 25%. Verdict per pre-registration: not
+  adopted; the flag stays off (code remains, spec'd and tested, inert by
+  default). Conclusion: the tax is the ~10-step protocol executed at
+  ~90 percent per-step teacher fidelity, not any single step's content.
+  With E6-E8, E11, and E13 all falsified, every teacher-side patch axis
+  (prompts, capability, completion length, step granularity) is now
+  eliminated; the one intervention that worked was observational (E9).
+  The remaining lever is the one the design names: a trained controller
+  with perfect menu fidelity by construction (Phase B). Cost: $0.20.
 
 ## Method notes
 
