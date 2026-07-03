@@ -192,3 +192,46 @@ def test_solve_claim_on_leaves_ground_facts_on_the_decide_path():
     s, _ = mdp.sample_transition(s, DeliberationAction(Verb.VERIFY, fact), _rng())
     from verifier_anchored_rl.reductio import is_verified
     assert is_verified(s.graph, fact)
+
+
+# ---------------------------------------------------------------------------
+# generator-boundary leniency (E14 fix): type-loose payloads are coerced
+# ---------------------------------------------------------------------------
+
+def test_split_coerces_object_children_and_spaced_connective():
+    # The exact shapes Qwen-1.5B produced in E14: children as objects, a
+    # connective with a space and capitalization.
+    mdp = _mdp({("SPLIT",): {
+        "connective": "Exhaustive case",
+        "children": [{"goal_id": 1, "text": "case x >= 4"},
+                     {"id": "p2", "sentence": "case x < 4"}]}})
+    s = mdp.initial_state()
+    s2, r = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
+    assert r == 0.0                                # NOT masked
+    root = get(s2.graph, 0)
+    assert root.connective == "exhaustive_case"
+    assert [get(s2.graph, c).statement for c in root.children] == \
+        ["case x >= 4", "case x < 4"]
+
+
+def test_compute_coerces_string_premises_and_drops_junk():
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
+                          givens=("a=1",),
+                          llm_client=MockLLMClient(script={
+                              ("COMPUTE",): {"statement": "7*6 = 42",
+                                             "premises": ["1", 99, "x", None]}}))
+    s = mdp.initial_state()
+    s2, r = mdp.sample_transition(s, DeliberationAction(Verb.COMPUTE, 0), _rng())
+    assert r == 0.0
+    fact = [n for n in s2.graph.nodes
+            if isinstance(n, Fact) and n.source == "derived"][0]
+    assert fact.premises == (1,)      # "1" coerced; 99 (dead), "x", None dropped
+
+
+def test_split_with_no_usable_children_is_still_masked():
+    mdp = _mdp({("SPLIT",): {"connective": "exhaustive_case",
+                             "children": [{"n": 1}, {"n": 2}]}})
+    s = mdp.initial_state()
+    s2, r = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
+    assert r == MASKED_ACTION_REWARD  # objects with no string content
+    assert s2.graph == s.graph

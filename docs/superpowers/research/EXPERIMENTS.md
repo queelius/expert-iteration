@@ -141,6 +141,20 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   axis found in E12 round 3), not Phase B's premise.
 - Cost: ~$0.10 teacher-side; generator is free local CPU (~40 min).
 
+### E15: design-true probe with generator-boundary coercion
+- Manipulation (single, vs E14): lenient wire schemas + apply-time
+  coercion for the generator's payloads (SPLIT children objects -> their
+  longest string value; connective normalized; premises coerced to live
+  int ids). Teacher, generator, problems, prompts unchanged from E14.
+- Measure: typed-verb mask rate (E14: SPLIT 63%, COMPUTE 55%); wins.
+- Reading: mask rate under ~20% and any wins => the boundary was the
+  blocker; proceed to the full design-true collection. Mask rate down
+  but zero wins => the residual is generator CONTENT (restating the
+  case equation instead of solving it), which is the small model's
+  actual limitation and exactly what Phase B must work within; collect
+  anyway (decision data is the product) but at reduced scale.
+- Cost: ~$0.10 teacher-side; local CPU generator (~40 min).
+
 ## Method notes
 
 - 20-episode probes distinguish 5% from 70%, not 20% from 30%: treat

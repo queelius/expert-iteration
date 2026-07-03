@@ -110,12 +110,15 @@ def test_schema_shapes():
     s = DeliberationState(g, 0)
     sp = schema_for(Verb.SPLIT, 0, s)
     assert set(sp["properties"]) == {"connective", "children"}
-    assert sp["properties"]["connective"]["enum"] == ["conjunctive", "exhaustive_case"]
+    # Deliberately NO enum/typed items on the wire (E14: client-side
+    # validation laundered small-model shape slips into masked actions);
+    # normalization happens by coercion in the MDP's apply step.
+    assert "enum" not in str(sp)
     fh = schema_for(Verb.FORM_HYPOTHESIS, 0, s)
     assert set(fh["properties"]) == {"statement"}
     co = schema_for(Verb.COMPUTE, 0, s)
     assert set(co["properties"]) == {"statement", "premises"}
-    assert co["properties"]["premises"]["items"]["enum"] == [1, 2]
+    assert "enum" not in str(co)
     import pytest
     with pytest.raises(ValueError):
         schema_for(Verb.VERIFY, 2, s)       # no-LLM verbs have no schema

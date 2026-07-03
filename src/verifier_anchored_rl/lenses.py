@@ -262,13 +262,16 @@ def _fields_description(verb: Verb, state: DeliberationState,
 def schema_for(verb: Verb, target: NodeId, state: DeliberationState) -> dict[str, Any]:
     """The constrained-generation schema for an LLM verb."""
     if verb is Verb.SPLIT:
+        # Types deliberately loose: the HTTP client VALIDATES against this
+        # schema and retries on mismatch, so a strict enum/items spec turns
+        # a small model's shape slips (children as {"text": ...} objects,
+        # a spaced connective) into opaque parse failures and masked
+        # actions (E14: 63% of SPLITs). The MDP coerces at apply time.
         return {
             "type": "object",
             "properties": {
-                "connective": {"type": "string",
-                               "enum": ["conjunctive", "exhaustive_case"]},
-                "children": {"type": "array", "minItems": 2, "maxItems": 6,
-                             "items": {"type": "string"}},
+                "connective": {"type": "string"},
+                "children": {"type": "array", "minItems": 2, "maxItems": 6},
             },
             "required": ["connective", "children"],
         }
@@ -279,13 +282,13 @@ def schema_for(verb: Verb, target: NodeId, state: DeliberationState) -> dict[str
             "required": ["statement"],
         }
     if verb is Verb.COMPUTE:
-        ids = _live_premise_ids(state.graph)
+        # Same looseness rationale as SPLIT: premises arrive as strings or
+        # stray ids from small models; the MDP coerces and filters.
         return {
             "type": "object",
             "properties": {
                 "statement": {"type": "string"},
-                "premises": {"type": "array",
-                             "items": {"enum": ids} if ids else {"type": "integer"}},
+                "premises": {"type": "array"},
             },
             "required": ["statement"],
         }

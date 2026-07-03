@@ -301,6 +301,31 @@ class DeliberationMDP:
         return self.llm_client.complete_json(
             self.system_prompt, view + tail, schema, seed=seed)
 
+    @staticmethod
+    def _coerce_child(c) -> str:
+        """A SPLIT child as a string, from whatever shape the model sent.
+
+        Small models wrap children in objects ({"text": ...},
+        {"goal_id": 1, "sentence": ...}); the content is the longest
+        string value. Bare values pass through str(). (E14 boundary fix.)
+        """
+        if isinstance(c, dict):
+            strings = [v for v in c.values() if isinstance(v, str)]
+            return max(strings, key=len) if strings else ""
+        return str(c)
+
+    @staticmethod
+    def _coerce_connective(raw) -> str:
+        """Normalize connective variants ('Exhaustive case', 'cases',
+        'and') onto the two canonical values; unknown text falls through
+        unchanged so reductio's own validation stays the arbiter."""
+        text = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
+        if text.startswith("exhaustive") or "case" in text:
+            return "exhaustive_case"
+        if text.startswith("conj") or text in ("and", "all"):
+            return "conjunctive"
+        return str(raw)
+
     def _do_llm_verb(self, state: DeliberationState,
                      action: DeliberationAction, rng
                      ) -> tuple[DeliberationState, float]:
@@ -315,10 +340,13 @@ class DeliberationMDP:
             return self._masked(state)
         try:
             if action.verb is Verb.SPLIT:
-                children = tuple(sanitize(str(c))
-                                 for c in payload["children"] if str(c).strip())
+                children = tuple(
+                    s for s in (sanitize(self._coerce_child(c))
+                                for c in payload["children"])
+                    if s.strip())
                 result = _r_split(state.graph, action.target,
-                                  str(payload["connective"]), children)
+                                  self._coerce_connective(payload["connective"]),
+                                  children)
             elif action.verb is Verb.FORM_HYPOTHESIS:
                 result = _r_form(state.graph, action.target,
                                  sanitize(str(payload["statement"])))
@@ -334,8 +362,20 @@ class DeliberationMDP:
                 if any(get(state.graph, fid).statement == stmt
                        for fid in existing):
                     return self._masked(state)
-                premises = tuple(int(p) for p in payload.get("premises", ()) or ())
-                result = _r_compute(state.graph, action.target, stmt, premises)
+                # Coerce premises leniently: ints or int-shaped strings that
+                # name LIVE nodes survive; everything else is dropped rather
+                # than failing the whole action (E14 boundary fix).
+                live = {n.id for n in state.graph.nodes}
+                premises = []
+                for p in payload.get("premises", ()) or ():
+                    try:
+                        pid = int(p)
+                    except (TypeError, ValueError):
+                        continue
+                    if pid in live:
+                        premises.append(pid)
+                result = _r_compute(state.graph, action.target, stmt,
+                                    tuple(premises))
         except (KeyError, TypeError, ValueError):
             return self._masked(state)
         if not hasattr(result, "graph"):        # reductio Err
