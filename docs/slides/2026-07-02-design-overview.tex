@@ -234,25 +234,24 @@
   conjunction, not a new RL algorithm.
 \end{frame}
 
-\begin{frame}{Casework: structure fires, and information beat capability}
-  \textbf{The dataset did its job} (\texttt{casework-v1}: 300
+\begin{frame}{Casework: the structural action space fires}
+  \textbf{The dataset does its job} (\texttt{casework-v1}: 300
   SymPy-verified problems with provenance): on a linear benchmark the
   chain policy is optimal, so structural verbs never fire; on casework
-  they reach \alert{12--23\%} of decisions (\verbword{split} in 20/20
-  episodes).
+  they reach \alert{12--23\%} of decisions, with \verbword{split} in
+  20/20 probe episodes and \verbword{abandon} on the dead-case families.
+  \medskip
 
-  \textbf{Solve rate isolated the bottleneck by experiment:}
-  \begin{itemize}
-    \item a $5\times$-price teacher (gpt-4.1), \emph{flat} state render:
-          1/20, unchanged from the small teacher
-    \item fixed \emph{observation} (tree render, commit-readiness,
-          rejection feedback), same small teacher: \alert{4--5$\times$}
-          across replicates (and 4/20 under the large teacher)
-  \end{itemize}
-  \begin{block}{Why this strengthens the thesis}
-    No controller can act on structure the lens erases. The residual
-    menu-ignoring errors are impossible for a pointer head restricted to
-    the legal menu; the teacher's mistakes are the training signal.
+  \textbf{The teacher-LLM controller plateaus at 20--25\%.} A win needs
+  roughly 10 correct sequential decisions and per-step protocol fidelity
+  binds; prompt engineering, a $5\times$-price teacher, longer
+  completions, and coarser verified steps all measured null against
+  pre-registered readings.
+  \begin{block}{Why a trained controller can do better}
+    The teacher's dominant errors are illegal action choices and
+    repetition, errors a pointer head restricted to the legal menu cannot
+    make by construction; and its logged decisions, right and wrong, are
+    exactly the behavior-cloning data Phase B trains on.
   \end{block}
 \end{frame}
 
