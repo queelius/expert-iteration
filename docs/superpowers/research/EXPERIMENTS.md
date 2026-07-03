@@ -54,15 +54,25 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   trap), v1-five at scale=10, f4+f6 at scale=10: 40/40 = 100% on all four
   (160/160 total, ~$0.08). Parameter magnitude and these family
   structures cannot challenge mini anywhere in single-variable
-  linear/quadratic algebra; the difficulty must come from a structurally
-  different source. Round-2 candidate axes, in order of expected bite:
-  (a) integer-counting casework ("how many integers x in [lo, hi]
-  satisfy ..."; off-by-one and boundary errors are real even in strong
-  models; ground truth by exhaustive enumeration, the strongest possible
-  verification); (b) tiered/piecewise word skins (inverse problems on
-  tax-bracket-style structures; GSM8K's 5.6% direct-miss rate lives in
-  word-problem semantics, not algebra); (c) nested absolute values
-  (||x-a| - b| = c, 4+ cases, working-memory pressure).
+  linear/quadratic algebra.
+- **Round 2 result (07-03): NULL again.** f7 (tiered-pricing word skins):
+  39/40, the single miss being exactly the designed tier-boundary slip
+  (13x$4 + 1x$2 = $54 -> 14 GB, model said 15); f8 (integer counting
+  under band + divisibility): 40/40 at scale 1 AND scale 3. Semantic
+  extraction and enumeration discipline are also saturated for mini;
+  the f7 trap mechanism is real but fires at 2.5%.
+- **E12 closing synthesis (rounds 1+2, 279/280 across seven configs):**
+  no reachable knob of this generator challenges gpt-4.1-mini. The
+  correct conclusion is NOT an arms race toward competition problems: it
+  is that the headroom question was being asked of the wrong model. The
+  design's deployment target is a LOCAL SMALL generator (Qwen
+  1.5B/3B-class); the decisive comparison is small-model-direct vs
+  small-model-plus-controller, so the 40-70% band must be measured on
+  the deployment-class model, which plausibly sits in it on casework-v1
+  AS SHIPPED. Casework-v2 dataset assembly is therefore deferred until
+  the direct baseline is re-run against the local small model (the
+  design-true-regime prerequisite, no OpenAI cost); f7/f8 stay in the
+  generator as calibrated-and-ready families.
 
 ### E13: solve-claim COMPUTE ablation (after the spec + build)
 - Manipulation: solve-claim COMPUTE on vs off, same teacher (mini), same
