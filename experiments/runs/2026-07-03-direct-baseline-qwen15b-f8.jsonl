@@ -1,0 +1,40 @@
+{"index": 0, "problem": "How many integers x satisfy -11 <= x <= 8, |x + 3| >= 8, and x is divisible by 5? Report the count.", "expected": "1", "answer": "0", "correct": false}
+{"index": 1, "problem": "How many integers x satisfy -15 <= x <= 2, |x + 4| <= 6, and x is not divisible by 5? Report the count.", "expected": "10", "answer": "9", "correct": false}
+{"index": 2, "problem": "How many integers x satisfy -12 <= x <= 15, |x - 5| <= 9, and x is not divisible by 5? Report the count.", "expected": "16", "answer": "30", "correct": false}
+{"index": 3, "problem": "How many integers x satisfy -10 <= x <= 19, |x - 2| <= 10, and x is not divisible by 2? Report the count.", "expected": "10", "answer": "4", "correct": false}
+{"index": 4, "problem": "How many integers x satisfy -17 <= x <= 8, |x + 2| >= 12, and x is divisible by 5? Report the count.", "expected": "1", "answer": "0", "correct": false}
+{"index": 5, "problem": "How many integers x satisfy 5 <= x <= 13, |x - 7| >= 4, and x is divisible by 4? Report the count.", "expected": "1", "answer": "0", "correct": false}
+{"index": 6, "problem": "How many integers x satisfy -16 <= x <= 2, |x + 3| <= 8, and x is not divisible by 3? Report the count.", "expected": "10", "answer": "8", "correct": false}
+{"index": 7, "problem": "How many integers x satisfy -15 <= x <= 19, |x - 4| >= 11, and x is divisible by 4? Report the count.", "expected": "3", "answer": "0", "correct": false}
+{"index": 8, "problem": "How many integers x satisfy -13 <= x <= 24, |x - 6| <= 11, and x is not divisible by 2? Report the count.", "expected": "12", "answer": "8", "correct": false}
+{"index": 9, "problem": "How many integers x satisfy -12 <= x <= 5, |x + 5| >= 3, and x is divisible by 3? Report the count.", "expected": "4", "answer": "4", "correct": true}
+{"index": 10, "problem": "How many integers x satisfy -8 <= x <= 24, |x - 5| >= 11, and x is divisible by 2? Report the count.", "expected": "7", "answer": "3", "correct": false}
+{"index": 11, "problem": "How many integers x satisfy -16 <= x <= 7, |x + 5| <= 5, and x is not divisible by 5? Report the count.", "expected": "8", "answer": "2", "correct": false}
+{"index": 12, "problem": "How many integers x satisfy -13 <= x <= 4, |x + 1| >= 8, and x is divisible by 2? Report the count.", "expected": "2", "answer": "0", "correct": false}
+{"index": 13, "problem": "How many integers x satisfy -22 <= x <= 7, |x + 7| >= 12, and x is divisible by 2? Report the count.", "expected": "3", "answer": "0", "correct": false}
+{"index": 14, "problem": "How many integers x satisfy -13 <= x <= 14, |x + 3| <= 12, and x is not divisible by 5? Report the count.", "expected": "19", "answer": "49", "correct": false}
+{"index": 15, "problem": "How many integers x satisfy -8 <= x <= -1, |x + 3| <= 4, and x is not divisible by 4? Report the count.", "expected": "6", "answer": "-2", "correct": false}
+{"index": 16, "problem": "How many integers x satisfy -15 <= x <= 5, |x + 5| <= 6, and x is not divisible by 2? Report the count.", "expected": "7", "answer": "2", "correct": false}
+{"index": 17, "problem": "How many integers x satisfy -18 <= x <= 5, |x + 9| <= 6, and x is not divisible by 3? Report the count.", "expected": "8", "answer": "0", "correct": false}
+{"index": 18, "problem": "How many integers x satisfy -14 <= x <= -1, |x + 6| >= 3, and x is divisible by 2? Report the count.", "expected": "4", "answer": "0", "correct": false}
+{"index": 20, "problem": "How many integers x satisfy -16 <= x <= 16, |x + 1| <= 12, and x is not divisible by 3? Report the count.", "expected": "17", "answer": "40", "correct": false}
+{"index": 19, "problem": "How many integers x satisfy -17 <= x <= 8, |x + 3| <= 12, and x is not divisible by 4? Report the count.", "expected": "18", "answer": "9", "correct": false}
+{"index": 21, "problem": "How many integers x satisfy -9 <= x <= 16, |x - 1| >= 12, and x is divisible by 5? Report the count.", "expected": "1", "answer": "0", "correct": false}
+{"index": 22, "problem": "How many integers x satisfy 4 <= x <= 21, |x - 8| >= 6, and x is divisible by 4? Report the count.", "expected": "2", "answer": "0", "correct": false}
+{"index": 23, "problem": "How many integers x satisfy -22 <= x <= -5, |x + 9| >= 6, and x is divisible by 5? Report the count.", "expected": "2", "answer": "0", "correct": false}
+{"index": 24, "problem": "How many integers x satisfy -4 <= x <= 23, |x - 9| >= 8, and x is divisible by 4? Report the count.", "expected": "3", "answer": "0", "correct": false}
+{"index": 25, "problem": "How many integers x satisfy -19 <= x <= 17, |x + 1| <= 12, and x is not divisible by 2? Report the count.", "expected": "13", "answer": "0", "correct": false}
+{"index": 26, "problem": "How many integers x satisfy -4 <= x <= 15, |x - 5| <= 8, and x is not divisible by 5? Report the count.", "expected": "14", "answer": "16", "correct": false}
+{"index": 27, "problem": "How many integers x satisfy -15 <= x <= 3, |x + 7| <= 3, and x is not divisible by 4? Report the count.", "expected": "5", "answer": "2", "correct": false}
+{"index": 28, "problem": "How many integers x satisfy -11 <= x <= 17, |x - 6| <= 11, and x is not divisible by 4? Report the count.", "expected": "17", "answer": "2", "correct": false}
+{"index": 29, "problem": "How many integers x satisfy -17 <= x <= 0, |x + 9| <= 5, and x is not divisible by 2? Report the count.", "expected": "5", "answer": "2", "correct": false}
+{"index": 30, "problem": "How many integers x satisfy -12 <= x <= 10, |x + 1| <= 6, and x is not divisible by 5? Report the count.", "expected": "10", "answer": "4", "correct": false}
+{"index": 31, "problem": "How many integers x satisfy -15 <= x <= 15, |x - 1| >= 9, and x is divisible by 2? Report the count.", "expected": "7", "answer": "4", "correct": false}
+{"index": 32, "problem": "How many integers x satisfy -11 <= x <= 17, |x - 4| >= 10, and x is divisible by 3? Report the count.", "expected": "3", "answer": "2", "correct": false}
+{"index": 33, "problem": "How many integers x satisfy -4 <= x <= 22, |x - 5| <= 9, and x is not divisible by 3? Report the count.", "expected": "13", "answer": "10", "correct": false}
+{"index": 34, "problem": "How many integers x satisfy -19 <= x <= 13, |x + 5| >= 10, and x is divisible by 4? Report the count.", "expected": "3", "answer": "1", "correct": false}
+{"index": 35, "problem": "How many integers x satisfy -11 <= x <= 10, |x + 3| >= 7, and x is divisible by 4? Report the count.", "expected": "2", "answer": "2", "correct": true}
+{"index": 36, "problem": "How many integers x satisfy -13 <= x <= 13, |x - 3| <= 10, and x is not divisible by 5? Report the count.", "expected": "17", "answer": "24", "correct": false}
+{"index": 37, "problem": "How many integers x satisfy -6 <= x <= 7, |x + 1| >= 5, and x is divisible by 5? Report the count.", "expected": "1", "answer": "0", "correct": false}
+{"index": 38, "problem": "How many integers x satisfy -16 <= x <= 21, |x - 1| <= 12, and x is not divisible by 4? Report the count.", "expected": "19", "answer": "3", "correct": false}
+{"index": 39, "problem": "How many integers x satisfy -19 <= x <= -6, |x + 7| >= 4, and x is divisible by 3? Report the count.", "expected": "3", "answer": null, "correct": false}

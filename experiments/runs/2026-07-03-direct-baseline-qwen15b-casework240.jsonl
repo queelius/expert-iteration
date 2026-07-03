@@ -1,0 +1,240 @@
+{"index": 0, "problem": "Solve for all real values of x: |4x - 16| = 4. Report the largest value of x that satisfies the equation.", "expected": "5", "answer": "5", "correct": true}
+{"index": 1, "problem": "Solve for x given that x < 12: |5x - 30| = 35. Report the value of x.", "expected": "-1", "answer": "12", "correct": false}
+{"index": 2, "problem": "A function is defined by f(x) = -x + 4 when x < 2, and f(x) = -2x + 18 when x >= 2. Find the value of x for which f(x) = 2.", "expected": "8", "answer": "8", "correct": true}
+{"index": 3, "problem": "A function is defined by f(x) = -2x - 8 when x < 4, and f(x) = x - 13 when x >= 4. Report the sum of all values of x for which f(x) = -4.", "expected": "7", "answer": "9", "correct": false}
+{"index": 4, "problem": "Solve the equation x^2 + 6x - 7 = 0. Report the smallest value of x.", "expected": "-7", "answer": "-8", "correct": false}
+{"index": 5, "problem": "Solve for all real values of x: |5x + 30| = 30. Report the largest value of x that satisfies the equation.", "expected": "0", "answer": "0", "correct": true}
+{"index": 6, "problem": "Solve for x given that x < 4: |3x + 9| = 27. Report the value of x.", "expected": "-12", "answer": "6", "correct": false}
+{"index": 8, "problem": "A function is defined by f(x) = -4x + 24 when x < 5, and f(x) = 4x - 4 when x >= 5. Report the sum of all values of x for which f(x) = 20.", "expected": "7", "answer": "10", "correct": false}
+{"index": 7, "problem": "A function is defined by f(x) = -4x + 20 when x < 3, and f(x) = -4x + 32 when x >= 3. Find the value of x for which f(x) = -4.", "expected": "9", "answer": null, "correct": false}
+{"index": 10, "problem": "Solve for all real values of x: |5x + 10| = 20. Report the sum of all solutions for x.", "expected": "-4", "answer": "4", "correct": false}
+{"index": 9, "problem": "Solve the equation x^2 + 6x - 7 = 0. Report the largest value of x.", "expected": "1", "answer": "3.5", "correct": false}
+{"index": 11, "problem": "Solve for x given that x < 4: |5x - 25| = 10. Report the value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 12, "problem": "A function is defined by f(x) = -3x + 17 when x < 3, and f(x) = x + 14 when x >= 3. Find the value of x for which f(x) = 11.", "expected": "2", "answer": "8", "correct": false}
+{"index": 13, "problem": "A function is defined by f(x) = -x + 1 when x < 3, and f(x) = x - 2 when x >= 3. Report the sum of all values of x for which f(x) = 1.", "expected": "3", "answer": "4", "correct": false}
+{"index": 14, "problem": "Solve the equation x^2 - 4x + 3 = 0. Report the largest value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 15, "problem": "Solve for all real values of x: |3x + 12| = 12. Report the sum of all solutions for x.", "expected": "-8", "answer": "0", "correct": false}
+{"index": 16, "problem": "Solve for x given that x > -7: |x + 1| = 8. Report the value of x.", "expected": "7", "answer": null, "correct": false}
+{"index": 17, "problem": "A function is defined by f(x) = -2x - 4 when x < 5, and f(x) = -4x when x >= 5. Find the value of x for which f(x) = -12.", "expected": "4", "answer": "-3", "correct": false}
+{"index": 18, "problem": "A function is defined by f(x) = x + 5 when x < 5, and f(x) = -x + 15 when x >= 5. Report the sum of all values of x for which f(x) = 5.", "expected": "10", "answer": "10", "correct": true}
+{"index": 19, "problem": "Solve the equation x^2 - 13x + 36 = 0. Report the smallest value of x.", "expected": "4", "answer": "4", "correct": true}
+{"index": 20, "problem": "Solve for all real values of x: |4x - 24| = 24. Report the sum of all solutions for x.", "expected": "12", "answer": "12", "correct": true}
+{"index": 21, "problem": "Solve for x given that x < -4: |3x + 18| = 24. Report the value of x.", "expected": "-14", "answer": "-14", "correct": true}
+{"index": 22, "problem": "A function is defined by f(x) = -4x - 5 when x < -2, and f(x) = x - 4 when x >= -2. Find the value of x for which f(x) = -5.", "expected": "-1", "answer": "-1", "correct": true}
+{"index": 23, "problem": "A function is defined by f(x) = 3x + 28 when x < -3, and f(x) = -4x + 13 when x >= -3. Report the sum of all values of x for which f(x) = 1.", "expected": "-6", "answer": "5", "correct": false}
+{"index": 24, "problem": "Solve the equation x^2 + 7x + 10 = 0. Report the largest value of x.", "expected": "-2", "answer": "3", "correct": false}
+{"index": 25, "problem": "Solve for all real values of x: |5x - 40| = 10. Report the sum of all solutions for x.", "expected": "16", "answer": null, "correct": false}
+{"index": 26, "problem": "Solve for x given that x > -3: |x + 3| = 2. Report the value of x.", "expected": "-1", "answer": null, "correct": false}
+{"index": 27, "problem": "A function is defined by f(x) = -4x + 7 when x < 0, and f(x) = -4x - 9 when x >= 0. Find the value of x for which f(x) = -13.", "expected": "1", "answer": "-1", "correct": false}
+{"index": 28, "problem": "A function is defined by f(x) = -x + 5 when x < -4, and f(x) = -4x - 6 when x >= -4. Report the sum of all values of x for which f(x) = 10.", "expected": "-9", "answer": "10", "correct": false}
+{"index": 29, "problem": "Solve the equation x^2 - 12x + 32 = 0. Report the largest value of x.", "expected": "8", "answer": "8", "correct": true}
+{"index": 30, "problem": "Solve for all real values of x: |3x + 21| = 12. Report the sum of all solutions for x.", "expected": "-14", "answer": "1", "correct": false}
+{"index": 31, "problem": "Solve for x given that x > -2: |3x - 6| = 21. Report the value of x.", "expected": "9", "answer": "9", "correct": true}
+{"index": 32, "problem": "A function is defined by f(x) = -4x + 9 when x < 3, and f(x) = -3x + 3 when x >= 3. Find the value of x for which f(x) = 9.", "expected": "0", "answer": "0", "correct": true}
+{"index": 34, "problem": "Solve the equation x^2 + 11x + 24 = 0. Report the largest value of x.", "expected": "-3", "answer": "-3", "correct": true}
+{"index": 33, "problem": "A function is defined by f(x) = 4x + 10 when x < -1, and f(x) = -2x + 10 when x >= -1. Report the sum of all values of x for which f(x) = 2.", "expected": "2", "answer": null, "correct": false}
+{"index": 35, "problem": "Solve for all real values of x: |2x - 2| = 18. Report the largest value of x that satisfies the equation.", "expected": "10", "answer": "10", "correct": true}
+{"index": 36, "problem": "Solve for x given that x < 3: |x - 5| = 3. Report the value of x.", "expected": "2", "answer": "2", "correct": true}
+{"index": 37, "problem": "A function is defined by f(x) = x - 1 when x < 5, and f(x) = 2x - 14 when x >= 5. Find the value of x for which f(x) = 6.", "expected": "10", "answer": "7", "correct": false}
+{"index": 38, "problem": "A function is defined by f(x) = -4x - 1 when x < -3, and f(x) = 4x + 27 when x >= -3. Report the sum of all values of x for which f(x) = 15.", "expected": "-7", "answer": "0", "correct": false}
+{"index": 39, "problem": "Solve the equation x^2 + 7x - 8 = 0. Report the smallest value of x.", "expected": "-8", "answer": "-8", "correct": true}
+{"index": 40, "problem": "Solve for all real values of x: |2x + 4| = 16. Report the largest value of x that satisfies the equation.", "expected": "6", "answer": "6", "correct": true}
+{"index": 41, "problem": "Solve for x given that x > 4: |5x| = 30. Report the value of x.", "expected": "6", "answer": "6", "correct": true}
+{"index": 42, "problem": "A function is defined by f(x) = 3x - 8 when x < -1, and f(x) = -3x + 4 when x >= -1. Find the value of x for which f(x) = 4.", "expected": "0", "answer": "4", "correct": false}
+{"index": 43, "problem": "A function is defined by f(x) = -x - 11 when x < 0, and f(x) = -x - 7 when x >= 0. Report the sum of all values of x for which f(x) = -10.", "expected": "2", "answer": "-2", "correct": false}
+{"index": 44, "problem": "Solve the equation x^2 - 12x + 27 = 0. Report the smallest value of x.", "expected": "3", "answer": "9", "correct": false}
+{"index": 46, "problem": "Solve for x given that x > 5: |2x - 10| = 4. Report the value of x.", "expected": "7", "answer": "7", "correct": true}
+{"index": 45, "problem": "Solve for all real values of x: |x - 3| = 7. Report the sum of all solutions for x.", "expected": "6", "answer": null, "correct": false}
+{"index": 47, "problem": "A function is defined by f(x) = 4x + 17 when x < 2, and f(x) = -4x + 5 when x >= 2. Find the value of x for which f(x) = 13.", "expected": "-1", "answer": "0", "correct": false}
+{"index": 49, "problem": "Solve the equation x^2 + 12x + 35 = 0. Report the largest value of x.", "expected": "-5", "answer": "-5", "correct": true}
+{"index": 48, "problem": "A function is defined by f(x) = -4x - 15 when x < -1, and f(x) = 3x when x >= -1. Report the sum of all values of x for which f(x) = 9.", "expected": "-3", "answer": null, "correct": false}
+{"index": 50, "problem": "Solve for all real values of x: |4x - 16| = 24. Report the sum of all solutions for x.", "expected": "8", "answer": "8", "correct": true}
+{"index": 51, "problem": "Solve for x given that x > -9: |2x + 18| = 2. Report the value of x.", "expected": "-8", "answer": "-8", "correct": true}
+{"index": 52, "problem": "A function is defined by f(x) = -x + 14 when x < -4, and f(x) = x + 21 when x >= -4. Find the value of x for which f(x) = 18.", "expected": "-3", "answer": "4", "correct": false}
+{"index": 53, "problem": "A function is defined by f(x) = -3x - 1 when x < 2, and f(x) = -4x + 25 when x >= 2. Report the sum of all values of x for which f(x) = 5.", "expected": "3", "answer": "7", "correct": false}
+{"index": 54, "problem": "Solve the equation x^2 + 7x + 6 = 0. Report the largest value of x.", "expected": "-1", "answer": "-1", "correct": true}
+{"index": 55, "problem": "Solve for all real values of x: |5x - 10| = 10. Report the sum of all solutions for x.", "expected": "4", "answer": "4", "correct": true}
+{"index": 56, "problem": "Solve for x given that x > -9: |3x + 27| = 3. Report the value of x.", "expected": "-8", "answer": "-10", "correct": false}
+{"index": 58, "problem": "A function is defined by f(x) = 4x + 11 when x < 4, and f(x) = 3x - 19 when x >= 4. Report the sum of all values of x for which f(x) = 11.", "expected": "10", "answer": "2", "correct": false}
+{"index": 57, "problem": "A function is defined by f(x) = 2x - 2 when x < 5, and f(x) = 2x - 12 when x >= 5. Find the value of x for which f(x) = -4.", "expected": "-1", "answer": null, "correct": false}
+{"index": 59, "problem": "Solve the equation x^2 - 4x - 32 = 0. Report the largest value of x.", "expected": "8", "answer": "8", "correct": true}
+{"index": 60, "problem": "Solve for all real values of x: |4x - 36| = 20. Report the sum of all solutions for x.", "expected": "18", "answer": "17", "correct": false}
+{"index": 61, "problem": "Solve for x given that x < -4: |2x + 10| = 10. Report the value of x.", "expected": "-10", "answer": "-10", "correct": true}
+{"index": 63, "problem": "A function is defined by f(x) = 2x - 6 when x < 4, and f(x) = 3x - 17 when x >= 4. Report the sum of all values of x for which f(x) = -2.", "expected": "7", "answer": "5", "correct": false}
+{"index": 62, "problem": "A function is defined by f(x) = 2x - 17 when x < 0, and f(x) = -4x - 11 when x >= 0. Find the value of x for which f(x) = -15.", "expected": "1", "answer": null, "correct": false}
+{"index": 64, "problem": "Solve the equation x^2 + 6x = 0. Report the smallest value of x.", "expected": "-6", "answer": "-6", "correct": true}
+{"index": 66, "problem": "Solve for x given that x < -5: |5x + 35| = 25. Report the value of x.", "expected": "-12", "answer": "0", "correct": false}
+{"index": 65, "problem": "Solve for all real values of x: |2x + 16| = 10. Report the sum of all solutions for x.", "expected": "-16", "answer": null, "correct": false}
+{"index": 67, "problem": "A function is defined by f(x) = -3x - 6 when x < -1, and f(x) = -3x - 6 when x >= -1. Find the value of x for which f(x) = 6.", "expected": "-4", "answer": "0", "correct": false}
+{"index": 68, "problem": "A function is defined by f(x) = -3x - 17 when x < 0, and f(x) = 4x - 19 when x >= 0. Report the sum of all values of x for which f(x) = 1.", "expected": "-1", "answer": "2", "correct": false}
+{"index": 69, "problem": "Solve the equation x^2 - 10x + 24 = 0. Report the largest value of x.", "expected": "6", "answer": "6", "correct": true}
+{"index": 70, "problem": "Solve for all real values of x: |3x - 3| = 9. Report the sum of all solutions for x.", "expected": "2", "answer": "4", "correct": false}
+{"index": 71, "problem": "Solve for x given that x > 2: |5x - 15| = 10. Report the value of x.", "expected": "5", "answer": "1", "correct": false}
+{"index": 73, "problem": "A function is defined by f(x) = 4x - 6 when x < 3, and f(x) = 4x - 34 when x >= 3. Report the sum of all values of x for which f(x) = -2.", "expected": "9", "answer": "9", "correct": true}
+{"index": 72, "problem": "A function is defined by f(x) = -4x + 2 when x < -2, and f(x) = 3x - 9 when x >= -2. Find the value of x for which f(x) = -6.", "expected": "1", "answer": null, "correct": false}
+{"index": 75, "problem": "Solve for all real values of x: |3x + 6| = 15. Report the sum of all solutions for x.", "expected": "-4", "answer": "3", "correct": false}
+{"index": 74, "problem": "Solve the equation x^2 - x - 12 = 0. Report the largest value of x.", "expected": "4", "answer": "4", "correct": true}
+{"index": 76, "problem": "Solve for x given that x > -7: |4x + 12| = 24. Report the value of x.", "expected": "3", "answer": "-9", "correct": false}
+{"index": 77, "problem": "A function is defined by f(x) = 4x + 25 when x < -5, and f(x) = -x + 11 when x >= -5. Find the value of x for which f(x) = 13.", "expected": "-2", "answer": "0", "correct": false}
+{"index": 78, "problem": "A function is defined by f(x) = -x - 26 when x < -2, and f(x) = -2x - 20 when x >= -2. Report the sum of all values of x for which f(x) = -18.", "expected": "-9", "answer": "-4", "correct": false}
+{"index": 79, "problem": "Solve the equation x^2 - 8x + 15 = 0. Report the smallest value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 80, "problem": "Solve for all real values of x: |5x + 25| = 10. Report the largest value of x that satisfies the equation.", "expected": "-3", "answer": "3", "correct": false}
+{"index": 81, "problem": "Solve for x given that x < 13: |2x - 18| = 14. Report the value of x.", "expected": "2", "answer": "5", "correct": false}
+{"index": 82, "problem": "A function is defined by f(x) = 2x + 7 when x < 3, and f(x) = 4x + 3 when x >= 3. Find the value of x for which f(x) = 11.", "expected": "2", "answer": "5", "correct": false}
+{"index": 83, "problem": "A function is defined by f(x) = -x + 8 when x < -2, and f(x) = -4x + 26 when x >= -2. Report the sum of all values of x for which f(x) = 14.", "expected": "-3", "answer": "10", "correct": false}
+{"index": 84, "problem": "Solve the equation x^2 + 7x - 8 = 0. Report the largest value of x.", "expected": "1", "answer": "1", "correct": true}
+{"index": 85, "problem": "Solve for all real values of x: |3x + 15| = 21. Report the largest value of x that satisfies the equation.", "expected": "2", "answer": "2", "correct": true}
+{"index": 87, "problem": "A function is defined by f(x) = -2x - 2 when x < -4, and f(x) = -4x + 2 when x >= -4. Find the value of x for which f(x) = -6.", "expected": "2", "answer": "-1", "correct": false}
+{"index": 86, "problem": "Solve for x given that x > -6: |4x + 28| = 8. Report the value of x.", "expected": "-5", "answer": null, "correct": false}
+{"index": 88, "problem": "A function is defined by f(x) = -2x + 3 when x < 2, and f(x) = -2x + 11 when x >= 2. Report the sum of all values of x for which f(x) = 1.", "expected": "6", "answer": "5", "correct": false}
+{"index": 89, "problem": "Solve the equation x^2 - 9x + 14 = 0. Report the smallest value of x.", "expected": "2", "answer": "2", "correct": true}
+{"index": 90, "problem": "Solve for all real values of x: |5x - 35| = 5. Report the sum of all solutions for x.", "expected": "14", "answer": "10", "correct": false}
+{"index": 91, "problem": "Solve for x given that x > -1: |5x + 35| = 35. Report the value of x.", "expected": "0", "answer": "-14", "correct": false}
+{"index": 92, "problem": "A function is defined by f(x) = 3x + 26 when x < -1, and f(x) = 4x + 26 when x >= -1. Find the value of x for which f(x) = 14.", "expected": "-4", "answer": "-4", "correct": true}
+{"index": 94, "problem": "Solve the equation x^2 - 7x = 0. Report the smallest value of x.", "expected": "0", "answer": "0", "correct": true}
+{"index": 93, "problem": "A function is defined by f(x) = -4x + 6 when x < 4, and f(x) = -4x + 14 when x >= 4. Report the sum of all values of x for which f(x) = -6.", "expected": "8", "answer": null, "correct": false}
+{"index": 95, "problem": "Solve for all real values of x: |3x + 21| = 24. Report the largest value of x that satisfies the equation.", "expected": "1", "answer": "5", "correct": false}
+{"index": 96, "problem": "Solve for x given that x < 10: |3x - 12| = 21. Report the value of x.", "expected": "-3", "answer": "5", "correct": false}
+{"index": 97, "problem": "A function is defined by f(x) = -2x - 16 when x < -5, and f(x) = -x - 9 when x >= -5. Find the value of x for which f(x) = -10.", "expected": "1", "answer": "-4", "correct": false}
+{"index": 98, "problem": "A function is defined by f(x) = 4x + 22 when x < -5, and f(x) = 3x - 12 when x >= -5. Report the sum of all values of x for which f(x) = -18.", "expected": "-12", "answer": "-12", "correct": true}
+{"index": 99, "problem": "Solve the equation x^2 + 12x + 35 = 0. Report the smallest value of x.", "expected": "-7", "answer": "-8", "correct": false}
+{"index": 101, "problem": "Solve for x given that x > -8: |4x + 32| = 8. Report the value of x.", "expected": "-6", "answer": "0", "correct": false}
+{"index": 100, "problem": "Solve for all real values of x: |4x + 32| = 32. Report the largest value of x that satisfies the equation.", "expected": "0", "answer": null, "correct": false}
+{"index": 102, "problem": "A function is defined by f(x) = -2x - 18 when x < -5, and f(x) = 2x - 16 when x >= -5. Find the value of x for which f(x) = -18.", "expected": "-1", "answer": "-3", "correct": false}
+{"index": 103, "problem": "A function is defined by f(x) = 3x + 10 when x < 0, and f(x) = 4x - 8 when x >= 0. Report the sum of all values of x for which f(x) = -8.", "expected": "-6", "answer": "-6", "correct": true}
+{"index": 104, "problem": "Solve the equation x^2 - 6x + 5 = 0. Report the largest value of x.", "expected": "5", "answer": "5", "correct": true}
+{"index": 105, "problem": "Solve for all real values of x: |5x| = 15. Report the largest value of x that satisfies the equation.", "expected": "3", "answer": "3", "correct": true}
+{"index": 106, "problem": "Solve for x given that x > -8: |3x + 18| = 27. Report the value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 107, "problem": "A function is defined by f(x) = 2x - 4 when x < 1, and f(x) = -x + 15 when x >= 1. Find the value of x for which f(x) = 8.", "expected": "7", "answer": "7", "correct": true}
+{"index": 108, "problem": "A function is defined by f(x) = -4x - 50 when x < -4, and f(x) = 4x - 2 when x >= -4. Report the sum of all values of x for which f(x) = -18.", "expected": "-12", "answer": "-4", "correct": false}
+{"index": 109, "problem": "Solve the equation x^2 - 16x + 63 = 0. Report the largest value of x.", "expected": "9", "answer": "10", "correct": false}
+{"index": 110, "problem": "Solve for all real values of x: |2x + 14| = 18. Report the largest value of x that satisfies the equation.", "expected": "2", "answer": "-16", "correct": false}
+{"index": 111, "problem": "Solve for x given that x < -1: |5x| = 10. Report the value of x.", "expected": "-2", "answer": null, "correct": false}
+{"index": 112, "problem": "A function is defined by f(x) = -3x + 28 when x < 4, and f(x) = -3x + 19 when x >= 4. Find the value of x for which f(x) = 7.", "expected": "4", "answer": "5", "correct": false}
+{"index": 113, "problem": "A function is defined by f(x) = 4x - 3 when x < -3, and f(x) = 3x - 19 when x >= -3. Report the sum of all values of x for which f(x) = -19.", "expected": "-4", "answer": "-2", "correct": false}
+{"index": 114, "problem": "Solve the equation x^2 + 3x - 54 = 0. Report the smallest value of x.", "expected": "-9", "answer": "-9", "correct": true}
+{"index": 115, "problem": "Solve for all real values of x: |3x + 21| = 18. Report the sum of all solutions for x.", "expected": "-14", "answer": "5", "correct": false}
+{"index": 117, "problem": "A function is defined by f(x) = -x - 22 when x < -3, and f(x) = 2x - 16 when x >= -3. Find the value of x for which f(x) = -20.", "expected": "-2", "answer": "-2", "correct": true}
+{"index": 116, "problem": "Solve for x given that x < 2: |x - 2| = 1. Report the value of x.", "expected": "1", "answer": null, "correct": false}
+{"index": 118, "problem": "A function is defined by f(x) = -3x - 34 when x < -5, and f(x) = -4x - 19 when x >= -5. Report the sum of all values of x for which f(x) = -7.", "expected": "-12", "answer": "-1", "correct": false}
+{"index": 119, "problem": "Solve the equation x^2 + 11x + 18 = 0. Report the largest value of x.", "expected": "-2", "answer": "2", "correct": false}
+{"index": 120, "problem": "Solve for all real values of x: |2x - 10| = 4. Report the largest value of x that satisfies the equation.", "expected": "7", "answer": "7", "correct": true}
+{"index": 121, "problem": "Solve for x given that x > -3: |3x + 3| = 9. Report the value of x.", "expected": "2", "answer": "2", "correct": true}
+{"index": 123, "problem": "A function is defined by f(x) = -3x - 15 when x < 0, and f(x) = -3x + 3 when x >= 0. Report the sum of all values of x for which f(x) = -9.", "expected": "2", "answer": "-2", "correct": false}
+{"index": 122, "problem": "A function is defined by f(x) = 4x - 19 when x < 0, and f(x) = x - 3 when x >= 0. Find the value of x for which f(x) = 1.", "expected": "4", "answer": null, "correct": false}
+{"index": 124, "problem": "Solve the equation x^2 + 4x = 0. Report the smallest value of x.", "expected": "-4", "answer": "0", "correct": false}
+{"index": 125, "problem": "Solve for all real values of x: |2x + 10| = 8. Report the largest value of x that satisfies the equation.", "expected": "-1", "answer": "-1", "correct": true}
+{"index": 127, "problem": "A function is defined by f(x) = 3x + 12 when x < -1, and f(x) = -4x - 25 when x >= -1. Find the value of x for which f(x) = 3.", "expected": "-3", "answer": "0", "correct": false}
+{"index": 126, "problem": "Solve for x given that x > 1: |5x + 10| = 20. Report the value of x.", "expected": "2", "answer": null, "correct": false}
+{"index": 129, "problem": "Solve the equation x^2 + 5x - 14 = 0. Report the largest value of x.", "expected": "2", "answer": "2", "correct": true}
+{"index": 128, "problem": "A function is defined by f(x) = -3x - 22 when x < 1, and f(x) = -2x - 10 when x >= 1. Report the sum of all values of x for which f(x) = -16.", "expected": "1", "answer": null, "correct": false}
+{"index": 130, "problem": "Solve for all real values of x: |4x - 8| = 36. Report the sum of all solutions for x.", "expected": "4", "answer": "10", "correct": false}
+{"index": 132, "problem": "A function is defined by f(x) = 2x + 1 when x < 2, and f(x) = x - 4 when x >= 2. Find the value of x for which f(x) = -7.", "expected": "-4", "answer": "-9", "correct": false}
+{"index": 131, "problem": "Solve for x given that x < 4: |4x - 16| = 4. Report the value of x.", "expected": "3", "answer": null, "correct": false}
+{"index": 133, "problem": "A function is defined by f(x) = -3x - 18 when x < -4, and f(x) = -2x - 5 when x >= -4. Report the sum of all values of x for which f(x) = -3.", "expected": "-6", "answer": "-1", "correct": false}
+{"index": 134, "problem": "Solve the equation x^2 + x - 12 = 0. Report the smallest value of x.", "expected": "-4", "answer": "-4", "correct": true}
+{"index": 135, "problem": "Solve for all real values of x: |4x + 16| = 16. Report the largest value of x that satisfies the equation.", "expected": "0", "answer": "-8", "correct": false}
+{"index": 136, "problem": "Solve for x given that x < 7: |3x - 21| = 9. Report the value of x.", "expected": "4", "answer": "4", "correct": true}
+{"index": 138, "problem": "A function is defined by f(x) = 4x + 31 when x < 2, and f(x) = -4x + 35 when x >= 2. Report the sum of all values of x for which f(x) = 19.", "expected": "1", "answer": "0", "correct": false}
+{"index": 137, "problem": "A function is defined by f(x) = -3x + 23 when x < 5, and f(x) = 4x + 24 when x >= 5. Find the value of x for which f(x) = 20.", "expected": "1", "answer": null, "correct": false}
+{"index": 139, "problem": "Solve the equation x^2 + 6x = 0. Report the largest value of x.", "expected": "0", "answer": "0", "correct": true}
+{"index": 140, "problem": "Solve for all real values of x: |4x - 24| = 8. Report the largest value of x that satisfies the equation.", "expected": "8", "answer": "8", "correct": true}
+{"index": 141, "problem": "Solve for x given that x > 6: |2x - 16| = 14. Report the value of x.", "expected": "15", "answer": "10", "correct": false}
+{"index": 142, "problem": "A function is defined by f(x) = -4x - 3 when x < -4, and f(x) = -4x - 3 when x >= -4. Find the value of x for which f(x) = -3.", "expected": "0", "answer": "0", "correct": true}
+{"index": 143, "problem": "A function is defined by f(x) = -3x - 1 when x < 1, and f(x) = x + 5 when x >= 1. Report the sum of all values of x for which f(x) = 8.", "expected": "0", "answer": "2", "correct": false}
+{"index": 144, "problem": "Solve the equation x^2 + 10x + 21 = 0. Report the largest value of x.", "expected": "-3", "answer": "7", "correct": false}
+{"index": 145, "problem": "Solve for all real values of x: |x + 1| = 5. Report the largest value of x that satisfies the equation.", "expected": "4", "answer": "4", "correct": true}
+{"index": 147, "problem": "A function is defined by f(x) = x + 12 when x < -4, and f(x) = x + 12 when x >= -4. Find the value of x for which f(x) = 6.", "expected": "-6", "answer": "0", "correct": false}
+{"index": 146, "problem": "Solve for x given that x > 10: |x - 7| = 4. Report the value of x.", "expected": "11", "answer": null, "correct": false}
+{"index": 149, "problem": "Solve the equation x^2 - 2x - 3 = 0. Report the smallest value of x.", "expected": "-1", "answer": "-1", "correct": true}
+{"index": 148, "problem": "A function is defined by f(x) = -3x + 5 when x < 5, and f(x) = 3x - 34 when x >= 5. Report the sum of all values of x for which f(x) = -7.", "expected": "13", "answer": null, "correct": false}
+{"index": 151, "problem": "Solve for x given that x < -6: |x + 6| = 7. Report the value of x.", "expected": "-13", "answer": "1", "correct": false}
+{"index": 150, "problem": "Solve for all real values of x: |4x - 8| = 12. Report the sum of all solutions for x.", "expected": "4", "answer": null, "correct": false}
+{"index": 153, "problem": "A function is defined by f(x) = 4x + 30 when x < -2, and f(x) = 2x + 4 when x >= -2. Report the sum of all values of x for which f(x) = 10.", "expected": "-2", "answer": "5", "correct": false}
+{"index": 152, "problem": "A function is defined by f(x) = x + 19 when x < -3, and f(x) = 2x + 27 when x >= -3. Find the value of x for which f(x) = 15.", "expected": "-4", "answer": null, "correct": false}
+{"index": 154, "problem": "Solve the equation x^2 + 3x - 40 = 0. Report the smallest value of x.", "expected": "-8", "answer": "-16", "correct": false}
+{"index": 155, "problem": "Solve for all real values of x: |2x - 12| = 2. Report the sum of all solutions for x.", "expected": "12", "answer": "7", "correct": false}
+{"index": 157, "problem": "A function is defined by f(x) = -3x - 7 when x < 3, and f(x) = 3x - 25 when x >= 3. Find the value of x for which f(x) = -16.", "expected": "3", "answer": "3", "correct": true}
+{"index": 156, "problem": "Solve for x given that x > 1: |x - 2| = 8. Report the value of x.", "expected": "10", "answer": null, "correct": false}
+{"index": 158, "problem": "A function is defined by f(x) = x - 23 when x < 4, and f(x) = x - 25 when x >= 4. Report the sum of all values of x for which f(x) = -20.", "expected": "8", "answer": "-19", "correct": false}
+{"index": 159, "problem": "Solve the equation x^2 - 4x - 45 = 0. Report the smallest value of x.", "expected": "-5", "answer": "-5", "correct": true}
+{"index": 160, "problem": "Solve for all real values of x: |2x + 12| = 14. Report the largest value of x that satisfies the equation.", "expected": "1", "answer": "1", "correct": true}
+{"index": 161, "problem": "Solve for x given that x < 3: |3x - 9| = 9. Report the value of x.", "expected": "0", "answer": "6", "correct": false}
+{"index": 162, "problem": "A function is defined by f(x) = -2x + 7 when x < 5, and f(x) = 4x - 5 when x >= 5. Find the value of x for which f(x) = 7.", "expected": "0", "answer": null, "correct": false}
+{"index": 163, "problem": "A function is defined by f(x) = -x - 15 when x < 0, and f(x) = -2x - 8 when x >= 0. Report the sum of all values of x for which f(x) = -12.", "expected": "-1", "answer": null, "correct": false}
+{"index": 164, "problem": "Solve the equation x^2 - 7x + 12 = 0. Report the smallest value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 165, "problem": "Solve for all real values of x: |4x + 8| = 16. Report the largest value of x that satisfies the equation.", "expected": "2", "answer": "3", "correct": false}
+{"index": 166, "problem": "Solve for x given that x > 9: |2x - 18| = 2. Report the value of x.", "expected": "10", "answer": "10", "correct": true}
+{"index": 167, "problem": "A function is defined by f(x) = -3x + 29 when x < -2, and f(x) = -2x + 26 when x >= -2. Find the value of x for which f(x) = 20.", "expected": "3", "answer": "3", "correct": true}
+{"index": 168, "problem": "A function is defined by f(x) = -x - 6 when x < 5, and f(x) = x - 14 when x >= 5. Report the sum of all values of x for which f(x) = -9.", "expected": "8", "answer": "5", "correct": false}
+{"index": 169, "problem": "Solve the equation x^2 - 9x + 20 = 0. Report the largest value of x.", "expected": "5", "answer": "5", "correct": true}
+{"index": 170, "problem": "Solve for all real values of x: |5x - 40| = 35. Report the largest value of x that satisfies the equation.", "expected": "15", "answer": "15", "correct": true}
+{"index": 171, "problem": "Solve for x given that x < -5: |4x + 4| = 32. Report the value of x.", "expected": "-9", "answer": "-8", "correct": false}
+{"index": 172, "problem": "A function is defined by f(x) = -4x - 14 when x < -1, and f(x) = -4x - 22 when x >= -1. Find the value of x for which f(x) = -18.", "expected": "-1", "answer": "-1", "correct": true}
+{"index": 173, "problem": "A function is defined by f(x) = -2x - 16 when x < 5, and f(x) = -3x + 10 when x >= 5. Report the sum of all values of x for which f(x) = -20.", "expected": "12", "answer": "12", "correct": true}
+{"index": 174, "problem": "Solve the equation x^2 - x - 6 = 0. Report the largest value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 175, "problem": "Solve for all real values of x: |4x + 12| = 24. Report the sum of all solutions for x.", "expected": "-6", "answer": "6", "correct": false}
+{"index": 176, "problem": "Solve for x given that x < -7: |5x + 35| = 30. Report the value of x.", "expected": "-13", "answer": "-1", "correct": false}
+{"index": 177, "problem": "A function is defined by f(x) = -4x when x < 0, and f(x) = -4x - 4 when x >= 0. Find the value of x for which f(x) = -4.", "expected": "0", "answer": "-1", "correct": false}
+{"index": 178, "problem": "A function is defined by f(x) = -x + 1 when x < 3, and f(x) = -x + 10 when x >= 3. Report the sum of all values of x for which f(x) = 2.", "expected": "7", "answer": "5", "correct": false}
+{"index": 179, "problem": "Solve the equation x^2 - 5x - 6 = 0. Report the smallest value of x.", "expected": "-1", "answer": "-1", "correct": true}
+{"index": 180, "problem": "Solve for all real values of x: |x - 5| = 8. Report the largest value of x that satisfies the equation.", "expected": "13", "answer": "13", "correct": true}
+{"index": 182, "problem": "A function is defined by f(x) = -3x - 24 when x < -4, and f(x) = -x - 13 when x >= -4. Find the value of x for which f(x) = -15.", "expected": "2", "answer": "-7", "correct": false}
+{"index": 181, "problem": "Solve for x given that x < 4: |x - 4| = 8. Report the value of x.", "expected": "-4", "answer": null, "correct": false}
+{"index": 184, "problem": "Solve the equation x^2 + 5x - 24 = 0. Report the largest value of x.", "expected": "3", "answer": "3", "correct": true}
+{"index": 183, "problem": "A function is defined by f(x) = 4x + 1 when x < 1, and f(x) = -3x + 8 when x >= 1. Report the sum of all values of x for which f(x) = -7.", "expected": "3", "answer": "-2", "correct": false}
+{"index": 185, "problem": "Solve for all real values of x: |2x - 12| = 8. Report the sum of all solutions for x.", "expected": "12", "answer": "12", "correct": true}
+{"index": 186, "problem": "Solve for x given that x > 3: |3x - 6| = 18. Report the value of x.", "expected": "8", "answer": "6", "correct": false}
+{"index": 187, "problem": "A function is defined by f(x) = -x - 1 when x < 3, and f(x) = x - 3 when x >= 3. Find the value of x for which f(x) = -2.", "expected": "1", "answer": "1", "correct": true}
+{"index": 188, "problem": "A function is defined by f(x) = x + 17 when x < 2, and f(x) = x + 12 when x >= 2. Report the sum of all values of x for which f(x) = 14.", "expected": "-1", "answer": "5", "correct": false}
+{"index": 189, "problem": "Solve the equation x^2 + 10x + 24 = 0. Report the smallest value of x.", "expected": "-6", "answer": "-6", "correct": true}
+{"index": 190, "problem": "Solve for all real values of x: |2x + 6| = 10. Report the sum of all solutions for x.", "expected": "-6", "answer": "2", "correct": false}
+{"index": 191, "problem": "Solve for x given that x > 1: |5x - 35| = 35. Report the value of x.", "expected": "14", "answer": "14", "correct": true}
+{"index": 192, "problem": "A function is defined by f(x) = -3x + 15 when x < 1, and f(x) = 2x - 15 when x >= 1. Find the value of x for which f(x) = -3.", "expected": "6", "answer": "6", "correct": true}
+{"index": 193, "problem": "A function is defined by f(x) = -x - 5 when x < 3, and f(x) = -x + 5 when x >= 3. Report the sum of all values of x for which f(x) = -2.", "expected": "4", "answer": "-1", "correct": false}
+{"index": 194, "problem": "Solve the equation x^2 - x = 0. Report the largest value of x.", "expected": "1", "answer": "1", "correct": true}
+{"index": 195, "problem": "Solve for all real values of x: |3x - 18| = 15. Report the sum of all solutions for x.", "expected": "12", "answer": "9", "correct": false}
+{"index": 196, "problem": "Solve for x given that x < -1: |2x + 18| = 18. Report the value of x.", "expected": "-18", "answer": "-18", "correct": true}
+{"index": 197, "problem": "A function is defined by f(x) = -4x - 3 when x < 0, and f(x) = -2x + 7 when x >= 0. Find the value of x for which f(x) = 17.", "expected": "-5", "answer": "4", "correct": false}
+{"index": 198, "problem": "A function is defined by f(x) = -2x - 16 when x < 3, and f(x) = -x - 9 when x >= 3. Report the sum of all values of x for which f(x) = -16.", "expected": "7", "answer": "7", "correct": true}
+{"index": 199, "problem": "Solve the equation x^2 + 5x + 6 = 0. Report the largest value of x.", "expected": "-2", "answer": "-2", "correct": true}
+{"index": 200, "problem": "Solve for all real values of x: |2x - 6| = 12. Report the sum of all solutions for x.", "expected": "6", "answer": "9", "correct": false}
+{"index": 201, "problem": "Solve for x given that x < -6: |4x + 24| = 4. Report the value of x.", "expected": "-7", "answer": "-7", "correct": true}
+{"index": 202, "problem": "A function is defined by f(x) = -4x - 13 when x < 2, and f(x) = -x when x >= 2. Find the value of x for which f(x) = -1.", "expected": "-3", "answer": "-3", "correct": true}
+{"index": 203, "problem": "A function is defined by f(x) = 2x + 14 when x < 2, and f(x) = -3x + 19 when x >= 2. Report the sum of all values of x for which f(x) = 10.", "expected": "1", "answer": "1", "correct": true}
+{"index": 204, "problem": "Solve the equation x^2 - 9 = 0. Report the smallest value of x.", "expected": "-3", "answer": "-3", "correct": true}
+{"index": 205, "problem": "Solve for all real values of x: |3x - 9| = 3. Report the sum of all solutions for x.", "expected": "6", "answer": "4", "correct": false}
+{"index": 206, "problem": "Solve for x given that x < 0: |x - 1| = 4. Report the value of x.", "expected": "-3", "answer": "-3", "correct": true}
+{"index": 207, "problem": "A function is defined by f(x) = x - 7 when x < 5, and f(x) = 2x - 4 when x >= 5. Find the value of x for which f(x) = -6.", "expected": "1", "answer": "1", "correct": true}
+{"index": 208, "problem": "A function is defined by f(x) = -4x when x < 0, and f(x) = -2x + 16 when x >= 0. Report the sum of all values of x for which f(x) = 16.", "expected": "-4", "answer": "0", "correct": false}
+{"index": 209, "problem": "Solve the equation x^2 + 2x - 48 = 0. Report the largest value of x.", "expected": "6", "answer": "6", "correct": true}
+{"index": 210, "problem": "Solve for all real values of x: |2x + 16| = 2. Report the sum of all solutions for x.", "expected": "-16", "answer": "-7", "correct": false}
+{"index": 212, "problem": "A function is defined by f(x) = 4x + 1 when x < -3, and f(x) = 3x - 4 when x >= -3. Find the value of x for which f(x) = -7.", "expected": "-1", "answer": "-2", "correct": false}
+{"index": 211, "problem": "Solve for x given that x < -7: |3x + 21| = 3. Report the value of x.", "expected": "-8", "answer": null, "correct": false}
+{"index": 213, "problem": "A function is defined by f(x) = 3x + 4 when x < 5, and f(x) = 3x - 23 when x >= 5. Report the sum of all values of x for which f(x) = 1.", "expected": "7", "answer": "-1", "correct": false}
+{"index": 214, "problem": "Solve the equation x^2 - 7x - 8 = 0. Report the smallest value of x.", "expected": "-1", "answer": "8", "correct": false}
+{"index": 215, "problem": "Solve for all real values of x: |x - 9| = 2. Report the largest value of x that satisfies the equation.", "expected": "11", "answer": "11", "correct": true}
+{"index": 217, "problem": "A function is defined by f(x) = -x + 3 when x < -4, and f(x) = -2x - 7 when x >= -4. Find the value of x for which f(x) = 1.", "expected": "-4", "answer": "2", "correct": false}
+{"index": 216, "problem": "Solve for x given that x > -4: |4x + 16| = 4. Report the value of x.", "expected": "-3", "answer": null, "correct": false}
+{"index": 218, "problem": "A function is defined by f(x) = -2x + 3 when x < -3, and f(x) = -3x + 24 when x >= -3. Report the sum of all values of x for which f(x) = 15.", "expected": "-3", "answer": "15", "correct": false}
+{"index": 219, "problem": "Solve the equation x^2 + x - 30 = 0. Report the largest value of x.", "expected": "5", "answer": "5", "correct": true}
+{"index": 220, "problem": "Solve for all real values of x: |5x + 40| = 25. Report the largest value of x that satisfies the equation.", "expected": "-3", "answer": null, "correct": false}
+{"index": 221, "problem": "Solve for x given that x > -9: |4x + 36| = 4. Report the value of x.", "expected": "-8", "answer": null, "correct": false}
+{"index": 222, "problem": "A function is defined by f(x) = -2x when x < 0, and f(x) = 4x - 10 when x >= 0. Find the value of x for which f(x) = -2.", "expected": "2", "answer": "-1", "correct": false}
+{"index": 223, "problem": "A function is defined by f(x) = x + 3 when x < 1, and f(x) = 4x - 3 when x >= 1. Report the sum of all values of x for which f(x) = 1.", "expected": "-1", "answer": "0", "correct": false}
+{"index": 224, "problem": "Solve the equation x^2 - 14x + 48 = 0. Report the largest value of x.", "expected": "8", "answer": "16", "correct": false}
+{"index": 225, "problem": "Solve for all real values of x: |5x - 45| = 45. Report the largest value of x that satisfies the equation.", "expected": "18", "answer": "18", "correct": true}
+{"index": 227, "problem": "A function is defined by f(x) = 4x - 2 when x < 1, and f(x) = -4x + 26 when x >= 1. Find the value of x for which f(x) = 2.", "expected": "6", "answer": "1", "correct": false}
+{"index": 226, "problem": "Solve for x given that x > 10: |x - 5| = 7. Report the value of x.", "expected": "12", "answer": null, "correct": false}
+{"index": 228, "problem": "A function is defined by f(x) = x + 20 when x < -1, and f(x) = -x + 20 when x >= -1. Report the sum of all values of x for which f(x) = 17.", "expected": "0", "answer": "3", "correct": false}
+{"index": 229, "problem": "Solve the equation x^2 - 4x + 3 = 0. Report the smallest value of x.", "expected": "1", "answer": "1", "correct": true}
+{"index": 230, "problem": "Solve for all real values of x: |2x + 12| = 12. Report the sum of all solutions for x.", "expected": "-12", "answer": "0", "correct": false}
+{"index": 231, "problem": "Solve for x given that x > 5: |5x - 40| = 30. Report the value of x.", "expected": "14", "answer": "8", "correct": false}
+{"index": 232, "problem": "A function is defined by f(x) = -4x - 36 when x < 0, and f(x) = -2x - 28 when x >= 0. Find the value of x for which f(x) = -20.", "expected": "-4", "answer": "-5", "correct": false}
+{"index": 233, "problem": "A function is defined by f(x) = 2x - 6 when x < 5, and f(x) = 4x - 38 when x >= 5. Report the sum of all values of x for which f(x) = -2.", "expected": "11", "answer": "9", "correct": false}
+{"index": 234, "problem": "Solve the equation x^2 - 16 = 0. Report the largest value of x.", "expected": "4", "answer": "4", "correct": true}
+{"index": 235, "problem": "Solve for all real values of x: |2x - 18| = 2. Report the largest value of x that satisfies the equation.", "expected": "10", "answer": "5", "correct": false}
+{"index": 236, "problem": "Solve for x given that x < 1: |2x - 2| = 2. Report the value of x.", "expected": "0", "answer": "0", "correct": true}
+{"index": 237, "problem": "A function is defined by f(x) = -3x + 7 when x < 4, and f(x) = 3x - 38 when x >= 4. Find the value of x for which f(x) = -8.", "expected": "10", "answer": "10", "correct": true}
+{"index": 238, "problem": "A function is defined by f(x) = -3x - 7 when x < 3, and f(x) = -2x - 4 when x >= 3. Report the sum of all values of x for which f(x) = -10.", "expected": "4", "answer": "-5", "correct": false}
+{"index": 239, "problem": "Solve the equation x^2 - 15x + 56 = 0. Report the smallest value of x.", "expected": "7", "answer": "7", "correct": true}
