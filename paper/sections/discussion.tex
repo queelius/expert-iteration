@@ -30,14 +30,11 @@ the verifier-only reward is only trainable at all because the typed
 action space gives credit assignment something to bind to; remove any one
 element and the others lose their function, which is the signature of an
 architecture rather than a pipeline. Empirically, the formative campaign
-(\cref{sec:preliminary}) shows the elements interact non-additively:
-raising controller capability roughly $5\times$ moved nothing while the
-observation carried the structure poorly (1/20 in both cells of
-\cref{tab:2x2}), and restoring the structural rendering at fixed
-capability moved outcomes four- to five-fold. A combination whose value
-were merely additive engineering would not produce that interaction
-pattern; the structured state, the typed actions, and the observation
-design succeed or fail jointly, which is precisely the claim.
+(\cref{sec:preliminary}) points the same way: every single-element remedy
+tried against the teacher-controller plateau (prompting, controller
+capability, completion budget, step granularity) measured null under
+pre-registered readings, which is what one expects when the elements
+succeed or fail jointly rather than additively.
 
 \paragraph{Limitations.}
 The verifier boundary is the trust boundary: the system is only as sound as

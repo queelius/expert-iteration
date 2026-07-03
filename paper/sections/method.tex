@@ -139,15 +139,10 @@ annotated \texttt{(evidence: node $N$ verified)}, naming the exact node a
 explicit rejection notice in the next controller input; without it the
 observation after a masked action is near-identical to the one before it,
 and a low-temperature controller repeats the same choice indefinitely.
-(iv) The turn counter shows the horizon (\texttt{TURN 7/16}). The formative
-evidence for (i) is stark: under a flat id-ordered rendering of the same
-state, a controller at roughly $5\times$ the price gained nothing (1/20 versus 1/20 on
-case-analysis problems), while restoring the tree structure at fixed
-controller capability improved outcomes four- to five-fold. No controller,
-at any capability, can act on structure the observation erases; because
-the same serialization feeds the learned encoder, we expect (though the
-trained controller does not yet exist to confirm it) the requirement to
-carry over. Two structural guards accompany the
+(iv) The turn counter shows the horizon (\texttt{TURN 7/16}). The design
+principle behind all four is the same: no controller, at any capability,
+can act on structure the observation erases, and the same serialization
+feeds the learned encoder. Two structural guards accompany the
 render: an exhaustive \textsc{Split} names its full case set in one call,
 so a goal that already has children is not re-splittable, and a
 \textsc{Compute} whose statement duplicates a fact already attached to the

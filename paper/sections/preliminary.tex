@@ -32,53 +32,26 @@ single comparison. On this distribution the structural verbs fire:
 12--23\% of decisions across probes, with \textsc{Split} in 20 of 20
 episodes and \textsc{Abandon} on the dead-case families.
 
-\subsection{Information versus capability}
+\subsection{The teacher-controller plateau}
 \label{sec:prelim-obs}
 
-The central formative result is a $2\times2$: controller capability
-(gpt-4.1-mini versus gpt-4.1, roughly $5\times$ the price) crossed with
-observation design (flat id-ordered rendering versus the tree rendering
-of \cref{sec:method}), on the same 20 casework problems.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{@{}lcc@{}}
-\toprule
-Solved / 20 & flat render & tree render + annotations \\
-\midrule
-mini teacher & 1 & 4--5 \\
-gpt-4.1 teacher & 1 & 4 \\
-\bottomrule
-\end{tabular}
-\caption{Observation design, not controller capability, moved the
-outcome ($n{=}20$ per cell). The render effect replicates across both
-models; the capability effect is null in both columns. One caveat: the
-tree-render arm shipped bundled with two smaller interface fixes
-(rejection feedback and a safer fallback policy), so the render is the
-dominant, not the perfectly isolated, manipulation.}
-\label{tab:2x2}
-\end{table}
-
-The mechanism was identifiable from trajectories: under the flat render a
-controller cannot tell which goal owns which fact or whether a commit is
-dischargeable, so it re-computes verified facts and attempts illegal
-commits regardless of how capable it is. The remaining failure axes were
-then eliminated one at a time, each by a single-manipulation probe with a
-pre-registered reading: prompt engineering (two iterations, including one
-that measured its own bug), controller capability (a $5\times$-price teacher, null),
-controller completion budget ($64 \to 192$ tokens: the unparseable-reply
-count was unchanged, killing a truncation hypothesis), and step
-granularity (a substitution-verified solve-claim form of
-\textsc{Compute}, specified, built, and ablated: 4/20 versus a 4--5/20
-control, not adopted). What survives is the residual: roughly 10 correct
-sequential decisions are needed per win and teacher-LLM per-step protocol
-fidelity is the binding constraint. Notably, the dominant residual errors
-(menu-ignoring illegal action intents; repetition after rejection) are
-impossible or directly penalized for the trained controller: a pointer
-head is a softmax over the legal menu, and value-based training
-extinguishes actions that earn the masked-action penalty. The teacher's
-logged mistakes are labeled negatives for exactly that training.
+On casework the LLM-as-controller rung plateaus at 20--25\% solved. The
+candidate remedies were eliminated one at a time, each by a
+single-manipulation probe with a pre-registered reading: prompt
+engineering (two iterations), controller capability (a $5\times$-price
+teacher: no change), controller completion budget ($64 \to 192$ tokens:
+the unparseable-reply count unchanged, killing a truncation hypothesis),
+and step granularity (a substitution-verified solve-claim form of
+\textsc{Compute}, specified, built, and ablated: no change against
+control, not adopted). What remains is the residual: a win needs roughly
+10 correct sequential decisions and teacher-LLM per-step protocol
+fidelity is the binding constraint. The dominant errors (illegal action
+choices; repetition of a rejected action) are impossible or directly
+penalized for the trained controller: a pointer head is a softmax over
+the legal menu, and value-based training extinguishes actions that earn
+the masked-action penalty. The teacher's logged decisions, right and
+wrong, are the behavior-cloning data and labeled negatives that
+\cref{sec:training-ladder} consumes.
 
 \subsection{Calibration on the deployment-class generator}
 \label{sec:prelim-calibration}
