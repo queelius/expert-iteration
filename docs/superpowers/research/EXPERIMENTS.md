@@ -27,6 +27,7 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
 | E9 | 07-02/03 | observation: tree render + parent tags + commit-readiness + rejection feedback, capability held fixed (mini) | solve rate; fallback source | 1/20 -> 5/20 (v6), 4/20 (v7 replicate); abandon 4/4 on dead-case families. INFORMATION BEAT CAPABILITY | $0.30 |
 | E9b | 07-03 | fill the 2x2: gpt-4.1 teacher on the FIXED interface | solve rate | 4/20, same as mini. Render effect replicates across models; capability adds nothing in either column | $0.85 |
 | E10 | 07-03 | remove the harness on casework: mini direct, all 240 train problems | solve rate (per family, per n_dead) | **100.0% (240/240)**, every family, every cut. Casework-v1 has no headroom for ANY harness; harness tax there is ~75-80 pts vs 24 on GSM8K | $0.02 |
+| E11 | 07-03 | controller max_tokens 64 -> 192 (gpt-4.1 teacher, tree view, all else fixed) | unparseable-reply count (pre-registered: <5 confirms truncation) | 25 vs 22: UNCHANGED. Hypothesis dead; solve 4/20 unchanged; mini stays the collection teacher on cost. Bonus: f3's first-ever harness win; illegal-intent signature (compute on a closed case) is cross-model stable | $0.75 |
 
 ## Standing conclusions the table supports
 
@@ -42,18 +43,6 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
    needs direct-baseline headroom (target band 40-70%).
 
 ## Pre-registered queue
-
-### E11: teacher max_tokens truncation test
-- Manipulation: controller max_tokens 64 -> 192, everything else fixed
-  (gpt-4.1 teacher, tree view, same 20 problems).
-- Hypothesis: gpt-4.1's 22 unparseable-reply fallbacks (a signature mini
-  does not produce) are narration truncated at 64 tokens.
-- Measure: fallback rate; unparseable-reply count; solve rate.
-- Reading: unparseable count collapses (<5) => truncation confirmed; if
-  solve also rises materially (>=8/20), 4.1 becomes the collection teacher
-  candidate again. Unparseable count unchanged => hypothesis dead, mini
-  stays the teacher on cost.
-- Cost: ~$0.85.
 
 ### E12: casework-v2 difficulty calibration sweep
 - Manipulation: generator difficulty knobs (two-absolute-value sums,
