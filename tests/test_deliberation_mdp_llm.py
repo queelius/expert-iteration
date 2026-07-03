@@ -55,9 +55,10 @@ def test_compute_attaches_fact_with_premises():
     assert facts[0].id in get(s2.graph, 0).facts
 
 
-def test_duplicate_compute_is_masked_not_appended():
-    # A COMPUTE whose statement matches an existing fact adds nothing and is
-    # masked, so a controller cannot loop the same fact to the depth limit.
+def test_duplicate_compute_on_same_goal_is_masked_not_appended():
+    # A COMPUTE whose statement matches a fact already on the SAME goal adds
+    # nothing and is masked, so a controller cannot loop one fact to the
+    # depth limit.
     mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
                           llm_client=MockLLMClient(script={
                               ("COMPUTE",): {"statement": "4 - 2 = 2"}}))
@@ -71,6 +72,27 @@ def test_duplicate_compute_is_masked_not_appended():
     assert r2 == MASKED_ACTION_REWARD             # duplicate rejected
     assert n_facts(s2) == 1                        # no second copy
     assert s2.turn == s1.turn + 1                  # but the turn still advances
+
+
+def test_same_statement_on_a_different_goal_is_allowed():
+    # Restating a case's value at the parent goal (the aggregation step) is
+    # legitimate; the duplicate guard is scoped per goal, not global.
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
+                          llm_client=MockLLMClient(script={
+                              ("SPLIT",): {"connective": "exhaustive_case",
+                                           "children": ["case A"]},
+                              ("COMPUTE",): {"statement": "40 + 2 = 42"}}))
+    s = mdp.initial_state()
+    s1, _ = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
+    child = get(s1.graph, 0).children[0]
+    s2, r2 = mdp.sample_transition(s1, DeliberationAction(Verb.COMPUTE, child), _rng())
+    assert r2 == 0.0                               # fact lands on the case
+    s3, r3 = mdp.sample_transition(s2, DeliberationAction(Verb.COMPUTE, 0), _rng())
+    assert r3 == 0.0                               # same text at the ROOT: allowed
+    root_facts = [get(s3.graph, fid).statement for fid in get(s3.graph, 0).facts]
+    assert "40 + 2 = 42" in root_facts
+    s4, r4 = mdp.sample_transition(s3, DeliberationAction(Verb.COMPUTE, 0), _rng())
+    assert r4 == MASKED_ACTION_REWARD              # but not twice at the root
 
 
 def test_llm_failure_takes_masked_fallback():

@@ -298,12 +298,15 @@ class DeliberationMDP:
                                  sanitize(str(payload["statement"])))
             else:  # Verb.COMPUTE
                 stmt = sanitize(str(payload["statement"]))
-                # Anti-loop guard: a COMPUTE that reproduces an existing
-                # fact's statement adds nothing and, unchecked, lets a
-                # controller emit the same fact every turn until the depth
-                # limit. Treat it as a masked (wasted) action.
-                if any(isinstance(n, Fact) and n.statement == stmt
-                       for n in state.graph.nodes):
+                # Anti-loop guard: a COMPUTE that reproduces a fact already
+                # attached to the SAME goal adds nothing and, unchecked, lets
+                # a controller emit the same fact every turn until the depth
+                # limit. Scoped per-goal on purpose: restating a case's value
+                # at the parent (the aggregation step) is legitimate.
+                tgt = get(state.graph, action.target)
+                existing = getattr(tgt, "facts", ())
+                if any(get(state.graph, fid).statement == stmt
+                       for fid in existing):
                     return self._masked(state)
                 premises = tuple(int(p) for p in payload.get("premises", ()) or ())
                 result = _r_compute(state.graph, action.target, stmt, premises)

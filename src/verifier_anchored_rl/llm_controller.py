@@ -78,25 +78,30 @@ CONTROLLER_SYSTEM_STRUCTURED = (
     "solution violates a stated condition of the problem (a range "
     "restriction, a domain, a sign); that branch contributes nothing.\n"
     "\n"
-    "Play the structure, then close it out. A typical episode:\n"
-    "1. split the root ONCE into its cases (you cannot split the same goal "
-    "twice; a goal that already has case-children is not offered split).\n"
-    "2. For each case (a child goal, not the root), compute its solution as "
-    'a GROUND equation, for example the case "4x - 16 = 4" is solved by the '
-    'ground fact "(4 + 16)/4 = 5"; then verify that fact.\n'
-    "3. Abandon a case whose solution is out of the allowed range or "
-    "violates a stated condition.\n"
-    "4. When every case is settled, add ONE root-level compute that "
-    'aggregates the verified case values (the sum, the largest, the one '
-    "survivor), verify it, and commit:0. Every episode must end in "
+    "Play the structure, then close it out. The winning line:\n"
+    "1. split the root ONCE into its cases (a goal that already has "
+    "case-children is not offered split again).\n"
+    "2. For each case (child goal id N): compute its solution as a GROUND "
+    'equation, for example the case "4x - 16 = 4" is solved by the ground '
+    'fact "(4 + 16)/4 = 5"; verify that fact; then commit:N to CLOSE the '
+    "case. A case with a (verified) fact is finished by commit:N, never by "
+    "computing more.\n"
+    "3. Abandon (abandon:N) a case whose solution violates a stated "
+    "condition (a range restriction, a domain, a sign).\n"
+    "4. Once every case is committed or abandoned, add ONE root-level "
+    "compute (compute:0) that establishes the final answer from the case "
+    'values: for a sum, "5 + 3 = 8"; for the largest, "max(5, 3) = 5"; for '
+    'a lone surviving value, restate it with a fresh expression such as '
+    '"max(6, 6) = 6". Verify it, then commit:0. Every episode must end in '
     "commit:0; never let it run out of turns.\n"
     "\n"
-    "Work a case-child to completion before moving on; do not keep splitting "
-    "or keep computing on the root while cases are unsolved. The checker "
-    'only accepts GROUND equations (no unknowns): "(13 - 5)/2 = 4" verifies, '
-    '"4x - 16 = 4" and "2*x = 8" do not. If a node shows (verify failed), '
-    "reformulate with a new compute instead of retrying it. Never add a "
-    "duplicate of an existing fact. Return only the requested JSON object."
+    "Efficiency rules. A compute whose statement duplicates a fact already "
+    "on the SAME goal is REJECTED and the turn is wasted; if the fact you "
+    "need already shows (verified), act on it: commit that case or move to "
+    "the root aggregation. The checker only accepts GROUND equations (no "
+    'unknowns): "(13 - 5)/2 = 4" verifies, "4x - 16 = 4" and "2*x = 8" do '
+    "not. If a node shows (verify failed), reformulate with a new compute "
+    "instead of retrying it. Return only the requested JSON object."
 )
 
 
