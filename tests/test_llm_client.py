@@ -138,3 +138,56 @@ def test_openai_client_gen_counters_default_zero_and_tolerate_missing_usage(monk
     client.complete_json(system="s", user="u", schema=schema)
     assert client.generate_calls == 1
     assert client.generated_tokens == 0
+
+
+def test_http_client_backs_off_on_429_then_succeeds(monkeypatch):
+    """A 429 gets patience (backoff + unchanged messages), not a corrective
+    prompt; the call succeeds once the server stops rate-limiting."""
+    import httpx
+
+    from verifier_anchored_rl import llm_client as mod
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(mod.time, "sleep", lambda s: sleeps.append(s))
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __init__(self, status):
+            self.status_code = status
+            self.headers = {}
+
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise httpx.HTTPStatusError(
+                    "rate limited", request=httpx.Request("POST", "http://x"),
+                    response=self)
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"action": "ok"}'}}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 3}}
+
+    class _FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            calls["n"] += 1
+            _FakeClient.last_body = json
+            return _Resp(429 if calls["n"] <= 2 else 200)
+
+    monkeypatch.setattr(httpx, "Client", _FakeClient)
+
+    client = mod.OpenAICompatibleLLMClient(base_url="http://x/v1", model="m")
+    result = client.complete_json("sys", "user", {"properties": {"action": {}}})
+    assert result == {"action": "ok"}
+    assert calls["n"] == 3
+    assert len(sleeps) == 2                       # backed off twice
+    assert len(_FakeClient.last_body["messages"]) == 2   # no corrective prompt
+    assert client.prompt_tokens == 7 and client.generated_tokens == 3

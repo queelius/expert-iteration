@@ -31,8 +31,10 @@ without changing the Protocol.
 from __future__ import annotations
 
 import json
+import random
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol, runtime_checkable
 
@@ -246,6 +248,12 @@ class OpenAICompatibleLLMClient:
     api_key: str | None = None
     timeout_s: float = 60.0
     max_retries: int = 1
+    # Rate-limit/server-error backoff budget, separate from the parse-retry
+    # budget above: a 429 needs patience, not a corrective prompt. Verified
+    # failure mode (2026-07-02): 8 concurrent workers against api.openai.com
+    # turned sustained 429s into silent controller fallbacks and ruined a
+    # 500-episode collection run.
+    max_backoff_retries: int = 6
     extra_headers: dict[str, str] = field(default_factory=dict)
     guided_json: bool = False
     # FLOP counters: mirroring TransformersLLMClient attribute names so that
@@ -308,14 +316,16 @@ class OpenAICompatibleLLMClient:
             body["guided_json"] = dict(schema)
 
         last_err: Exception | None = None
-        for attempt in range(self.max_retries + 1):
+        parse_attempts = 0
+        backoff_attempts = 0
+        while True:
             if seed is not None:
                 # Per-attempt bump: with a fixed seed a malformed response
                 # would be resampled identically on retry; offsetting by the
-                # attempt index keeps the call reproducible while letting the
-                # retry actually draw a fresh continuation. Ollama and vLLM
+                # parse-attempt index keeps the call reproducible while letting
+                # the retry actually draw a fresh continuation. Ollama and vLLM
                 # both honor request-level "seed" on /v1/chat/completions.
-                body["seed"] = seed + attempt
+                body["seed"] = seed + parse_attempts
             try:
                 with httpx.Client(timeout=self.timeout_s) as client:
                     response = client.post(url, headers=headers, json=body)
@@ -332,9 +342,27 @@ class OpenAICompatibleLLMClient:
                     self.generated_tokens += completion_tokens
                     self.prompt_tokens += new_prompt_tokens
                 return parsed
+            except httpx.HTTPStatusError as e:
+                # Rate limits and transient server errors get patience, not a
+                # corrective prompt: honor Retry-After when present, else
+                # exponential backoff with jitter.
+                status = e.response.status_code
+                if (status == 429 or status >= 500) \
+                        and backoff_attempts < self.max_backoff_retries:
+                    retry_after = e.response.headers.get("retry-after")
+                    try:
+                        delay = float(retry_after)  # type: ignore[arg-type]
+                    except (TypeError, ValueError):
+                        delay = min(2.0 ** backoff_attempts, 30.0)
+                    time.sleep(delay + random.uniform(0.0, 0.5))
+                    backoff_attempts += 1
+                    continue
+                last_err = e
+                break
             except (httpx.HTTPError, KeyError, ValueError, LLMResponseError) as e:
                 last_err = e
-                if attempt < self.max_retries:
+                if parse_attempts < self.max_retries:
+                    parse_attempts += 1
                     body["messages"].append(
                         {
                             "role": "user",
@@ -346,10 +374,12 @@ class OpenAICompatibleLLMClient:
                         }
                     )
                     continue
+                break
 
         raise LLMResponseError(
-            f"OpenAICompatibleLLMClient: no parseable response after "
-            f"{self.max_retries + 1} attempts at {url} (model={self.model})",
+            f"OpenAICompatibleLLMClient: no usable response after "
+            f"{parse_attempts + 1} parse attempt(s) and {backoff_attempts} "
+            f"backoff retr(ies) at {url} (model={self.model})",
             cause=last_err,
         )
 
