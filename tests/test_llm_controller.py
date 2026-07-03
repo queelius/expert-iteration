@@ -78,6 +78,67 @@ def test_controller_marks_fallback_on_llm_error():
     assert controller.last_choice_fallback is True
 
 
+class _Scripted:
+    """Returns a fixed action string; records every user message."""
+    def __init__(self, action):
+        self.action = action
+        self.users = []
+
+    def complete_json(self, system, user, schema, **kw):
+        self.users.append(user)
+        return {"action": self.action}
+
+
+def test_choose_normalizes_whitespace_and_case():
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=4,
+                          llm_client=EchoLLMClient())
+    controller = LLMController(_Scripted("  SPLIT:0 "))
+    state = mdp.initial_state()
+    action = controller.choose(mdp, state)
+    assert action == DeliberationAction(Verb.SPLIT, 0)
+    assert controller.last_choice_fallback is False
+
+
+def test_fallback_prefers_a_legal_verify():
+    from verifier_anchored_rl.reductio import compute
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
+                          llm_client=EchoLLMClient())
+    s0 = mdp.initial_state()
+    g = compute(s0.graph, 0, "6*7 = 42", premise_ids=()).graph  # fact 1
+    state = type(s0)(g, 1)
+    controller = LLMController(_Scripted("not-a-menu-key"))
+    action = controller.choose(mdp, state)
+    assert controller.last_choice_fallback is True
+    assert action.verb is Verb.VERIFY                 # not menu[0]
+    assert controller.last_raw_response == {"action": "not-a-menu-key"}
+
+
+def test_choose_threads_feedback_and_turn_budget_into_the_message():
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=7,
+                          llm_client=EchoLLMClient())
+    client = _Scripted("split:0")
+    controller = LLMController(client)
+    controller.choose(mdp, mdp.initial_state(), feedback="PREVIOUS REJECTED")
+    assert "PREVIOUS REJECTED" in client.users[0]
+    assert "[TURN 0/7]" in client.users[0]
+
+
+def test_run_episode_feeds_rejection_back_and_logs_raw_response():
+    # Turn 1: a legal choice whose generation fails (no scripted SPLIT
+    # payload in the mock) -> masked; turn 2's message must carry the
+    # rejection notice.
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=2,
+                          llm_client=MockLLMClient(script={}))
+    client = _Scripted("split:0")
+    controller = LLMController(client)
+    records = []
+    run_episode(mdp, controller, np.random.default_rng(0),
+                log_fn=records.append)
+    assert records[0]["masked"] is True
+    assert 'was REJECTED' in client.users[1]
+    assert "split:0" in client.users[1]
+
+
 def test_structured_prompt_is_distinct_and_foregrounds_structural_verbs():
     assert CONTROLLER_SYSTEM_STRUCTURED != CONTROLLER_SYSTEM
     low = CONTROLLER_SYSTEM_STRUCTURED.lower()

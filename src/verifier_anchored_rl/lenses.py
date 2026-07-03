@@ -14,13 +14,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .deliberation_mdp import DeliberationState, Verb
+from .deliberation_mdp import DeliberationState, Verb, _witnesses
 from .reductio import (
     Fact, Goal, Hypothesis, get, is_abandoned, is_verified, scope, solved,
 )
 from .reductio.graph import Graph, NodeId, VerifierCall
 
-_MARKER = re.compile(r"\[([A-Z_]+) id=(\d+)\]")
+# Matches both marker shapes the render emits ([KIND id=N] and
+# [KIND id=N parent=M]) so sanitized LLM text can spoof neither.
+_MARKER = re.compile(r"\[([A-Z_]+) id=(\d+)(?: parent=(\d+))?\]")
 
 _LLM_VERBS = frozenset({Verb.SPLIT, Verb.FORM_HYPOTHESIS, Verb.COMPUTE})
 
@@ -45,9 +47,18 @@ def _is_closed_goal(graph: Graph, node_id: NodeId) -> bool:
 
 def _detail(graph: Graph, node) -> str:
     if isinstance(node, Goal):
+        out = node.statement
         if node.connective is not None:
-            return f"{node.statement} connective={node.connective}"
-        return node.statement
+            out += f" connective={node.connective}"
+        # Commit-readiness: an open goal with a discharging witness shows
+        # WHICH node a commit would use (the most recent verified evidence,
+        # the same one _do_commit picks). Without this a controller must
+        # guess whether commit is dischargeable and by what.
+        if not solved(graph, node.id) and not is_abandoned(graph, node.id):
+            ws = _witnesses(graph, node)
+            if ws:
+                out += f" (evidence: node {ws[-1]} verified)"
+        return out
     if isinstance(node, (Hypothesis, Fact)):
         return f"{node.statement}{_verify_marker(graph, node.id)}"
     if isinstance(node, VerifierCall):
@@ -92,38 +103,56 @@ def _subtree_ids(graph: Graph, node_id: NodeId) -> set[NodeId]:
 def render_view(graph: Graph, target: NodeId) -> str:
     """The grounded-local view: problem, ancestor path, target subtree.
 
+    Rendered AS A TREE: children are indented under their parent and every
+    non-root node carries a parent= tag, so the controller can see which
+    goal owns which fact (a flat id-ordered list erases exactly the
+    structure a commit decision needs; found via the casework probes).
+
     Closed goals other than the target itself render as a single line,
     statement plus verdict, with their subtrees omitted (the compaction
-    that replaces a SUMMARIZE verb; design.md section 4.3).
+    that replaces a SUMMARIZE verb; design.md section 4.3). Recursion
+    stops at a compacted goal, which is what hides its subtree.
     """
     sub = scope(graph, target)
-    closed = {nid for nid in sub.node_ids
-              if nid != target
-              and _is_closed_goal(graph, nid)
-              and target not in _subtree_ids(graph, nid)}
-    hidden: set[NodeId] = set()
-    for cid in closed:
-        hidden |= _subtree_ids(graph, cid) - {cid}
-    hidden -= {target}
+    in_scope = set(sub.node_ids)
+    compacted = {nid for nid in sub.node_ids
+                 if nid != target
+                 and _is_closed_goal(graph, nid)
+                 and target not in _subtree_ids(graph, nid)}
     lines = [f"Problem: {get(graph, graph.root_id).statement}",
              f"focus={target}"]
-    for nid in sub.node_ids:
-        if nid in hidden:
-            continue
+
+    def emit(nid: NodeId, parent: NodeId | None, depth: int) -> None:
+        if nid not in in_scope:
+            return                       # hidden sibling of an ancestor
         node = get(graph, nid)
         kind = type(node).__name__.upper()
-        line = f"[{kind} id={nid}] {_detail(graph, node)}"
+        tag = (f"[{kind} id={nid}]" if parent is None
+               else f"[{kind} id={nid} parent={parent}]")
+        line = "  " * depth + f"{tag} {_detail(graph, node)}"
         if _is_closed_goal(graph, nid) and nid != target:
             verdict = "solved" if solved(graph, nid) else "abandoned"
             line += f" ({verdict})"
         lines.append(line)
+        if isinstance(node, Goal) and nid not in compacted:
+            for child in node.children + node.candidates + node.facts:
+                emit(child, nid, depth + 1)
+
+    emit(graph.root_id, None, 0)
     return "\n".join(lines)
 
 
-def global_prefix(state: DeliberationState) -> str:
-    """The whole-forest serialization used for the global state embedding."""
+def global_prefix(state: DeliberationState,
+                  depth_limit: int | None = None) -> str:
+    """The whole-forest serialization used for the global state embedding.
+
+    With a depth_limit the turn marker shows the budget ([TURN 3/16]);
+    "finish before the limit" is unactionable when the horizon is hidden.
+    """
+    turn = (f"[TURN {state.turn}/{depth_limit}]" if depth_limit is not None
+            else f"[TURN {state.turn}]")
     return (f"State:\n{render_view(state.graph, state.graph.root_id)}"
-            f"\n[TURN {state.turn}]")
+            f"\n{turn}")
 
 
 def _live_premise_ids(graph: Graph) -> list[NodeId]:
@@ -161,9 +190,12 @@ def _fields_description(verb: Verb, state: DeliberationState) -> str:
         return (
             "Produce a JSON object with this field:\n"
             '  - "statement": a short tentative claim addressing the target '
-            "goal, as checkable math where possible\n"
+            "goal, as checkable GROUND math where possible. The symbolic "
+            "checker can only verify statements with no unknowns: a "
+            'hypothesis like "x = 4" can never be verified and so can '
+            "never serve as commit evidence.\n"
             "Example:\n"
-            '  {"statement": "x = 4"}'
+            '  {"statement": "6*7 = 42"}'
         )
     if verb is Verb.COMPUTE:
         ids = _live_premise_ids(state.graph)
@@ -196,7 +228,7 @@ def schema_for(verb: Verb, target: NodeId, state: DeliberationState) -> dict[str
             "properties": {
                 "connective": {"type": "string",
                                "enum": ["conjunctive", "exhaustive_case"]},
-                "children": {"type": "array", "minItems": 1, "maxItems": 6,
+                "children": {"type": "array", "minItems": 2, "maxItems": 6,
                              "items": {"type": "string"}},
             },
             "required": ["connective", "children"],
