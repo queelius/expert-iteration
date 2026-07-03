@@ -167,7 +167,24 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   anyway (decision data is the product) but at reduced scale.
 - Cost: ~$0.10 teacher-side; local CPU generator (~40 min).
 
-### E16: generator capability (Qwen-1.5B -> 3B), interface held fixed
+### E16 - RESOLVED 07-03: 3B clears the content cliff per-case; root aggregation is the last choke
+- (a) 3B direct on casework-240: **68.8%** (vs 1.5B 39.2%): top of the
+  useful band; if 3B is adopted the decisive target becomes 68.8%.
+- (b) Probe: **0/20**, but the failure narrowed dramatically: split
+  content is now GOOD (mask 3/46, clean two-case trees), teacher
+  fallbacks fell 32% -> 8%, and CASES GET SOLVED end to end. The single
+  remaining choke is the root-level aggregation COMPUTE: 163/200 (82%)
+  masked, dominated by the duplicate guard: the generator, re-prompted
+  for the same target, re-emits the same rejected statement; rejection
+  feedback reaches the TEACHER but the GENERATOR is memoryless, so
+  episodes burn turns 7-15 in a mask loop at the root.
+- Next single manipulation (E17, cheap): make the COMPUTE lens
+  duplicate-aware: list the target's existing fact statements in the
+  suffix with "produce a DIFFERENT statement", and/or bump generation
+  temperature on a masked retry. Reading: any root aggregations landing
+  + first design-true wins => collect with 3B against the 68.8% target.
+
+### E16 (original registration): generator capability (Qwen-1.5B -> 3B), interface held fixed
 - Manipulation (single, vs E15): the local generator only. Two runs:
   (a) 3B direct baseline on casework-240 (re-anchors the decisive-
   comparison target); (b) the standard design-true probe.
