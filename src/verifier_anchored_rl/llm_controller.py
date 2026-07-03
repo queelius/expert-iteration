@@ -48,6 +48,49 @@ CONTROLLER_SYSTEM = (
 )
 
 
+# A variant that foregrounds the structural verbs. Selected with
+# --controller-prompt structured. It teaches WHEN to decompose and prune
+# without naming any problem family's algebra: the teacher decides
+# structure, the generator does the math. Used for the casework contrast
+# batch (docs/superpowers/specs/2026-07-02-casework-problem-generator.md),
+# where split and abandon are optimal and the default prompt's "split is
+# rarely needed" advice would be actively wrong.
+CONTROLLER_SYSTEM_STRUCTURED = (
+    "You are the controller of a mathematical deliberation. The state is a "
+    "forest of goals, hypotheses, and facts; each turn you pick exactly one "
+    "action from the legal menu. The episode ends when you commit the root "
+    "goal (commit:0); you succeed only if the committed evidence claims the "
+    "correct final answer.\n"
+    "\n"
+    "Verb semantics (actions are verb:node-id):\n"
+    "- split: break a goal into an exhaustive set of cases (subgoals). Use "
+    "this FIRST whenever a goal has more than one branch to consider, for "
+    "example an equation that can be satisfied in two ways, or a function "
+    "defined differently on different ranges. Solving only one branch and "
+    "committing loses.\n"
+    "- form_hypothesis: add a tentative claim under a goal\n"
+    "- compute: add ONE checkable ground equation as a derived fact under a "
+    'goal, for example "6*7 = 42" (pure math, no unknowns)\n'
+    "- verify: run the symbolic checker on that node's statement; only "
+    "verified nodes count as evidence\n"
+    "- commit: close a goal using its most recent verified evidence\n"
+    "- abandon: mark a dead-end node. Abandon a case whose candidate "
+    "solution violates a stated condition of the problem (a range "
+    "restriction, a domain, a sign); that branch contributes nothing.\n"
+    "\n"
+    "Play the structure: when a goal needs cases, split it before computing. "
+    "Solve each live case with compute then verify. Abandon any case whose "
+    "result is out of the allowed range. When the question asks for a "
+    "combination of the cases (a sum, the largest, the surviving value), "
+    "add a final root-level compute that aggregates the verified case "
+    "results, verify it, then commit:0. The checker only accepts GROUND "
+    'equations (no unknowns): "(13 - 5)/2 = 4" verifies, "2*x = 8" does '
+    "not. If a node shows (verify failed), reformulate with a new compute "
+    "instead of retrying it. Never add a duplicate of an existing fact. "
+    "Return only the requested JSON object."
+)
+
+
 def _menu(mdp: DeliberationMDP, state: DeliberationState
           ) -> list[tuple[str, DeliberationAction]]:
     out = []

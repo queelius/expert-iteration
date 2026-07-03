@@ -35,7 +35,12 @@ from verifier_anchored_rl.deliberation_mdp import DeliberationMDP
 from verifier_anchored_rl.llm_client import (
     EchoLLMClient, OpenAICompatibleLLMClient,
 )
-from verifier_anchored_rl.llm_controller import LLMController, run_episode
+from verifier_anchored_rl.llm_controller import (
+    CONTROLLER_SYSTEM, CONTROLLER_SYSTEM_STRUCTURED, LLMController, run_episode,
+)
+
+_CONTROLLER_PROMPTS = {"default": CONTROLLER_SYSTEM,
+                       "structured": CONTROLLER_SYSTEM_STRUCTURED}
 
 DEMO_PROBLEMS = [
     {"problem": "What is 6*7?", "answer": "42"},
@@ -69,7 +74,8 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
     """One episode on its own controller instance (its fallback flag is
     per-episode mutable state) and its own seeded rng; records are buffered
     and written contiguously under the lock."""
-    controller = LLMController(ctrl_client)
+    controller = LLMController(ctrl_client,
+                               system=_CONTROLLER_PROMPTS[args.controller_prompt])
     rng = np.random.default_rng(args.seed + i)
     buffer: list[dict] = []
     summary = run_episode(
@@ -83,6 +89,7 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
         meta={"backend": args.backend, "model": args.model,
               "controller_backend": args.controller_backend or args.backend,
               "controller_model": args.controller_model or args.model,
+              "controller_prompt": args.controller_prompt,
               "seed": args.seed, "problem_index": i})
     with write_lock:
         for rec in buffer:
@@ -107,6 +114,10 @@ def main() -> None:
                          "strong API teacher drive a local generator.")
     ap.add_argument("--controller-base-url", default=None,
                     help="teacher base URL; defaults to --base-url")
+    ap.add_argument("--controller-prompt",
+                    choices=list(_CONTROLLER_PROMPTS), default="default",
+                    help="'structured' foregrounds split/abandon for "
+                         "case-analysis problems (casework dataset)")
     ap.add_argument("--api-key-env", default="OPENAI_API_KEY",
                     help="environment variable holding the bearer token "
                          "(used by http and openai backends when set)")

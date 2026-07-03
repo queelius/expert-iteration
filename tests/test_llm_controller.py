@@ -10,7 +10,9 @@ from verifier_anchored_rl.deliberation_mdp import (
     DeliberationAction, DeliberationMDP, Verb,
 )
 from verifier_anchored_rl.llm_client import EchoLLMClient, MockLLMClient
-from verifier_anchored_rl.llm_controller import LLMController, run_episode
+from verifier_anchored_rl.llm_controller import (
+    CONTROLLER_SYSTEM, CONTROLLER_SYSTEM_STRUCTURED, LLMController, run_episode,
+)
 
 
 def test_controller_choice_is_constrained_to_legal_menu():
@@ -74,3 +76,18 @@ def test_controller_marks_fallback_on_llm_error():
     action = controller.choose(mdp, state)
     assert action == mdp.actions(state)[0]
     assert controller.last_choice_fallback is True
+
+
+def test_structured_prompt_is_distinct_and_foregrounds_structural_verbs():
+    assert CONTROLLER_SYSTEM_STRUCTURED != CONTROLLER_SYSTEM
+    low = CONTROLLER_SYSTEM_STRUCTURED.lower()
+    # It must teach when to decompose and prune...
+    assert "split" in low and "abandon" in low and "case" in low
+    # ...and must NOT carry the default prompt's discouragement of split.
+    assert "rarely needed" not in low
+
+
+def test_runner_maps_controller_prompt_choices():
+    import experiments.run_llm_controller as runner
+    assert runner._CONTROLLER_PROMPTS["default"] is CONTROLLER_SYSTEM
+    assert runner._CONTROLLER_PROMPTS["structured"] is CONTROLLER_SYSTEM_STRUCTURED
