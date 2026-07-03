@@ -110,6 +110,24 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   The remaining lever is the one the design names: a trained controller
   with perfect menu fidelity by construction (Phase B). Cost: $0.20.
 
+### E14: design-true regime probe (teacher controller + local Qwen generator)
+- Configuration: gpt-4.1-mini (OpenAI) picks (verb, target); Qwen2.5-1.5B
+  (local Ollama CPU) writes all content; casework-v1 first-20; tree view;
+  structured prompt; solve-claims off.
+- Purpose: the long-pending prerequisite for the design-true collection:
+  measure the small generator's masked-action rate and the win rate on
+  the TRUE state distribution (design.md section 7.3).
+- Pre-registered expectation: solve rate BELOW the teacher+mini-generator
+  20-25 percent and below Qwen-direct 39.2 percent; this is not failure
+  (Rung 1's product is decision data; the decisive comparison is the
+  TRAINED controller + Qwen vs 39.2 percent).
+- Reading: any wins + masked-action rate under ~40 percent of decisions
+  => proceed to the full 240-episode design-true collection (~$1.50-2
+  teacher-side). Zero wins or masked-dominated episodes => fix the
+  generator-facing lens/schema interface first (the type-loose JSON
+  axis found in E12 round 3), not Phase B's premise.
+- Cost: ~$0.10 teacher-side; generator is free local CPU (~40 min).
+
 ## Method notes
 
 - 20-episode probes distinguish 5% from 70%, not 20% from 30%: treat
