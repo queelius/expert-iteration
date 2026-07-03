@@ -1,10 +1,17 @@
 \section{Experimental Setup (Pre-Registered)}
 \label{sec:experimental-setup}
 
-The headline result is a compute-versus-accuracy frontier on verifiable math
-benchmarks, beginning with GSM8K \citep{gsm8k} and progressing to MATH
-\citep{math}. The baseline grid below and the compute metrics are committed
-before training and will not be adjusted post hoc.
+The headline result is a compute-versus-accuracy frontier on verifiable
+math problems. The primary instrument is casework, the purpose-built
+case-analysis dataset of \cref{sec:prelim-casework}: it is the
+distribution on which the structured action space is exercised, and it is
+calibrated so the deployment-class generator has genuine headroom
+(\cref{sec:prelim-calibration}), which makes it the site of the decisive
+comparison (learned controller plus frozen generator versus the same
+generator prompted directly). The standard benchmarks, GSM8K \citep{gsm8k}
+and then MATH \citep{math}, follow once the primary loop shows progress.
+The baseline grid below and the compute metrics are committed before
+training and will not be adjusted post hoc.
 
 \begin{table}[h]
 \centering
