@@ -24,8 +24,17 @@ Families (v1):
 Families (v2, for the E12 difficulty calibration):
   f4   |x - a| + |x - b| = c: three regions, the middle one dead; ask
        largest/smallest (sum leaks a+b without casework, so it is banned).
-  f6   |a*x + b| = x + d: the classic extraneous-solution trap; the signed
+  f6   |x + b| = c*x + d: the classic extraneous-solution trap; the signed
        candidate that violates its own branch domain must be discarded.
+  f7   tiered-pricing word problems, solved in reverse ("the bill was C;
+       how many units?"): a piecewise-linear inverse with one tier dead by
+       monotonicity; E12 round-2 candidate targeting word-problem
+       semantics rather than algebra.
+  f8   integer counting under interval + divisibility constraints ("how
+       many integers x in [lo, hi] satisfy ..."): ground truth by
+       exhaustive enumeration (cross-checked against the constructor's
+       closed form); E12 round-2 candidate targeting boundary/off-by-one
+       discipline.
 
 All constructors take a ``scale`` knob multiplying the sampling ranges
 (magnitude difficulty) while integer-cleanliness stays construction-exact.
@@ -100,6 +109,9 @@ class Problem:
     tier: int
     # verification plan: solve each (equation, domain) and union the roots.
     solve_plan: list[tuple[sp.Eq, sp.Set]] = field(default_factory=list)
+    # counting families instead carry an enumeration spec; verification
+    # brute-forces it and cross-checks the constructor's closed form.
+    count_spec: dict[str, Any] | None = None
 
 
 # --------------------------------------------------------------------------
@@ -359,11 +371,147 @@ def gen_f6(rng: Random, scale: int = 1) -> Problem:
     )
 
 
+_F7_SKINS = (
+    ("A courier charges {r1} dollars per kilogram for the first {T} "
+     "kilograms of a shipment and {r2} dollars for each kilogram after "
+     "that. Shipping one package cost {C} dollars in total. How many "
+     "kilograms did the package weigh?"),
+    ("An electricity plan bills {r1} dollars per kilowatt-hour for the "
+     "first {T} kilowatt-hours each month and {r2} dollars for each "
+     "kilowatt-hour beyond that. One month's bill came to {C} dollars. "
+     "How many kilowatt-hours were used that month?"),
+    ("A taxi service charges {r1} dollars per mile for the first {T} "
+     "miles of a trip and {r2} dollars for each mile after that. A trip "
+     "cost {C} dollars. How many miles long was the trip?"),
+    ("A data plan costs {r1} dollars per gigabyte for the first {T} "
+     "gigabytes and {r2} dollars for each additional gigabyte. Last "
+     "month the plan cost {C} dollars. How many gigabytes were used?"),
+)
+
+
+def gen_f7(rng: Random, scale: int = 1) -> Problem:
+    """Tiered-pricing inverse problem: given the bill, recover the usage.
+
+    The tariff is piecewise linear and strictly increasing, so exactly one
+    tier contains the true usage; the other tier's candidate violates its
+    own tier condition (dead by monotonicity). Boundary usage (exactly T
+    units) is sampled deliberately: tier boundaries are where models slip.
+    """
+    r1 = rng.randint(2, 9)
+    r2 = rng.randint(2, 9)
+    while r2 == r1:
+        r2 = rng.randint(2, 9)
+    t = rng.randint(5, 5 + 15 * scale)
+    if rng.random() < 0.5:
+        w = rng.randint(1, t)                 # tier 1, includes the boundary
+        cost = r1 * w
+    else:
+        w = t + rng.randint(1, 12 * scale)    # tier 2
+        cost = r1 * t + r2 * (w - t)
+    skin = rng.randrange(len(_F7_SKINS))
+    problem = _F7_SKINS[skin].format(r1=r1, r2=r2, T=t, C=cost)
+    piece = sp.Piecewise((r1 * x, x <= t), (r1 * t + r2 * (x - t), x > t))
+    return Problem(
+        problem=problem,
+        answer="",
+        symbolic=f"Eq({piece}, {cost})",
+        question_type="find_x",
+        family="f7", n_cases=2, n_dead=1,
+        params={"r1": r1, "r2": r2, "t": t, "cost": cost, "answer_x": w,
+                "skin": skin, "scale": scale},
+        tier=4,
+        solve_plan=[
+            (sp.Eq(r1 * x, cost), sp.Interval(1, t)),
+            (sp.Eq(r1 * t + r2 * (x - t), cost), sp.Interval.open(t, sp.oo)),
+        ],
+    )
+
+
+def _f8_values(spec: dict[str, Any]) -> list[int]:
+    """Exhaustive enumeration: the ground truth for counting problems."""
+    lo, hi = spec["lo"], spec["hi"]
+    a, b, m = spec["a"], spec["b"], spec["m"]
+    out = []
+    for v in range(lo, hi + 1):
+        inside = abs(v - a) <= b
+        if spec["form"] == "inside":
+            ok = inside and v % m != 0
+        else:                                   # outside
+            ok = abs(v - a) >= b and v % m == 0
+        if ok:
+            out.append(v)
+    return out
+
+
+def _count_multiples(m: int, lo: int, hi: int) -> int:
+    """Multiples of m in [lo, hi] (0 if empty); floor division is exact
+    for negative bounds too."""
+    if hi < lo:
+        return 0
+    return hi // m - (lo - 1) // m
+
+
+def gen_f8(rng: Random, scale: int = 1) -> Problem:
+    """Count integers in [lo, hi] under an absolute-value band plus a
+    divisibility constraint.
+
+    The answer is computed two independent ways: a closed form here
+    (interval intersection and multiple-counting) and brute-force
+    enumeration in verify_and_fill; a mismatch raises. n_cases/n_dead are
+    advisory for counting families (the casework is region-splitting, not
+    an AND-OR branch count).
+    """
+    for _ in range(200):
+        form = "inside" if rng.random() < 0.5 else "outside"
+        a = rng.randint(-9 * scale, 9 * scale)
+        b = rng.randint(3, 12 * scale)
+        m = rng.randint(2, 5)
+        lo = a - b - rng.randint(-3, 8 * scale)
+        hi = a + b + rng.randint(-3, 8 * scale)
+        if hi < lo:
+            continue
+        if form == "inside":
+            il, ih = max(lo, a - b), min(hi, a + b)
+            if ih < il:
+                count = 0
+            else:
+                count = (ih - il + 1) - _count_multiples(m, il, ih)
+        else:
+            count = (_count_multiples(m, lo, min(hi, a - b))
+                     + _count_multiples(m, max(lo, a + b), hi))
+        if 1 <= count <= 60:
+            break
+    else:
+        raise RuntimeError("f8: no admissible parameters in 200 draws")
+    band = f"|{_linear(1, -a)}|"
+    if form == "inside":
+        cond = f"{band} <= {b}, and x is not divisible by {m}"
+    else:
+        cond = f"{band} >= {b}, and x is divisible by {m}"
+    problem = (f"How many integers x satisfy {lo} <= x <= {hi}, "
+               f"{cond}? Report the count.")
+    op = "<=" if form == "inside" else ">="
+    divop = "!=" if form == "inside" else "=="
+    return Problem(
+        problem=problem,
+        answer="",
+        symbolic=(f"Count({lo} <= x <= {hi}, Abs(x - ({a})) {op} {b}, "
+                  f"x % {m} {divop} 0)"),
+        question_type="count",
+        family="f8", n_cases=2, n_dead=0,
+        params={"form": form, "lo": lo, "hi": hi, "a": a, "b": b, "m": m,
+                "claimed_count": count, "scale": scale},
+        tier=4,
+        count_spec={"form": form, "lo": lo, "hi": hi, "a": a, "b": b, "m": m},
+    )
+
+
 FAMILIES: dict[str, Callable[..., Problem]] = {
     "f1a": gen_f1a, "f1b": gen_f1b,
     "f2a": gen_f2a, "f2b": gen_f2b,
     "f3": gen_f3,
     "f4": gen_f4, "f6": gen_f6,
+    "f7": gen_f7, "f8": gen_f8,
 }
 
 # casework-v1 shipped with these five; v2 candidates are calibrated by E12.
@@ -395,9 +543,21 @@ def verify_and_fill(p: Problem) -> Problem:
     """Independently re-derive the answer and cross-check structural counts.
 
     This is the correctness gate: the answer field is populated from a fresh
-    ``solveset``, not from the constructor's bookkeeping, so a mis-placed
-    coefficient is caught here rather than shipped as a wrong label.
+    ``solveset`` (or, for counting families, brute-force enumeration), not
+    from the constructor's bookkeeping, so a mis-placed coefficient is
+    caught here rather than shipped as a wrong label.
     """
+    if p.count_spec is not None:
+        values = _f8_values(p.count_spec)
+        if len(values) != p.params["claimed_count"]:
+            raise ValueError(
+                f"{p.family}: closed-form count {p.params['claimed_count']} "
+                f"!= enumerated {len(values)} for {p.symbolic}")
+        if "case" in p.problem.lower():
+            raise ValueError(f"{p.family}: statement leaks the word 'case'")
+        p.answer = str(len(values))
+        p._solution_set = [str(v) for v in values]  # type: ignore[attr-defined]
+        return p
     sols = _solve(p.solve_plan)
     if not sols:
         raise ValueError(f"{p.family}: no valid solutions for {p.symbolic}")

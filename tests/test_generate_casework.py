@@ -50,6 +50,21 @@ def _expected_answer(rec: dict) -> int:
         num, den = -(p["b"] + p["d"]), p["c"] + 1
         assert num % den == 0
         return num // den
+    if fam == "f7":
+        # Recompute the bill from the recorded usage through the tariff.
+        w, t, r1, r2, cost = (p["answer_x"], p["t"], p["r1"], p["r2"],
+                              p["cost"])
+        assert (r1 * w if w <= t else r1 * t + r2 * (w - t)) == cost
+        return w
+    if fam == "f8":
+        # Brute-force from params, independently of the generator's code.
+        good = 0
+        for v in range(p["lo"], p["hi"] + 1):
+            if p["form"] == "inside":
+                good += abs(v - p["a"]) <= p["b"] and v % p["m"] != 0
+            else:
+                good += abs(v - p["a"]) >= p["b"] and v % p["m"] == 0
+        return good
     raise AssertionError(f"unknown family {fam}")
 
 
@@ -93,9 +108,24 @@ def test_answers_are_integers():
 # --------------------------------------------------------------------------
 
 def test_dead_case_families_have_a_dead_branch():
-    for r in g.generate(160, seed=0, families=["f1b", "f2a", "f4", "f6"]):
+    for r in g.generate(160, seed=0, families=["f1b", "f2a", "f4", "f6", "f7"]):
         assert r["n_dead"] >= 1
         assert len(r["solution_set"]) == r["n_cases"] - r["n_dead"]
+
+
+def test_counting_family_enumerates_and_counts_consistently():
+    for r in g.generate(40, seed=5, families=["f8"]):
+        assert r["question_type"] == "count"
+        assert int(r["answer"]) == len(r["solution_set"]) >= 1
+        # every listed value actually satisfies the stated predicate
+        p = r["difficulty"]["params"]
+        for s in r["solution_set"]:
+            v = int(s)
+            assert p["lo"] <= v <= p["hi"]
+            if p["form"] == "inside":
+                assert abs(v - p["a"]) <= p["b"] and v % p["m"] != 0
+            else:
+                assert abs(v - p["a"]) >= p["b"] and v % p["m"] == 0
 
 
 def test_scale_widens_parameter_magnitudes_and_stays_correct():
