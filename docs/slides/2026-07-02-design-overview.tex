@@ -324,21 +324,43 @@
   \end{block}
 \end{frame}
 
+% ---------------------------------------------------------------- casework
+\begin{frame}{Casework contrast: structure fires; close-out is the new bottleneck}
+  \textbf{The fix worked} (synthetic \texttt{casework-v1}: 300 SymPy-verified
+  problems, published with full provenance):
+  \begin{itemize}
+    \item structural verbs: \alert{0.5\%} of decisions (GSM8K) $\to$
+          \alert{12--23\%}; \verbword{split} in 20/20 probe episodes
+    \item the per-case arc completes: split $\to$ compute
+          \verbword{(4+16)/4 = 5} $\to$ verify $\to$ commit
+  \end{itemize}
+  \textbf{But solve rate stayed low (0--10\%)}, all \emph{controller}-side:
+  premature commits (illegal $\to$ wasted turn), nested splits,
+  re-computing verified facts.
+  \begin{block}{Why this strengthens the thesis}
+    Two of the three failure modes are impossible for the trained
+    controller by construction: a pointer head is a softmax \emph{over the
+    legal menu}, and value-based training extinguishes repetition loops
+    first. The teacher's mistakes are the training signal. (The probes also
+    surfaced two latent action-space bugs, now fixed and tested.)
+  \end{block}
+\end{frame}
+
 % ---------------------------------------------------------------- next steps
 \begin{frame}{Next steps}
   \begin{enumerate}
-    \item \textbf{Synthetic casework generator} (spec'd 2026-07-02):
-          SymPy-verified absolute-value / piecewise / quadratic problems
-          where case analysis is required for correctness, plus a
-          structure-encouraging teacher prompt; contrast batch so
-          \verbword{split}/\verbword{abandon} appear in the
-          behavior-cloning data
+    \item \textbf{Casework collection at teacher scale}: the probes used
+          gpt-4.1-mini (deployment-scale) as the teacher; the design calls
+          for a \emph{strong} teacher. Decide: stronger-teacher probe, or a
+          solve-claim extension to \verbword{compute} (a spec'd invariant
+          change), or bank the structural data as is
     \item \textbf{Design-true regime}: hosted teacher + \emph{local} small
           generator (Qwen 1.5B/3B); measure the small model's failed-action
           rate before large collection
     \item \textbf{Phase B}: per-node encoder + pointer head,
           behavior-cloning warm-start on rung-1 trajectories, then
-          $Q$-learning fine-tune against the verifier
+          $Q$-learning fine-tune against the verifier; the casework probes'
+          controller failures are its negative examples
     \item \textbf{The decisive comparison}: small generator + trained
           controller vs the \emph{same} small model prompted directly; the
           approach succeeds or fails on that margin
