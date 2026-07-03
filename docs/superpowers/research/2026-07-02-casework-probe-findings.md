@@ -91,6 +91,47 @@ C. **Ship as-is.** Record the structural-share finding and the machinery
 These are not mutually exclusive: A is cheap and informative regardless; B
 can be spec'd independently; C is the floor already banked.
 
+## Addendum (2026-07-03): the observability fixes, and what moved the needle
+
+The open decision was resolved by analysis rather than escalation. A
+systematic defect review found the binding constraint: **the state render
+was flat** (`scope()` returns id-sorted nodes; `render_view` iterated them),
+erasing all parent-child structure, so no controller at any capability could
+tell which goal owned which fact, whether a commit was dischargeable, or by
+what. Corroborating experiment: gpt-4.1 as teacher under the flat render
+scored 1/20, identical to mini, at 40x the price. Capability was not the
+bottleneck; information was.
+
+Fixes shipped (all committed, 304 tests): tree render with indentation and
+parent= tags; commit-readiness annotation "(evidence: node N verified)" on
+open goals; explicit REJECTED feedback after masked actions; turn budget
+([TURN 7/16]); action-string normalization; verify-preferring fallback that
+never picks an irreversible root action; raw controller replies logged on
+fallback; the wire schema no longer carries the menu enum (client-side
+validation had been converting every illegal-action intent into opaque
+parse-retry errors, two wasted API calls each); the client's corrective
+retry now echoes the failed assistant reply it scolds.
+
+Results at identical capability (gpt-4.1-mini teacher, same 20 problems):
+
+| Interface | Solved | Notes |
+|---|---|---|
+| flat render (probe 5) | 1/20 | fallback default flooded form_hypothesis |
+| tree render (v6) | 5/20 | abandon 4/4 on both dead-case families |
+| + intent surfacing (v7) | 4/20 | wins in 4 of 5 families; f3 still 0 |
+
+v6 vs v7 is within 20-episode noise; the v7 fixes bought diagnosability,
+not accuracy. The residual ~13% fallback rate is now fully legible: the
+teacher asks for actions the machinery correctly forbids (compute on a
+closed case x13, re-split of an already-split goal x15, commit without a
+witness x5). That is mini's protocol-fidelity plateau (~20-25% solve), and
+those logged illegal intents are labeled negative examples for Phase B.
+
+The information-vs-capability contrast (5x from the render at fixed
+capability; nothing from 40x capability at fixed render) is the memo's
+strongest result and belongs in the paper's motivation for structured
+observations.
+
 ## Honesty notes
 
 - Probe 4's regression was self-inflicted (prompt pseudo-syntax) and probe 4

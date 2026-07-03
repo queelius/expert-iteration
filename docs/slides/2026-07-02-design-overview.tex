@@ -325,24 +325,27 @@
 \end{frame}
 
 % ---------------------------------------------------------------- casework
-\begin{frame}{Casework contrast: structure fires; close-out is the new bottleneck}
-  \textbf{The fix worked} (synthetic \texttt{casework-v1}: 300 SymPy-verified
-  problems, published with full provenance):
+\begin{frame}{Casework: structure fires, and information beat capability}
+  \textbf{The dataset did its job} (\texttt{casework-v1}: 300 SymPy-verified
+  problems, published with provenance): structural verbs went from
+  \alert{0.5\%} of decisions (GSM8K) to \alert{12--23\%}, with
+  \verbword{split} in 20/20 probe episodes and the full per-case arc
+  (split $\to$ compute $\to$ verify $\to$ commit) in the win set.
+  \medskip
+
+  \textbf{Solve rate isolated the bottleneck by experiment:}
   \begin{itemize}
-    \item structural verbs: \alert{0.5\%} of decisions (GSM8K) $\to$
-          \alert{12--23\%}; \verbword{split} in 20/20 probe episodes
-    \item the per-case arc completes: split $\to$ compute
-          \verbword{(4+16)/4 = 5} $\to$ verify $\to$ commit
+    \item $40\times$ teacher capability (gpt-4.1), \emph{flat} state
+          render: 1/20, unchanged from the small teacher
+    \item fixed \emph{observation} (tree render, commit-readiness,
+          rejection feedback), same small teacher: \alert{$5\times$}
+          improvement, wins in 4 of 5 families
   \end{itemize}
-  \textbf{But solve rate stayed low (0--10\%)}, all \emph{controller}-side:
-  premature commits (illegal $\to$ wasted turn), nested splits,
-  re-computing verified facts.
   \begin{block}{Why this strengthens the thesis}
-    Two of the three failure modes are impossible for the trained
-    controller by construction: a pointer head is a softmax \emph{over the
-    legal menu}, and value-based training extinguishes repetition loops
-    first. The teacher's mistakes are the training signal. (The probes also
-    surfaced two latent action-space bugs, now fixed and tested.)
+    No controller can act on structure the lens erases: the case for
+    structured observations. The residual menu-ignoring errors are
+    impossible for a pointer head softmaxing over the legal menu; the
+    teacher's mistakes are the training signal.
   \end{block}
 \end{frame}
 
