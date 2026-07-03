@@ -75,7 +75,8 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
     per-episode mutable state) and its own seeded rng; records are buffered
     and written contiguously under the lock."""
     controller = LLMController(ctrl_client,
-                               system=_CONTROLLER_PROMPTS[args.controller_prompt])
+                               system=_CONTROLLER_PROMPTS[args.controller_prompt],
+                               max_tokens=args.controller_max_tokens)
     rng = np.random.default_rng(args.seed + i)
     buffer: list[dict] = []
     summary = run_episode(
@@ -118,6 +119,10 @@ def main() -> None:
                     choices=list(_CONTROLLER_PROMPTS), default="default",
                     help="'structured' foregrounds split/abandon for "
                          "case-analysis problems (casework dataset)")
+    ap.add_argument("--controller-max-tokens", type=int, default=64,
+                    help="completion cap for the teacher's action choice; "
+                         "large models narrate before the JSON and get "
+                         "truncated at the 64 default (experiment E11)")
     ap.add_argument("--api-key-env", default="OPENAI_API_KEY",
                     help="environment variable holding the bearer token "
                          "(used by http and openai backends when set)")
