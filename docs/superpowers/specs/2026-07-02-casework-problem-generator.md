@@ -118,11 +118,25 @@ root aggregation uses only the surviving fact.
 
 1. **`experiments/generate_casework.py`**: seeded CLI generator.
    - `--n`, `--seed`, `--families f1a,f1b,f2a,f2b,f3` (default: all,
-     round-robin balanced), `--out`.
-   - Output: JSONL records `{"problem": str, "answer": str, "meta":
-     {"family": str, "seed": int, "params": {...}, "n_cases": int,
-     "n_dead": int}}`. `meta` exists so run analysis can stratify verb
-     usage and solve rate by structure; the runner ignores it.
+     round-robin balanced), `--out`, `--split {train,test}`.
+   - Output: JSONL records shaped for publication, not just internal use:
+     ```json
+     {"id": "cw1-<12-hex content hash>",
+      "problem": "...natural-language statement...",
+      "answer": "41",
+      "symbolic": "Eq(Abs(2*x - 3), 7)",
+      "solution_set": ["-2", "5"],
+      "question_type": "sum_of_solutions",
+      "family": "f1a", "n_cases": 2, "n_dead": 0,
+      "difficulty": {"tier": 1, "params": {"a": 2, "m": 1, "k": 3}},
+      "provenance": {"generator": "generate_casework.py",
+                     "generator_version": "1.0.0",
+                     "git_sha": "<commit>", "sympy_version": "<ver>",
+                     "seed": 0, "index_in_seed": 17}}
+     ```
+     The `id` is a content hash of `(symbolic, question_type)` so it is
+     stable across regenerations and detects accidental duplicates. The
+     runner consumes only `problem`/`answer` and ignores the rest.
    - Internal invariant check: every record's `answer` is re-derived with
      an independent `sympy.solveset` call on the symbolic form before it is
      written; a mismatch is a generator bug and raises.
@@ -132,9 +146,22 @@ root aggregation uses only the surviving fact.
      recorded answer across a seed sweep;
    - structure guarantees: F1b/F2a records have `n_dead >= 1`; F1a/F2b/F3
      have `n_dead = 0`; statements never contain the word "case";
-   - integer-cleanliness: all recorded answers parse as integers.
-3. **Dataset**: `experiments/problems/casework-v1-240.jsonl` (240 problems,
-   48 per family, seed 0), committed.
+   - integer-cleanliness: all recorded answers parse as integers;
+   - id stability and uniqueness: content hash unchanged on regeneration,
+     no collisions within a split, and train/test ids are disjoint.
+3. **Dataset as a publishable artifact**: `datasets/casework-v1/` with
+   - `train.jsonl` (240 problems, 48 per family, seed 0) and `test.jsonl`
+     (60 problems, 12 per family, seed 1); disjoint seeds AND a cross-split
+     `id`-collision check so no test problem duplicates a train problem;
+   - `README.md`: a dataset card (Hugging Face conventions: YAML front
+     matter with license/task tags, then Datasheets-for-Datasets style
+     sections: motivation, composition, generation process, intended
+     uses, limitations, verification method, per-family statistics table);
+   - `checksums.sha256` over the data files;
+   - license: CC-BY-4.0, stated in the card and the YAML front matter;
+   - regeneration command recorded verbatim in the card, with the git SHA
+     the files were generated at (byte-reproducibility is the claim, and
+     the determinism test backs it).
 4. **Structure-aware teacher prompt**: `CONTROLLER_SYSTEM_STRUCTURED` in
    `llm_controller.py`, selected by a new runner flag
    `--controller-prompt {default,structured}` (default unchanged). It adds:
