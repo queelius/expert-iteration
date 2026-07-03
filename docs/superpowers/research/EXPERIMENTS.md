@@ -44,13 +44,25 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
 
 ## Pre-registered queue
 
-### E12: casework-v2 difficulty calibration sweep
-- Manipulation: generator difficulty knobs (two-absolute-value sums,
-  3-branch piecewise, magnitude scaling), one config per batch.
+### E12 (continuing): casework-v2 difficulty calibration sweep
+- Manipulation: generator difficulty knobs, one config per batch.
 - Measure: mini DIRECT baseline accuracy per ~40-problem batch ($0.02 each).
 - Reading: keep configs landing in the 40-70% direct band; below 40% is too
   hard for a mini generator to solve per-case, above 70% has no headroom.
 - Note: this calibrates the TESTBED; it does not touch the harness.
+- **Round 1 result (07-03): NULL.** f4 (three-region), f6 (extraneous
+  trap), v1-five at scale=10, f4+f6 at scale=10: 40/40 = 100% on all four
+  (160/160 total, ~$0.08). Parameter magnitude and these family
+  structures cannot challenge mini anywhere in single-variable
+  linear/quadratic algebra; the difficulty must come from a structurally
+  different source. Round-2 candidate axes, in order of expected bite:
+  (a) integer-counting casework ("how many integers x in [lo, hi]
+  satisfy ..."; off-by-one and boundary errors are real even in strong
+  models; ground truth by exhaustive enumeration, the strongest possible
+  verification); (b) tiered/piecewise word skins (inverse problems on
+  tax-bracket-style structures; GSM8K's 5.6% direct-miss rate lives in
+  word-problem semantics, not algebra); (c) nested absolute values
+  (||x-a| - b| = c, 4+ cases, working-memory pressure).
 
 ### E13: solve-claim COMPUTE ablation (after the spec + build)
 - Manipulation: solve-claim COMPUTE on vs off, same teacher (mini), same
