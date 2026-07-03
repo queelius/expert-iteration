@@ -21,6 +21,15 @@ Families (v1):
   f2b  piecewise f(x)=v with both branches live; ask the sum of solutions.
   f3   x^2 + p*x + q = 0 with distinct integer roots; ask largest/smallest.
 
+Families (v2, for the E12 difficulty calibration):
+  f4   |x - a| + |x - b| = c: three regions, the middle one dead; ask
+       largest/smallest (sum leaks a+b without casework, so it is banned).
+  f6   |a*x + b| = x + d: the classic extraneous-solution trap; the signed
+       candidate that violates its own branch domain must be discarded.
+
+All constructors take a ``scale`` knob multiplying the sampling ranges
+(magnitude difficulty) while integer-cleanliness stays construction-exact.
+
 Determinism: a single ``random.Random(seed)`` drives all sampling in a fixed
 order, so ``--seed`` fully determines the output (within one environment;
 provenance carries the git SHA and sympy version that would differ across
@@ -115,11 +124,11 @@ def _reduce(question_type: str, sols: list[sp.Integer]) -> sp.Integer:
 # family constructors (reverse generation)
 # --------------------------------------------------------------------------
 
-def gen_f1a(rng: Random) -> Problem:
+def gen_f1a(rng: Random, scale: int = 1) -> Problem:
     """|a*x + b| = c, both roots live. Roots are m+k and m-k."""
     a = rng.randint(1, 5)
-    m = rng.randint(-9, 9)
-    k = rng.randint(1, 9)
+    m = rng.randint(-9 * scale, 9 * scale)
+    k = rng.randint(1, 9 * scale)
     b, c = -a * m, a * k
     qtype = rng.choice(["sum_of_solutions", "largest_solution"])
     inside = _linear(a, b)
@@ -135,17 +144,17 @@ def gen_f1a(rng: Random) -> Problem:
         symbolic=str(eq),
         question_type=qtype,
         family="f1a", n_cases=2, n_dead=0,
-        params={"a": a, "m": m, "k": k, "b": b, "c": c},
+        params={"a": a, "m": m, "k": k, "b": b, "c": c, "scale": scale},
         tier=1,
         solve_plan=[(eq, sp.S.Reals)],
     )
 
 
-def gen_f1b(rng: Random) -> Problem:
+def gen_f1b(rng: Random, scale: int = 1) -> Problem:
     """|a*x + b| = c with x>d or x<d; the condition kills one root."""
     a = rng.randint(1, 5)
-    m = rng.randint(-9, 9)
-    k = rng.randint(1, 9)
+    m = rng.randint(-9 * scale, 9 * scale)
+    k = rng.randint(1, 9 * scale)
     b, c = -a * m, a * k
     lo, hi = m - k, m + k
     d = rng.randint(lo + 1, hi - 1)          # strictly between the two roots
@@ -167,7 +176,7 @@ def gen_f1b(rng: Random) -> Problem:
         question_type="find_x",
         family="f1b", n_cases=2, n_dead=1,
         params={"a": a, "m": m, "k": k, "b": b, "c": c, "d": d,
-                "direction": direction},
+                "direction": direction, "scale": scale},
         tier=2,
         solve_plan=[(eq, domain)],
     )
@@ -183,28 +192,28 @@ def _piecewise(a1: int, b1: int, a2: int, b2: int, t: int) -> tuple[str, str]:
     return frag, str(piece)
 
 
-def gen_f2a(rng: Random) -> Problem:
+def gen_f2a(rng: Random, scale: int = 1) -> Problem:
     """Piecewise f(x)=v; one branch's candidate lands outside its domain."""
-    t = rng.randint(-5, 5)
-    v = rng.randint(-20, 20)
+    t = rng.randint(-5 * scale, 5 * scale)
+    v = rng.randint(-20 * scale, 20 * scale)
     a1 = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4])
     a2 = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4])
     dead_lower = rng.random() < 0.5
     if dead_lower:
         # Live branch: upper (x >= t), solution xUp >= t.
-        x_up = rng.randint(t, t + 6)
+        x_up = rng.randint(t, t + 6 * scale)
         b2 = v - a2 * x_up
         # Dead branch: lower (x < t), candidate xLoCand >= t violates x < t.
-        x_lo_cand = rng.randint(t, t + 6)
+        x_lo_cand = rng.randint(t, t + 6 * scale)
         b1 = v - a1 * x_lo_cand
         answer_x = x_up
         params_extra = {"x_up": x_up, "x_lo_cand": x_lo_cand}
     else:
         # Live branch: lower (x < t), solution xLo < t.
-        x_lo = rng.randint(t - 6, t - 1)
+        x_lo = rng.randint(t - 6 * scale, t - 1)
         b1 = v - a1 * x_lo
         # Dead branch: upper (x >= t), candidate xUpCand < t violates x >= t.
-        x_up_cand = rng.randint(t - 6, t - 1)
+        x_up_cand = rng.randint(t - 6 * scale, t - 1)
         b2 = v - a2 * x_up_cand
         answer_x = x_lo
         params_extra = {"x_lo": x_lo, "x_up_cand": x_up_cand}
@@ -219,21 +228,21 @@ def gen_f2a(rng: Random) -> Problem:
         question_type="find_x",
         family="f2a", n_cases=2, n_dead=1,
         params={"a1": a1, "b1": b1, "a2": a2, "b2": b2, "t": t, "v": v,
-                "answer_x": answer_x, **params_extra},
+                "answer_x": answer_x, "scale": scale, **params_extra},
         tier=2,
         solve_plan=[(lower_eq, sp.Interval.open(-sp.oo, t)),
                     (upper_eq, sp.Interval(t, sp.oo))],
     )
 
 
-def gen_f2b(rng: Random) -> Problem:
+def gen_f2b(rng: Random, scale: int = 1) -> Problem:
     """Piecewise f(x)=v; both branches yield an in-domain solution."""
-    t = rng.randint(-5, 5)
-    v = rng.randint(-20, 20)
+    t = rng.randint(-5 * scale, 5 * scale)
+    v = rng.randint(-20 * scale, 20 * scale)
     a1 = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4])
     a2 = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4])
-    x_lo = rng.randint(t - 6, t - 1)          # in x < t
-    x_up = rng.randint(t, t + 6)              # in x >= t
+    x_lo = rng.randint(t - 6 * scale, t - 1)  # in x < t
+    x_up = rng.randint(t, t + 6 * scale)      # in x >= t
     b1 = v - a1 * x_lo
     b2 = v - a2 * x_up
     frag, sym = _piecewise(a1, b1, a2, b2, t)
@@ -248,19 +257,19 @@ def gen_f2b(rng: Random) -> Problem:
         question_type="sum_of_solutions",
         family="f2b", n_cases=2, n_dead=0,
         params={"a1": a1, "b1": b1, "a2": a2, "b2": b2, "t": t, "v": v,
-                "x_lo": x_lo, "x_up": x_up},
+                "x_lo": x_lo, "x_up": x_up, "scale": scale},
         tier=2,
         solve_plan=[(lower_eq, sp.Interval.open(-sp.oo, t)),
                     (upper_eq, sp.Interval(t, sp.oo))],
     )
 
 
-def gen_f3(rng: Random) -> Problem:
+def gen_f3(rng: Random, scale: int = 1) -> Problem:
     """x^2 + p*x + q = 0 with distinct integer roots r1 < r2."""
-    r1 = rng.randint(-9, 9)
-    r2 = rng.randint(-9, 9)
+    r1 = rng.randint(-9 * scale, 9 * scale)
+    r2 = rng.randint(-9 * scale, 9 * scale)
     while r2 == r1:
-        r2 = rng.randint(-9, 9)
+        r2 = rng.randint(-9 * scale, 9 * scale)
     r1, r2 = sorted((r1, r2))
     p, q = -(r1 + r2), r1 * r2
     qtype = rng.choice(["largest_solution", "smallest_solution"])
@@ -275,17 +284,90 @@ def gen_f3(rng: Random) -> Problem:
         symbolic=str(eq),
         question_type=qtype,
         family="f3", n_cases=2, n_dead=0,
-        params={"r1": r1, "r2": r2, "p": p, "q": q},
+        params={"r1": r1, "r2": r2, "p": p, "q": q, "scale": scale},
         tier=1,
         solve_plan=[(eq, sp.S.Reals)],
     )
 
 
-FAMILIES: dict[str, Callable[[Random], Problem]] = {
+def gen_f4(rng: Random, scale: int = 1) -> Problem:
+    """|x - a| + |x - b| = c with c > b - a: three regions, middle dead.
+
+    Solutions are (a+b-c)/2 (left region) and (a+b+c)/2 (right region);
+    both are integers because c - (b - a) is sampled even. The sum leaks
+    a + b without any casework, so only largest/smallest are asked.
+    """
+    a = rng.randint(-9 * scale, 9 * scale)
+    g = rng.randint(1, 8 * scale)
+    b = a + g
+    c = g + 2 * rng.randint(1, 8 * scale)     # > b - a, matching parity
+    qtype = rng.choice(["largest_solution", "smallest_solution"])
+    which = "largest" if qtype == "largest_solution" else "smallest"
+    lhs = f"|{_linear(1, -a)}| + |{_linear(1, -b)}|"
+    problem = (f"Solve for all real values of x: {lhs} = {c}. "
+               f"Report the {which} value of x that satisfies the equation.")
+    eq = sp.Eq(sp.Abs(x - a) + sp.Abs(x - b), c)
+    return Problem(
+        problem=problem,
+        answer="",
+        symbolic=str(eq),
+        question_type=qtype,
+        family="f4", n_cases=3, n_dead=1,
+        params={"a": a, "b": b, "c": c, "scale": scale},
+        tier=3,
+        solve_plan=[
+            (sp.Eq(a + b - 2 * x, c), sp.Interval.open(-sp.oo, a)),
+            (sp.Eq(sp.Integer(b - a), c), sp.Interval(a, b)),
+            (sp.Eq(2 * x - (a + b), c), sp.Interval.open(b, sp.oo)),
+        ],
+    )
+
+
+def gen_f6(rng: Random, scale: int = 1) -> Problem:
+    """|x + b| = c*x + d with c >= 2: the extraneous-solution trap.
+
+    Reverse construction: pick the vertex v = -b and a live solution
+    x_live < v on the shallow negative arm, then pass the steep RHS line
+    (slope c > 1) through it. Then RHS(v) = (c+1)(v - x_live) > 0, so the
+    line starts above the positive arm at the vertex and, being steeper,
+    never crosses it: the positive-branch candidate always violates its
+    own branch domain and must be discarded. Exactly one valid solution,
+    one extraneous candidate, provably, with no rejection sampling.
+    """
+    c = rng.randint(2, 4)
+    v = rng.randint(-9 * scale, 9 * scale)
+    x_live = v - rng.randint(1, 10 * scale)       # strictly left of the vertex
+    b = -v
+    d = -(x_live + b) - c * x_live                # line through the live point
+    inside = _linear(1, b)
+    rhs = _linear(c, d)
+    problem = (f"Solve for x: |{inside}| = {rhs}. Report the value of x.")
+    eq = sp.Eq(sp.Abs(x + b), c * x + d)
+    return Problem(
+        problem=problem,
+        answer="",
+        symbolic=str(eq),
+        question_type="find_x",
+        family="f6", n_cases=2, n_dead=1,
+        params={"b": b, "c": c, "d": d, "v": v, "answer_x": x_live,
+                "scale": scale},
+        tier=3,
+        solve_plan=[
+            (sp.Eq(x + b, c * x + d), sp.Interval(v, sp.oo)),
+            (sp.Eq(-(x + b), c * x + d), sp.Interval.open(-sp.oo, v)),
+        ],
+    )
+
+
+FAMILIES: dict[str, Callable[..., Problem]] = {
     "f1a": gen_f1a, "f1b": gen_f1b,
     "f2a": gen_f2a, "f2b": gen_f2b,
     "f3": gen_f3,
+    "f4": gen_f4, "f6": gen_f6,
 }
+
+# casework-v1 shipped with these five; v2 candidates are calibrated by E12.
+V1_FAMILIES = ("f1a", "f1b", "f2a", "f2b", "f3")
 
 
 # --------------------------------------------------------------------------
@@ -384,7 +466,8 @@ def _record(p: Problem, *, seed: int, index_in_seed: int, split: str | None,
 
 def generate(n: int, seed: int, families: list[str], *,
              split: str | None = None,
-             exclude_ids: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
+             exclude_ids: frozenset[str] = frozenset(),
+             scale: int = 1) -> list[dict[str, Any]]:
     """Generate ``n`` records, round-robin across ``families``.
 
     Records are deduplicated by content id within this call and against
@@ -406,7 +489,7 @@ def generate(n: int, seed: int, families: list[str], *,
                 f"exhausted {budget} attempts with only {len(out)}/{n} "
                 f"distinct problems; widen the parameter ranges")
         fam = families[len(out) % len(families)]
-        p = verify_and_fill(FAMILIES[fam](rng))
+        p = verify_and_fill(FAMILIES[fam](rng, scale))
         rid = _content_id(p.symbolic, p.question_type)
         if rid in seen:
             continue
@@ -428,8 +511,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--n", type=int, default=240)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--families", default=",".join(FAMILIES),
-                    help="comma-separated subset of " + ",".join(FAMILIES))
+    ap.add_argument("--families", default=",".join(V1_FAMILIES),
+                    help="comma-separated subset of " + ",".join(FAMILIES) +
+                         " (default: the v1 five, so the shipped dataset's "
+                         "regeneration command stays byte-faithful)")
+    ap.add_argument("--scale", type=int, default=1,
+                    help="multiplies sampling ranges (magnitude difficulty)")
     ap.add_argument("--split", default=None,
                     help="label recorded in provenance (e.g. train, test)")
     ap.add_argument("--exclude", type=Path, default=None,
@@ -444,7 +531,8 @@ def main() -> None:
     exclude = _load_ids(args.exclude) if args.exclude else frozenset()
 
     records = generate(args.n, args.seed, families,
-                       split=args.split, exclude_ids=exclude)
+                       split=args.split, exclude_ids=exclude,
+                       scale=args.scale)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w") as fh:
         for r in records:

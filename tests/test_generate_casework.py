@@ -40,6 +40,16 @@ def _expected_answer(rec: dict) -> int:
     if fam == "f3":
         roots = sorted((p["r1"], p["r2"]))
         return roots[-1] if qt == "largest_solution" else roots[0]
+    if fam == "f4":
+        a, b, c = p["a"], p["b"], p["c"]
+        return ((a + b + c) // 2 if qt == "largest_solution"
+                else (a + b - c) // 2)
+    if fam == "f6":
+        # Recompute from the equation, not the recorded answer: the live
+        # root solves -(x + b) = c*x + d, i.e. x = -(b + d)/(c + 1).
+        num, den = -(p["b"] + p["d"]), p["c"] + 1
+        assert num % den == 0
+        return num // den
     raise AssertionError(f"unknown family {fam}")
 
 
@@ -83,9 +93,18 @@ def test_answers_are_integers():
 # --------------------------------------------------------------------------
 
 def test_dead_case_families_have_a_dead_branch():
-    for r in g.generate(160, seed=0, families=["f1b", "f2a"]):
+    for r in g.generate(160, seed=0, families=["f1b", "f2a", "f4", "f6"]):
         assert r["n_dead"] >= 1
         assert len(r["solution_set"]) == r["n_cases"] - r["n_dead"]
+
+
+def test_scale_widens_parameter_magnitudes_and_stays_correct():
+    small = g.generate(60, seed=2, families=["f1a", "f4", "f6"], scale=1)
+    big = g.generate(60, seed=2, families=["f1a", "f4", "f6"], scale=10)
+    mag = lambda recs: max(abs(int(r["answer"])) for r in recs)
+    assert mag(big) > mag(small)              # the knob actually turns
+    for r in big:                             # correctness holds at scale
+        assert int(r["answer"]) == _expected_answer(r)
 
 
 def test_live_case_families_have_no_dead_branch():
