@@ -32,13 +32,18 @@ SYSTEM = (
     "problem step by step, then state the final numeric answer."
 )
 
+# Types deliberately unconstrained: the baseline measures MATH ability,
+# and small models return schema-spirited but type-loose JSON (reasoning
+# as a list of steps, answer as a bare number). A {"type": "string"}
+# constraint made a correct Qwen-1.5B answer fail validation three times
+# in a row. _solve_one coerces with str().
 SCHEMA = {
     "type": "object",
     "properties": {
-        "reasoning": {"type": "string"},
-        "answer": {"type": "string"},
+        "reasoning": {},
+        "answer": {},
     },
-    "required": ["reasoning", "answer"],
+    "required": ["answer"],
 }
 
 
