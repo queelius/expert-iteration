@@ -191,3 +191,12 @@ def test_http_client_backs_off_on_429_then_succeeds(monkeypatch):
     assert len(sleeps) == 2                       # backed off twice
     assert len(_FakeClient.last_body["messages"]) == 2   # no corrective prompt
     assert client.prompt_tokens == 7 and client.generated_tokens == 3
+
+
+def test_http_client_repr_never_contains_the_api_key():
+    from verifier_anchored_rl.llm_client import OpenAICompatibleLLMClient
+    secret = "sk-proj-SUPERSECRET123"
+    client = OpenAICompatibleLLMClient(base_url="http://x/v1", model="m",
+                                       api_key=secret)
+    assert secret not in repr(client)
+    assert secret not in str(client)

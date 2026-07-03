@@ -245,7 +245,9 @@ class OpenAICompatibleLLMClient:
 
     base_url: str
     model: str
-    api_key: str | None = None
+    # repr=False: the bearer token must never appear in reprs, tracebacks,
+    # or logs that format this object.
+    api_key: str | None = field(default=None, repr=False)
     timeout_s: float = 60.0
     max_retries: int = 1
     # Rate-limit/server-error backoff budget, separate from the parse-retry
