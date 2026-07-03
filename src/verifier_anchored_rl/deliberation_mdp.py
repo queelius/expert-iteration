@@ -297,10 +297,16 @@ class DeliberationMDP:
                 result = _r_form(state.graph, action.target,
                                  sanitize(str(payload["statement"])))
             else:  # Verb.COMPUTE
+                stmt = sanitize(str(payload["statement"]))
+                # Anti-loop guard: a COMPUTE that reproduces an existing
+                # fact's statement adds nothing and, unchecked, lets a
+                # controller emit the same fact every turn until the depth
+                # limit. Treat it as a masked (wasted) action.
+                if any(isinstance(n, Fact) and n.statement == stmt
+                       for n in state.graph.nodes):
+                    return self._masked(state)
                 premises = tuple(int(p) for p in payload.get("premises", ()) or ())
-                result = _r_compute(state.graph, action.target,
-                                    sanitize(str(payload["statement"])),
-                                    premises)
+                result = _r_compute(state.graph, action.target, stmt, premises)
         except (KeyError, TypeError, ValueError):
             return self._masked(state)
         if not hasattr(result, "graph"):        # reductio Err

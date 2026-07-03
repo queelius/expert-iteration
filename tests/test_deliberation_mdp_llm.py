@@ -55,6 +55,24 @@ def test_compute_attaches_fact_with_premises():
     assert facts[0].id in get(s2.graph, 0).facts
 
 
+def test_duplicate_compute_is_masked_not_appended():
+    # A COMPUTE whose statement matches an existing fact adds nothing and is
+    # masked, so a controller cannot loop the same fact to the depth limit.
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
+                          llm_client=MockLLMClient(script={
+                              ("COMPUTE",): {"statement": "4 - 2 = 2"}}))
+    s = mdp.initial_state()
+    s1, r1 = mdp.sample_transition(s, DeliberationAction(Verb.COMPUTE, 0), _rng())
+    assert r1 == 0.0
+    n_facts = lambda st: sum(1 for n in st.graph.nodes
+                             if isinstance(n, Fact) and n.source == "derived")
+    assert n_facts(s1) == 1
+    s2, r2 = mdp.sample_transition(s1, DeliberationAction(Verb.COMPUTE, 0), _rng())
+    assert r2 == MASKED_ACTION_REWARD             # duplicate rejected
+    assert n_facts(s2) == 1                        # no second copy
+    assert s2.turn == s1.turn + 1                  # but the turn still advances
+
+
 def test_llm_failure_takes_masked_fallback():
     mdp = _mdp({})                              # no scripted responses at all
     s = mdp.initial_state()

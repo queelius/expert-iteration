@@ -170,15 +170,20 @@ def _fields_description(verb: Verb, state: DeliberationState) -> str:
         opts = ", ".join(str(i) for i in ids) if ids else "(none yet)"
         return (
             "Produce a JSON object with these fields:\n"
-            '  - "statement": one checkable computation step as a GROUND '
-            "equation: numbers and operations only, NO variables or "
-            "unknowns, with the computed value on the right-hand side. "
-            'Good: "7*6 = 42", "(13 - 5)/2 = 4". '
-            'Bad (contains an unknown, will fail the check): "2*x = 8".\n'
+            '  - "statement": ONE checkable step as a GROUND equation '
+            "(numbers and operations only, NO variables or unknowns), with "
+            "the value it establishes on the right-hand side. If the target "
+            "goal is an equation to solve for a variable, SOLVE it and put "
+            'the solution on the right: goal "4x - 16 = 4" becomes '
+            '"(4 + 16)/4 = 5"; goal "2x + 5 = 13" becomes "(13 - 5)/2 = 4". '
+            "To combine the results of separate cases at a parent goal, "
+            'compute with their values: for a sum of solutions, "5 + 3 = 8". '
+            'Good: "7*6 = 42", "(4 + 16)/4 = 5", "5 + 3 = 8". Bad (has an '
+            'unknown, the check rejects it): "4x - 16 = 4", "2*x = 8".\n'
             f'  - "premises": (optional) a list of ids among {{{opts}}} this '
             "step uses\n"
             "Example:\n"
-            '  {"statement": "(13 - 5)/2 = 4", "premises": []}'
+            '  {"statement": "(4 + 16)/4 = 5", "premises": []}'
         )
     raise ValueError(f"{verb} takes no LLM generation")
 
