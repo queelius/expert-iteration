@@ -141,7 +141,19 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   axis found in E12 round 3), not Phase B's premise.
 - Cost: ~$0.10 teacher-side; generator is free local CPU (~40 min).
 
-### E15: design-true probe with generator-boundary coercion
+### E15: design-true probe with coercion - RESOLVED 07-03: content, not shape
+- **Result: 0/20; SPLIT mask 63% -> 8% (coercion worked), COMPUTE mask 65%
+  (duplicates/unverifiable content), teacher fallbacks 32%.** With the
+  shape barrier gone, the small generator's CONTENT lands and is poor:
+  junk split children ("solve_statement"), restated equations as facts;
+  the teacher then flounders on polluted trees. Per the pre-registered
+  second branch: this is the deployment model's real limitation, exactly
+  what Phase B must work within. Design-true collection proceeds at
+  REDUCED scale (decision data is the product), and the open question of
+  a stronger local generator (Qwen-3B / the GPU box) is a user decision.
+- Original registration follows.
+
+### E15 (original registration): design-true probe with generator-boundary coercion
 - Manipulation (single, vs E14): lenient wire schemas + apply-time
   coercion for the generator's payloads (SPLIT children objects -> their
   longest string value; connective normalized; premises coerced to live
