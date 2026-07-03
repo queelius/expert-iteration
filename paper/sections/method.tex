@@ -6,9 +6,7 @@ $(S, A, P, R, \gamma)$ induced by a frozen language model. This section
 specifies the state (\cref{sec:method-state}), the action space and lens
 semantics (\cref{sec:method-actions}), the controller network
 (\cref{sec:method-controller}), and the reward (\cref{sec:method-reward}).
-Training is deferred to \cref{sec:training}. The repository's design
-document (\texttt{design.md}) is the normative specification; this section
-follows it.
+Training is deferred to \cref{sec:training}.
 
 \subsection{State: an immutable reasoning forest}
 \label{sec:method-state}
@@ -38,8 +36,8 @@ ablation, deferred with the move from answer verification to proof
 verification.
 
 A worked forest for $|x-3| + |x+2| = 7$ by case analysis, exercising every
-node kind and both closure polarities, appears in the design document and is
-pinned by an executable integration test in the released code.
+node kind and both closure polarities, is pinned by an executable
+integration test in the accompanying artifact.
 
 \subsection{Actions: verbs as lenses}
 \label{sec:method-actions}
