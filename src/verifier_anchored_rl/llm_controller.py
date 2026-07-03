@@ -157,9 +157,15 @@ class LLMController:
             '  - "action": exactly one of the menu keys above\n'
             "Return only the JSON object."
         )
+        # No enum in the wire schema, on purpose: the client VALIDATES
+        # against the schema and retries on mismatch, so an enum turns
+        # every illegal-action intent (for example commit on a case with
+        # no verified witness) into two wasted corrective API calls and an
+        # opaque parse error. A plain string lets the reply reach the menu
+        # lookup below, where a wrong key is logged with its content and
+        # handled by the fallback policy.
         schema = {"type": "object",
-                  "properties": {"action": {"type": "string",
-                                            "enum": [k for k, _ in menu]}},
+                  "properties": {"action": {"type": "string"}},
                   "required": ["action"]}
         try:
             resp = self.client.complete_json(
@@ -181,15 +187,23 @@ class LLMController:
             return chosen
         # Fallback policy for an unusable reply: prefer a legal VERIFY
         # (cheap, informative, never destructive), else a uniform-random
-        # legal action; menu[0] only as the deterministic last resort.
+        # SAFE action; menu[0] only as the deterministic last resort.
         # menu[0] was the OLD default, and it silently manufactured
-        # form_hypothesis floods in the casework probes.
+        # form_hypothesis floods in the casework probes. Irreversible root
+        # actions are excluded from the random pool: a fallback must never
+        # end the episode (abandon:0 forfeits; commit:0 gambles on -1). A
+        # probe episode was observed losing exactly this way: perfect play
+        # for six turns, then a random-fallback abandon:0.
         verifies = [a for k, a in menu if k.startswith("verify")]
         if verifies:
             return verifies[0]
-        if rng is not None:
-            return menu[int(rng.integers(len(menu)))][1]
-        return menu[0][1]
+        root = state.graph.root_id
+        safe = [a for _, a in menu
+                if not (a.target == root
+                        and a.verb in (Verb.ABANDON, Verb.COMMIT))]
+        if rng is not None and safe:
+            return safe[int(rng.integers(len(safe)))]
+        return (safe or [a for _, a in menu])[0]
 
 
 @dataclass(frozen=True)

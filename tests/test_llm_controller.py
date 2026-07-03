@@ -152,3 +152,37 @@ def test_runner_maps_controller_prompt_choices():
     import experiments.run_llm_controller as runner
     assert runner._CONTROLLER_PROMPTS["default"] is CONTROLLER_SYSTEM
     assert runner._CONTROLLER_PROMPTS["structured"] is CONTROLLER_SYSTEM_STRUCTURED
+
+
+def test_random_fallback_never_ends_the_episode():
+    # At a state whose menu is only root actions (including abandon:0), an
+    # unusable reply must never resolve to an irreversible root action: a
+    # probe episode was lost to a random-fallback abandon:0 after six turns
+    # of perfect play.
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
+                          llm_client=EchoLLMClient())
+    state = mdp.initial_state()      # menu: split/form/compute/abandon on root
+    controller = LLMController(_Scripted("garbage"))
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        action = controller.choose(mdp, state, rng=rng)
+        assert controller.last_choice_fallback is True
+        assert not (action.target == 0 and action.verb in
+                    (Verb.ABANDON, Verb.COMMIT))
+
+
+def test_controller_schema_has_no_wire_enum():
+    # The enum lives in choose()'s own lookup, not the wire schema: client-
+    # side schema validation would turn every illegal-action intent into
+    # opaque parse retries (observed: 42 laundered fallbacks in one probe).
+    captured = {}
+
+    class _SchemaCapture:
+        def complete_json(self, system, user, schema, **kw):
+            captured["schema"] = schema
+            return {"action": "split:0"}
+
+    mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=4,
+                          llm_client=EchoLLMClient())
+    LLMController(_SchemaCapture()).choose(mdp, mdp.initial_state())
+    assert "enum" not in str(captured["schema"])

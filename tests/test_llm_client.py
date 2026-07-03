@@ -200,3 +200,48 @@ def test_http_client_repr_never_contains_the_api_key():
                                        api_key=secret)
     assert secret not in repr(client)
     assert secret not in str(client)
+
+
+def test_parse_retry_echoes_failed_reply_before_correction(monkeypatch):
+    """The corrective retry says "your previous response could not be
+    parsed", so that response must be in the transcript as an assistant
+    message; without it the model is scolded about a reply it cannot see."""
+    import pytest
+    pytest.importorskip("httpx")
+    import httpx
+    from verifier_anchored_rl.llm_client import OpenAICompatibleLLMClient
+
+    requests = []
+    replies = ["not json at all", '{"answer": "42"}']
+
+    class _Resp:
+        def __init__(self, content):
+            self._content = content
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"choices": [{"message": {"content": self._content}}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def post(self, url, headers=None, json=None):
+            requests.append([dict(m) for m in json["messages"]])
+            return _Resp(replies[len(requests) - 1])
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    schema = {"type": "object", "properties": {"answer": {"type": "string"}},
+              "required": ["answer"]}
+    client = OpenAICompatibleLLMClient(base_url="http://x/v1", model="m")
+    out = client.complete_json(system="s", user="u", schema=schema)
+    assert out == {"answer": "42"}
+    second = requests[1]
+    roles = [m["role"] for m in second]
+    assert roles == ["system", "user", "assistant", "user"]
+    assert second[2]["content"] == "not json at all"
+    assert "could not be parsed" in second[3]["content"]

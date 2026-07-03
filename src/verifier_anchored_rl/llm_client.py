@@ -321,6 +321,7 @@ class OpenAICompatibleLLMClient:
         parse_attempts = 0
         backoff_attempts = 0
         while True:
+            content: str | None = None      # this attempt's raw reply, if any
             if seed is not None:
                 # Per-attempt bump: with a fixed seed a malformed response
                 # would be resampled identically on retry; offsetting by the
@@ -365,6 +366,15 @@ class OpenAICompatibleLLMClient:
                 last_err = e
                 if parse_attempts < self.max_retries:
                     parse_attempts += 1
+                    # The correction refers to "your previous response", so
+                    # that response must be IN the transcript: without the
+                    # assistant echo the retry sends two consecutive user
+                    # messages scolding the model about a reply it cannot
+                    # see. content is None when the failure was HTTP-side;
+                    # only echo what was actually received this attempt.
+                    if content:
+                        body["messages"].append(
+                            {"role": "assistant", "content": content})
                     body["messages"].append(
                         {
                             "role": "user",
