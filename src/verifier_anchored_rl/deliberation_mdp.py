@@ -78,7 +78,12 @@ def available_actions(state: DeliberationState,
         if isinstance(node, Goal):
             if not _is_open_goal(g, nid):
                 continue
-            acts.append(DeliberationAction(Verb.SPLIT, nid))
+            # SPLIT names a goal's full case set in one call; a goal that
+            # already has children is not re-splittable (re-splitting only
+            # appends duplicate cases and lets a controller loop on the root
+            # forever). Solve the children, or COMPUTE/COMMIT this goal.
+            if not node.children:
+                acts.append(DeliberationAction(Verb.SPLIT, nid))
             acts.append(DeliberationAction(Verb.FORM_HYPOTHESIS, nid))
             acts.append(DeliberationAction(Verb.COMPUTE, nid))
             if _witnesses(g, node):

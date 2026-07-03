@@ -283,31 +283,30 @@ class _EqualVerbFakeActor:
 
 
 def test_state_actor_prior_splits_verb_mass_across_targets():
-    """A verb legal on several targets (SPLIT: root goal + child goal) must
+    """A verb legal on several targets (SPLIT: two sibling leaf goals) must
     not get multiple times the head's per-verb mass relative to a verb legal
     on only one target (VERIFY: the lone unverified hypothesis). Building the
-    state with reductio verbs new_graph/split/form_hypothesis/abandon:
+    state with reductio verbs new_graph/split/form_hypothesis:
 
-        root goal 0 --split--> child goals 1, 2
-        abandon(2)                              # 2 no longer an open goal
-        form_hypothesis(1, "h")                 # hypothesis 3, unverified
+        root goal 0 --split--> child goals 1, 2   # 0 is no longer splittable
+        form_hypothesis(1, "h")                    # hypothesis 3, unverified
 
-    leaves SPLIT legal on exactly 2 targets (0, 1) and VERIFY legal on
-    exactly 1 target (3). With a head that assigns every available verb
-    class equal raw probability, SPLIT's total prior mass must still equal
-    VERIFY's total prior mass: the two targets of SPLIT must each get HALF
-    of what the single target of VERIFY gets.
+    leaves SPLIT legal on exactly 2 targets (the childless leaves 1, 2; not
+    the already-split root 0) and VERIFY legal on exactly 1 target (3). With
+    a head that assigns every available verb class equal raw probability,
+    SPLIT's total prior mass must still equal VERIFY's total prior mass: the
+    two targets of SPLIT must each get HALF of what the single target of
+    VERIFY gets.
     """
     pytest.importorskip("torch")
     from verifier_anchored_rl.deliberation_mdp import (
         DeliberationState, available_actions,
     )
     from verifier_anchored_rl.planner_actor import StateActor
-    from verifier_anchored_rl.reductio import abandon, form_hypothesis, new_graph, split
+    from verifier_anchored_rl.reductio import form_hypothesis, new_graph, split
 
     g = new_graph("prove x")
     g = split(g, 0, "conjunctive", ("a", "b")).graph  # child goals 1, 2
-    g = abandon(g, 2).graph                            # goal 2 no longer open
     g = form_hypothesis(g, 1, "h").graph                # hypothesis 3
 
     state = DeliberationState(g, 0)

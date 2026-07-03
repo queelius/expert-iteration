@@ -78,16 +78,25 @@ CONTROLLER_SYSTEM_STRUCTURED = (
     "solution violates a stated condition of the problem (a range "
     "restriction, a domain, a sign); that branch contributes nothing.\n"
     "\n"
-    "Play the structure: when a goal needs cases, split it before computing. "
-    "Solve each live case with compute then verify. Abandon any case whose "
-    "result is out of the allowed range. When the question asks for a "
-    "combination of the cases (a sum, the largest, the surviving value), "
-    "add a final root-level compute that aggregates the verified case "
-    "results, verify it, then commit:0. The checker only accepts GROUND "
-    'equations (no unknowns): "(13 - 5)/2 = 4" verifies, "2*x = 8" does '
-    "not. If a node shows (verify failed), reformulate with a new compute "
-    "instead of retrying it. Never add a duplicate of an existing fact. "
-    "Return only the requested JSON object."
+    "Play the structure, then close it out. A typical episode:\n"
+    "1. split the root ONCE into its cases (you cannot split the same goal "
+    "twice; a goal that already has case-children is not offered split).\n"
+    "2. For each case (a child goal, not the root), compute its solution as "
+    'a GROUND equation, for example the case "4x - 16 = 4" is solved by the '
+    'ground fact "(4 + 16)/4 = 5"; then verify that fact.\n'
+    "3. Abandon a case whose solution is out of the allowed range or "
+    "violates a stated condition.\n"
+    "4. When every case is settled, add ONE root-level compute that "
+    'aggregates the verified case values (the sum, the largest, the one '
+    "survivor), verify it, and commit:0. Every episode must end in "
+    "commit:0; never let it run out of turns.\n"
+    "\n"
+    "Work a case-child to completion before moving on; do not keep splitting "
+    "or keep computing on the root while cases are unsolved. The checker "
+    'only accepts GROUND equations (no unknowns): "(13 - 5)/2 = 4" verifies, '
+    '"4x - 16 = 4" and "2*x = 8" do not. If a node shows (verify failed), '
+    "reformulate with a new compute instead of retrying it. Never add a "
+    "duplicate of an existing fact. Return only the requested JSON object."
 )
 
 

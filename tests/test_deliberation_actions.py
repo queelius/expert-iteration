@@ -65,6 +65,20 @@ def test_witnesses_ascending_most_recent_last():
     assert _witnesses(g, root) == (1, 2)
 
 
+def test_split_goal_is_not_resplittable_but_children_are():
+    g = new_graph("p")
+    g = split(g, 0, "exhaustive_case", ("case A", "case B")).graph  # children 1, 2
+    acts = _acts(DeliberationState(g, 0))
+    # The parent keeps its non-SPLIT verbs but can no longer be re-split.
+    assert (Verb.SPLIT, 0) not in acts
+    assert (Verb.COMPUTE, 0) in acts          # the aggregation step
+    assert (Verb.ABANDON, 0) in acts
+    # Its childless case-goals remain splittable (and otherwise workable).
+    assert (Verb.SPLIT, 1) in acts
+    assert (Verb.SPLIT, 2) in acts
+    assert (Verb.COMPUTE, 1) in acts
+
+
 def test_abandoned_nodes_offer_nothing():
     g = new_graph("p")
     g = split(g, 0, "conjunctive", ("a",)).graph          # child goal id 1
