@@ -116,6 +116,11 @@ def main() -> None:
     ap.add_argument("--depth-limit", type=int, default=16)
     ap.add_argument("--max-problems", type=int, default=None,
                     help="budget guard: run at most this many problems")
+    ap.add_argument("--start-index", type=int, default=0,
+                    help="resume support: skip the first N problems while "
+                         "keeping each surviving problem's TRUE index as its "
+                         "episode id, so a resumed shard's ids never collide "
+                         "with an earlier shard's on merge")
     ap.add_argument("--workers", type=int, default=1,
                     help="concurrent episodes (each on its own controller)")
     ap.add_argument("--token-budget", type=int, default=None,
@@ -135,8 +140,11 @@ def main() -> None:
         problems = [json.loads(l) for l in args.problems.read_text().splitlines() if l.strip()]
     else:
         problems = DEMO_PROBLEMS
+    # Enumerate BEFORE slicing so each surviving problem keeps its true index
+    # (its episode id / meta.problem_index) across a resumed run.
+    indexed = list(enumerate(problems))[args.start_index:]
     if args.max_problems is not None:
-        problems = problems[: args.max_problems]
+        indexed = indexed[: args.max_problems]
 
     write_lock = threading.Lock()
     wins = 0
@@ -145,7 +153,7 @@ def main() -> None:
     with args.out.open("w") as fh, \
             ThreadPoolExecutor(max_workers=args.workers) as pool:
         pending = set()
-        it = iter(enumerate(problems))
+        it = iter(indexed)
         exhausted = False
         while pending or not exhausted:
             while not exhausted and len(pending) < args.workers:
