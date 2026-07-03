@@ -28,17 +28,19 @@
 \begin{frame}{What this is (and is not)}
   \begin{block}{The system}
     A \alert{tiny external controller} (verb head + pointer head + $Q$ head,
-    a few million parameters) learns to orchestrate a \alert{frozen} LLM by
-    issuing typed $(\text{verb}, \text{target})$ actions over a structured,
-    nested reasoning forest. A \alert{symbolic verifier} is the only reward
-    source.
+    a few million parameters) learns to orchestrate a \alert{frozen} large
+    language model (LLM) by issuing typed $(\text{verb}, \text{target})$
+    actions over a structured, nested reasoning forest. A \alert{symbolic
+    verifier} is the only reward source.
   \end{block}
   \begin{itemize}
-    \item \textbf{Not} o1 / DeepSeek-R1: RL never touches the LLM's weights
-    \item \textbf{Not} a learned reward model: no PRM, ORM, critic, or
-          LLM-judge anywhere in the reward path
-    \item Training spine: off-policy value-based $Q$-learning; MCTS is a
-          strictly additive accelerator and the test-time compute knob
+    \item \textbf{Not} o1 / DeepSeek-R1: reinforcement learning never
+          touches the LLM's weights
+    \item \textbf{Not} a learned reward model: no process or outcome reward
+          model, no critic, no LLM-as-judge anywhere in the reward path
+    \item Training spine: off-policy value-based $Q$-learning; Monte Carlo
+          Tree Search (MCTS) is a strictly additive accelerator and the
+          test-time compute knob
   \end{itemize}
 \end{frame}
 
@@ -160,18 +162,20 @@
       \textbf{Three rungs}
       \begin{enumerate}
         \item \alert{LLM-as-controller}: a strong teacher picks
-              $(\text{verb},\text{target})$; JSONL trajectories logged
+              $(\text{verb},\text{target})$; trajectories logged as
+              JSON lines
         \item Behavior cloning: warm-start $\pitheta$ on rung-1 data
-        \item $Q$-learning fine-tune: off-policy, n-step / MC returns from
-              the verifier; MCTS optional for better targets
+        \item $Q$-learning fine-tune: off-policy, n-step / Monte Carlo
+              returns from the verifier; MCTS optional for better targets
       \end{enumerate}
     \end{column}
   \end{columns}
   \medskip
   \footnotesize
-  Design-true collection regime: API teacher decides, a \emph{local small
-  generator} writes all content, so trajectories reflect the deployed
-  model's state distribution.
+  Design-true collection regime: a strong \emph{hosted} teacher model
+  (reached over a network endpoint) decides; a \emph{local small generator}
+  writes all content, so trajectories reflect the deployed model's state
+  distribution.
 \end{frame}
 
 % ---------------------------------------------------------------- prior art 1
@@ -199,6 +203,10 @@
       \bottomrule
     \end{tabular}
   \end{center}
+  \smallskip
+  \footnotesize ORM: a learned \emph{outcome} reward model (scores final
+  answers); its process-level sibling scores intermediate steps. We forbid
+  both.
 \end{frame}
 
 % ---------------------------------------------------------------- prior art 2
@@ -206,8 +214,8 @@
   \textbf{Threats a reviewer will raise}
   \begin{enumerate}
     \item TS-LLM read as ``same loop, different reward source''
-    \item ArCHer + GSoS + RLVR: ``each ingredient is published, the
-          combination is engineering''
+    \item ArCHer + GSoS + verifiable-reward RL: ``each ingredient is
+          published, the combination is engineering''
     \item Active Context Curation as concurrent work on the lens axis
   \end{enumerate}
   \medskip
@@ -216,7 +224,8 @@
     \item Tiny \emph{external} controller (neither the LLM nor an LLM-sized critic)
     \item Factored verb + pointer heads over live node ids of a growing forest
     \item Off-policy value-based $Q$-learning as the spine, MCTS strictly additive
-    \item Symbolic verifier as the sole reward, no learned value/PRM/ORM anywhere
+    \item Symbolic verifier as the sole reward, no learned value or reward
+          model anywhere
     \item The lens property: action selection = context scoping, with local write-back
   \end{itemize}
   \smallskip
@@ -231,30 +240,29 @@
       \textbf{Setup}
       \begin{itemize}
         \item gpt-4.1-mini as both controller-teacher and generator
-        \item 247 GSM8K problems, depth limit 16, 3 workers,
-              hard token budget
+        \item 500 GSM8K problems, depth limit 16, hard token budget
         \item Verifier: SymPy; ground equations only
       \end{itemize}
       \medskip
       \textbf{Headline numbers}
       \begin{itemize}
-        \item \alert{71.7\%} solved (177/247)
-        \item 1{,}942 decisions; 7 fallbacks (0.36\%)
-        \item median 7 turns; pilot cost $<$ \$0.20
+        \item \alert{70.8\%} solved (354/500)
+        \item 3{,}906 decisions; 10 fallbacks (0.26\%)
+        \item median 7 turns; full sweep about \$1.50
       \end{itemize}
     \end{column}
     \begin{column}{0.44\textwidth}
-      \textbf{Verb usage (1{,}942 decisions)}
+      \textbf{Verb usage (3{,}906 decisions)}
       \begin{center}
         \footnotesize
         \begin{tabular}{lr}
           \toprule
-          \verbword{compute} & 1165 \\
-          \verbword{verify} & 558 \\
-          \verbword{commit} & 203 \\
-          \verbword{split} & 7 \\
-          \verbword{form\_hypothesis} & 5 \\
-          \verbword{abandon} & 4 \\
+          \verbword{compute} & 2339 \\
+          \verbword{verify} & 1116 \\
+          \verbword{commit} & 414 \\
+          \verbword{form\_hypothesis} & 16 \\
+          \verbword{abandon} & 11 \\
+          \verbword{split} & 10 \\
           \bottomrule
         \end{tabular}
       \end{center}
@@ -264,6 +272,34 @@
       instead of retrying.
     \end{column}
   \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------- honesty
+\begin{frame}{Honesty check: the same model does better without us}
+  \begin{center}
+    \begin{tabular}{lr}
+      \toprule
+      Same model (gpt-4.1-mini), same 500 problems, same scoring & solved \\
+      \midrule
+      Direct prompt, free-form step-by-step reasoning & \alert{94.4\%} (472/500) \\
+      Inside the deliberation harness & 70.8\% (354/500) \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \footnotesize One-sided overlap: the harness solved only 3 problems the
+  direct prompt missed; the direct prompt solved 121 the harness lost.
+  \normalsize
+  \begin{block}{Why this is not (yet) a dealbreaker}
+    \begin{itemize}
+      \item Rung 1's product is \emph{typed decision data}, not benchmark
+            accuracy
+      \item The harness constrains the generator on purpose; the accuracy
+            tax buys a machine-checkable, verifier-vouched trace
+      \item The claim lives at the \emph{small}-model frontier: small
+            generator + trained controller vs the same small model prompted
+            directly. Lose that margin, lose the approach.
+    \end{itemize}
+  \end{block}
 \end{frame}
 
 % ---------------------------------------------------------------- results 2
@@ -291,15 +327,21 @@
 % ---------------------------------------------------------------- next steps
 \begin{frame}{Next steps}
   \begin{enumerate}
-    \item \textbf{Finish the GSM8K sweep} (problems 247-499, running now)
-    \item \textbf{Synthetic casework generator}: SymPy-verified structured
-          problems + a structure-encouraging teacher prompt; contrast batch
-          so \verbword{split}/\verbword{abandon} appear in BC data
-    \item \textbf{Design-true regime}: API teacher + local small generator
-          (Qwen 1.5B/3B); measure the small model's masked-action rate first
-    \item \textbf{Phase B}: per-node encoder + pointer head, BC warm-start on
-          rung-1 trajectories, then $Q$-learning fine-tune against the
-          verifier
+    \item \textbf{Synthetic casework generator} (spec'd 2026-07-02):
+          SymPy-verified absolute-value / piecewise / quadratic problems
+          where case analysis is required for correctness, plus a
+          structure-encouraging teacher prompt; contrast batch so
+          \verbword{split}/\verbword{abandon} appear in the
+          behavior-cloning data
+    \item \textbf{Design-true regime}: hosted teacher + \emph{local} small
+          generator (Qwen 1.5B/3B); measure the small model's failed-action
+          rate before large collection
+    \item \textbf{Phase B}: per-node encoder + pointer head,
+          behavior-cloning warm-start on rung-1 trajectories, then
+          $Q$-learning fine-tune against the verifier
+    \item \textbf{The decisive comparison}: small generator + trained
+          controller vs the \emph{same} small model prompted directly; the
+          approach succeeds or fails on that margin
   \end{enumerate}
   \medskip
   \begin{block}{One-sentence summary}
