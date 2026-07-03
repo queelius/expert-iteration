@@ -160,12 +160,14 @@ def _live_premise_ids(graph: Graph) -> list[NodeId]:
             if isinstance(n, (Fact, Hypothesis)) and not is_abandoned(graph, n.id)]
 
 
-def suffix(verb: Verb, target: NodeId, state: DeliberationState) -> str:
+def suffix(verb: Verb, target: NodeId, state: DeliberationState,
+           solve_claims: bool = False) -> str:
     """The per-verb prompt tail: verb name, target line, field list, example."""
     if verb not in _LLM_VERBS:
         raise ValueError(f"{verb} takes no LLM generation")
     tgt = get(state.graph, target)
-    fields = _fields_description(verb, state)
+    fields = _fields_description(verb, state, target=target,
+                                 solve_claims=solve_claims)
     return (
         f"\n\nVerb: {verb.name}\n"
         f"Target: [id={target}] {tgt.statement}\n\n"
@@ -174,7 +176,26 @@ def suffix(verb: Verb, target: NodeId, state: DeliberationState) -> str:
     )
 
 
-def _fields_description(verb: Verb, state: DeliberationState) -> str:
+def _goal_equation_symbol(state: DeliberationState,
+                          target: NodeId) -> str | None:
+    """The unknown's name if the target goal's statement carries a parseable
+    single-variable equation, else None. Lazy sympy import: only the
+    solve-claims path pays it."""
+    from .verifier_adapter import _extract_equation
+    stmt = get(state.graph, target).statement
+    # Candidate unknowns are ISOLATED single letters ("4x", "x - 2"), not
+    # characters inside words ("Solve" contributes nothing).
+    candidates = list(dict.fromkeys(
+        re.findall(r"(?<![a-zA-Z])([a-zA-Z])(?![a-zA-Z])", stmt)))
+    for sym in candidates[:6]:
+        if _extract_equation(stmt, sym) is not None:
+            return sym
+    return None
+
+
+def _fields_description(verb: Verb, state: DeliberationState,
+                        target: NodeId | None = None,
+                        solve_claims: bool = False) -> str:
     if verb is Verb.SPLIT:
         return (
             "Produce a JSON object with these fields:\n"
@@ -200,6 +221,24 @@ def _fields_description(verb: Verb, state: DeliberationState) -> str:
     if verb is Verb.COMPUTE:
         ids = _live_premise_ids(state.graph)
         opts = ", ".join(str(i) for i in ids) if ids else "(none yet)"
+        solve_sym = (_goal_equation_symbol(state, target)
+                     if solve_claims and target is not None else None)
+        if solve_sym is not None:
+            # Solve-claim form (spec 2026-07-03): the checker substitutes
+            # the claimed value into the goal's own equation.
+            return (
+                "Produce a JSON object with these fields:\n"
+                '  - "statement": the SOLUTION of the target equation, '
+                f'stated directly as "{solve_sym} = <value>"; the checker '
+                "substitutes your value into the goal's equation. "
+                f'Example: for goal "4{solve_sym} - 16 = 4", the statement '
+                f'is "{solve_sym} = 5". A ground arithmetic equation like '
+                '"(4 + 16)/4 = 5" is also accepted.\n'
+                f'  - "premises": (optional) a list of ids among {{{opts}}} '
+                "this step uses\n"
+                "Example:\n"
+                f'  {{"statement": "{solve_sym} = 5", "premises": []}}'
+            )
         return (
             "Produce a JSON object with these fields:\n"
             '  - "statement": ONE checkable step as a GROUND equation '

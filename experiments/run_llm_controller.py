@@ -74,8 +74,17 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
     """One episode on its own controller instance (its fallback flag is
     per-episode mutable state) and its own seeded rng; records are buffered
     and written contiguously under the lock."""
+    system = _CONTROLLER_PROMPTS[args.controller_prompt]
+    if args.solve_claims == "on":
+        # The on-arm teacher must not contradict the on-arm lens: the
+        # default text says unknowns never verify, which is exactly what
+        # solve-claims relaxes for case-goal facts.
+        system += (
+            "\n\nSolve-claims are enabled: a fact under an equation case "
+            'may state the solution directly, like "x = 5"; the checker '
+            "substitutes it into that case's equation.")
     controller = LLMController(ctrl_client,
-                               system=_CONTROLLER_PROMPTS[args.controller_prompt],
+                               system=system,
                                max_tokens=args.controller_max_tokens)
     rng = np.random.default_rng(args.seed + i)
     buffer: list[dict] = []
@@ -83,7 +92,8 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
         mdp := DeliberationMDP(problem=p["problem"],
                                expected_answer=p["answer"],
                                depth_limit=args.depth_limit,
-                               llm_client=gen_client),
+                               llm_client=gen_client,
+                               solve_claims=args.solve_claims == "on"),
         controller, rng,
         log_fn=buffer.append,
         episode_id=i,
@@ -91,6 +101,7 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
               "controller_backend": args.controller_backend or args.backend,
               "controller_model": args.controller_model or args.model,
               "controller_prompt": args.controller_prompt,
+              "solve_claims": args.solve_claims,
               "seed": args.seed, "problem_index": i})
     with write_lock:
         for rec in buffer:
@@ -123,6 +134,10 @@ def main() -> None:
                     help="completion cap for the teacher's action choice; "
                          "large models narrate before the JSON and get "
                          "truncated at the 64 default (experiment E11)")
+    ap.add_argument("--solve-claims", choices=["on", "off"], default="off",
+                    help="E13 arm: COMPUTE on an equation goal may claim "
+                         "'x = 5', verified by substitution (spec "
+                         "2026-07-03-solve-claim-compute)")
     ap.add_argument("--api-key-env", default="OPENAI_API_KEY",
                     help="environment variable holding the bearer token "
                          "(used by http and openai backends when set)")

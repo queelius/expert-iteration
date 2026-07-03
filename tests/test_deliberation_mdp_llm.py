@@ -120,3 +120,75 @@ def test_encoder_path_generates_via_instantiate_json():
     s2, _ = mdp.sample_transition(s, DeliberationAction(Verb.FORM_HYPOTHESIS, 0), _rng())
     assert enc.gen_calls == 1                   # generation went through it
     assert get(s2.graph, 0).candidates          # echo statement (possibly "")
+
+
+# ---------------------------------------------------------------------------
+# solve-claim COMPUTE (spec 2026-07-03; E13 arms)
+# ---------------------------------------------------------------------------
+
+def _case_mdp(solve_claims):
+    # SPLIT gives an equation case; COMPUTE writes a solve-claim under it.
+    return DeliberationMDP(
+        problem="Solve |4x - 16| = 4. Report the largest value of x.",
+        expected_answer="5", depth_limit=12,
+        solve_claims=solve_claims,
+        llm_client=MockLLMClient(script={
+            ("SPLIT",): {"connective": "exhaustive_case",
+                         "children": ["4x - 16 = 4", "4x - 16 = -4"]},
+            ("COMPUTE",): {"statement": "x = 5"},
+        }))
+
+
+def _split_then_compute_on_case(mdp):
+    s = mdp.initial_state()
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
+    case = get(s.graph, 0).children[0]
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.COMPUTE, case), _rng())
+    fact = get(s.graph, case).facts[0]
+    return s, case, fact
+
+
+def test_solve_claim_on_verifies_by_substitution_and_commits():
+    mdp = _case_mdp(solve_claims=True)
+    s, case, fact = _split_then_compute_on_case(mdp)
+    s, r = mdp.sample_transition(s, DeliberationAction(Verb.VERIFY, fact), _rng())
+    from verifier_anchored_rl.reductio import is_verified
+    assert is_verified(s.graph, fact)          # substitution accepted x = 5
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.COMMIT, case), _rng())
+    from verifier_anchored_rl.reductio import solved
+    assert solved(s.graph, case)
+
+
+def test_solve_claim_off_is_fail_closed_exactly_as_today():
+    mdp = _case_mdp(solve_claims=False)
+    s, case, fact = _split_then_compute_on_case(mdp)
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.VERIFY, fact), _rng())
+    from verifier_anchored_rl.reductio import is_verified
+    assert not is_verified(s.graph, fact)      # decide("x = 5") fails closed
+
+
+def test_solve_claim_on_rejects_a_wrong_solution():
+    mdp = DeliberationMDP(
+        problem="p", expected_answer="5", depth_limit=12, solve_claims=True,
+        llm_client=MockLLMClient(script={
+            ("SPLIT",): {"connective": "exhaustive_case",
+                         "children": ["4x - 16 = 4", "4x - 16 = -4"]},
+            ("COMPUTE",): {"statement": "x = 3"},   # solves the OTHER case
+        }))
+    s, case, fact = _split_then_compute_on_case(mdp)
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.VERIFY, fact), _rng())
+    from verifier_anchored_rl.reductio import is_verified
+    assert not is_verified(s.graph, fact)
+
+
+def test_solve_claim_on_leaves_ground_facts_on_the_decide_path():
+    mdp = DeliberationMDP(
+        problem="p", expected_answer="42", depth_limit=8, solve_claims=True,
+        llm_client=MockLLMClient(script={
+            ("COMPUTE",): {"statement": "6*7 = 42"}}))
+    s = mdp.initial_state()
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.COMPUTE, 0), _rng())
+    fact = get(s.graph, 0).facts[0]
+    s, _ = mdp.sample_transition(s, DeliberationAction(Verb.VERIFY, fact), _rng())
+    from verifier_anchored_rl.reductio import is_verified
+    assert is_verified(s.graph, fact)

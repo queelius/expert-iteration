@@ -57,3 +57,61 @@ def test_check_answer_ported():
     assert check_answer("YES.", "yes").success is True
     assert check_answer("", "0").success is False       # empty never succeeds
     assert check_answer("41", "42").success is False
+
+
+# ---------------------------------------------------------------------------
+# solve-claim checking (spec 2026-07-03-solve-claim-compute)
+# ---------------------------------------------------------------------------
+
+def test_solve_claim_true_claim_passes_by_substitution():
+    from verifier_anchored_rl.verifier_adapter import check_solve_claim
+    assert check_solve_claim("x = 5", "4x - 16 = 4").success is True
+    assert check_solve_claim("x = 5", "Solve equation 4x - 16 = 4").success is True
+
+
+def test_solve_claim_false_claim_fails():
+    from verifier_anchored_rl.verifier_adapter import check_solve_claim
+    assert check_solve_claim("x = 3", "4x - 16 = 4").success is False
+
+
+def test_solve_claim_side_condition_parenthetical_is_ignored():
+    from verifier_anchored_rl.verifier_adapter import check_solve_claim
+    # The domain condition is the controller's job (abandon); substitution
+    # only checks the equation.
+    assert check_solve_claim("x = 5", "case 4x - 16 = 4 (x >= 3/2)").success is True
+
+
+def test_solve_claim_symbol_absent_from_goal_fails():
+    from verifier_anchored_rl.verifier_adapter import check_solve_claim
+    assert check_solve_claim("y = 5", "4x - 16 = 4").success is False
+
+
+def test_solve_claim_tautological_goal_fails():
+    from verifier_anchored_rl.verifier_adapter import check_solve_claim
+    assert check_solve_claim("x = 5", "x = x").success is False
+    assert check_solve_claim("x = 5", "4 = 4").success is False
+
+
+def test_solve_claim_non_equation_goal_falls_back_to_decide():
+    from verifier_anchored_rl.verifier_adapter import check_solve_claim
+    # No equation in the goal text: decide("x = 5") fails closed (unknown).
+    assert check_solve_claim("x = 5", "prove the problem statement").success is False
+    # A ground claim still decides on its own truth regardless of context.
+    assert check_solve_claim("2 + 2 = 4", "prose goal").success is True
+
+
+def test_math_verifier_routes_solve_check_verb():
+    v = MathVerifier()
+    assert v.check("x = 5", "solve_check", "4x - 16 = 4").success is True
+    assert v.check("x = 3", "solve_check", "4x - 16 = 4").success is False
+    # default verb path unchanged: unknowns fail closed
+    assert v.check("x = 5", "check", None).success is False
+
+
+def test_parse_solve_claim_shapes():
+    from verifier_anchored_rl.verifier_adapter import parse_solve_claim
+    assert parse_solve_claim("x = 5") is not None
+    assert parse_solve_claim("  y = -3/2 ") is not None
+    assert parse_solve_claim("(4 + 16)/4 = 5") is None     # ground equation
+    assert parse_solve_claim("2x = 8") is None             # not a lone symbol
+    assert parse_solve_claim("x = y") is None              # non-numeric value

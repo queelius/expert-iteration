@@ -140,3 +140,22 @@ def test_render_view_marks_verified_and_failed_verification():
     view = render_view(g, 0)
     assert "2+2=4 (verified)" in view
     assert "2*x=8 (verify failed x1)" in view
+
+
+def test_compute_suffix_teaches_solve_claims_only_when_enabled():
+    g = new_graph("p")
+    g = split(g, 0, "exhaustive_case", ("4x - 16 = 4", "4x - 16 = -4")).graph
+    s = DeliberationState(g, 1)
+    off = suffix(Verb.COMPUTE, 1, s)
+    on = suffix(Verb.COMPUTE, 1, s, solve_claims=True)
+    assert off == suffix(Verb.COMPUTE, 1, s, solve_claims=False)  # default off
+    assert '"x = 5"' not in off                 # no solve-claim teaching
+    assert '"statement": "x = 5"' in on         # taught, with the goal's symbol
+    assert "substitutes" in on
+
+
+def test_compute_suffix_stays_ground_for_non_equation_goals():
+    g = new_graph("What is 6*7? Report the product.")
+    s = DeliberationState(g, 0)
+    on = suffix(Verb.COMPUTE, 0, s, solve_claims=True)
+    assert "GROUND equation" in on              # no equation, no solve-claim form

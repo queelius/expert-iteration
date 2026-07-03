@@ -334,21 +334,124 @@ def decide(statement: str) -> RichResult:
 _VALID_VERBS = frozenset(_VERIFIERS)
 
 
+# ---------------------------------------------------------------------------
+# Solve-claim checking (spec: 2026-07-03-solve-claim-compute.md)
+# ---------------------------------------------------------------------------
+
+_SOLVE_CLAIM = re.compile(r"^\s*([a-zA-Z])\s*=\s*([-\d./\s()]+)\s*$")
+
+
+def parse_solve_claim(statement: str):
+    """``x = 5`` -> (Symbol('x'), Integer(5)); anything else -> None.
+
+    A solve-claim is a single-letter variable equated to a numeric value.
+    Ground equations ("(4 + 16)/4 = 5") do not match (letters absent but
+    the LHS is not a lone symbol), so the decide path keeps handling them.
+    """
+    m = _SOLVE_CLAIM.match(statement)
+    if not m:
+        return None
+    sp = _sympy()
+    try:
+        value = sp.sympify(m.group(2))
+    except Exception:
+        return None
+    if value.free_symbols:
+        return None
+    return sp.Symbol(m.group(1)), value
+
+
+def _extract_equation(text: str, symbol_name: str):
+    """Pull the first equation in ``symbol_name`` out of free text.
+
+    Goal statements are LLM-authored prose like "4x - 16 = 4" or
+    "Solve equation 4x - 16 = 4 (x >= 3/2)". Strategy: drop parenthesized
+    side conditions, scan for a math-shaped '=' segment whose only letters
+    are the claimed symbol, and parse both sides with implicit
+    multiplication ("4x"). Every failure path returns None so the caller
+    falls back to the fail-closed decide path.
+    """
+    sp = _sympy()
+    from sympy.parsing.sympy_parser import (
+        implicit_multiplication_application, parse_expr,
+        standard_transformations,
+    )
+    transformations = standard_transformations + (
+        implicit_multiplication_application,)
+    cleaned = re.sub(r"\([^)]*\)", " ", text)
+    seg = re.compile(
+        rf"([\d\s+\-*/^.{symbol_name}]+)=([\d\s+\-*/^.{symbol_name}]+)")
+    for m in seg.finditer(cleaned):
+        lhs_txt, rhs_txt = m.group(1).strip(), m.group(2).strip()
+        if not lhs_txt or not rhs_txt:
+            continue
+        try:
+            lhs = parse_expr(lhs_txt.replace("^", "**"),
+                             transformations=transformations)
+            rhs = parse_expr(rhs_txt.replace("^", "**"),
+                             transformations=transformations)
+        except Exception:
+            continue
+        names = {s.name for s in lhs.free_symbols | rhs.free_symbols}
+        if names != {symbol_name}:
+            continue                    # junk symbols, or no unknown at all
+        return sp.Eq(lhs, rhs)
+    return None
+
+
+def check_solve_claim(claim: str, goal_text: str) -> RichResult:
+    """Verify ``x = 5`` by substitution into the goal's equation.
+
+    Stronger than checking a ground re-expression: this checks the actual
+    solving step. Tautological goal equations are rejected (they claim
+    nothing to solve); any unparseable input falls back to deciding the
+    claim itself, which fails closed on unknowns.
+    """
+    parsed = parse_solve_claim(claim)
+    if parsed is None:
+        return decide(claim)
+    sym, value = parsed
+    eq = _extract_equation(goal_text, sym.name)
+    if eq is None:
+        return decide(claim)
+    sp = _sympy()
+    try:
+        residue = sp.simplify(eq.lhs - eq.rhs)
+        if residue == 0 or not residue.free_symbols:
+            return RichResult(success=False, observed=str(eq),
+                              reason="goal equation has nothing to solve")
+        target = next(s for s in residue.free_symbols
+                      if s.name == sym.name)
+        left = sp.simplify(residue.subs(target, value))
+        if left == 0:
+            return RichResult(success=True, observed=str(value))
+        return RichResult(success=False, observed=str(left),
+                          reason=f"{claim} does not satisfy {eq}")
+    except Exception as e:
+        return RichResult(success=False, observed="",
+                          reason=f"solve-claim check raised {type(e).__name__}")
+
+
 @dataclass(frozen=True)
 class MathVerifier:
     """The reductio Verifier for the math domain.
 
     check(statement, verb, expected):
+    * verb "solve_check" with expected -> substitution check of a
+      solve-claim ("x = 5") against the goal equation carried in expected
+      (spec: 2026-07-03-solve-claim-compute.md).
     * expected is None  -> decide the statement itself (never vacuous).
     * expected is given -> dispatch the legacy SymPy operation named by
       verb; an unknown verb falls back to check_arith (statement equals
       expected after simplification).
-    The policy never supplies expected in the Deliberation MDP; the
-    None path is the only one VERIFY actions use.
+    VERIFY actions use the None path by default; the Deliberation MDP
+    supplies solve_check only when solve_claims is enabled.
     """
 
     def check(self, statement: str, verb: str, expected: str | None) -> CoreVerifierResult:
-        if expected is None:
+        if verb == "solve_check" and expected is not None:
+            rich = check_solve_claim(statement, expected)
+        elif expected is None:
             rich = decide(statement)
         else:
             op = verb if verb in _VALID_VERBS else "check_arith"
@@ -357,4 +460,4 @@ class MathVerifier:
 
 
 __all__ = ["MathVerifier", "RichResult", "VerifierVerb", "check_answer",
-           "decide", "run_verifier"]
+           "check_solve_claim", "decide", "parse_solve_claim", "run_verifier"]

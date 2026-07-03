@@ -52,6 +52,14 @@ def _is_open_goal(graph: Graph, node_id: NodeId) -> bool:
             and not is_abandoned(graph, node_id))
 
 
+def _owning_goal_statement(graph: Graph, fact_id: NodeId) -> str | None:
+    """The statement of the goal whose facts tuple contains fact_id."""
+    for n in graph.nodes:
+        if isinstance(n, Goal) and fact_id in n.facts:
+            return n.statement
+    return None
+
+
 def _witnesses(graph: Graph, goal: Goal) -> tuple[NodeId, ...]:
     """Discharging, non-abandoned witnesses of a goal, ascending by id (most recent last)."""
     out = [wid for wid in goal.candidates
@@ -174,7 +182,8 @@ class DeliberationMDP:
     def __init__(self, problem: str, expected_answer: str,
                  givens: tuple[str, ...] = (), depth_limit: int = 16,
                  llm_client=None, encoder=None, verifier=None,
-                 system_prompt: str = DEFAULT_SYSTEM_PROMPT):
+                 system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+                 solve_claims: bool = False):
         from .verifier_adapter import MathVerifier
         self.problem = problem
         self.expected_answer = expected_answer
@@ -184,6 +193,9 @@ class DeliberationMDP:
         self.encoder = encoder
         self.verifier = verifier if verifier is not None else MathVerifier()
         self.system_prompt = system_prompt
+        # Solve-claim COMPUTE (spec 2026-07-03): off by default; the E13
+        # control arm requires byte-identical behavior when False.
+        self.solve_claims = solve_claims
 
     # -- environment contract -------------------------------------------------
 
@@ -221,9 +233,23 @@ class DeliberationMDP:
 
     def _do_verify(self, state: DeliberationState, target: NodeId
                    ) -> tuple[DeliberationState, float]:
-        statement = get(state.graph, target).statement
+        node = get(state.graph, target)
+        statement = node.statement
         rewardable = _verification_is_rewardable(state.graph, target, statement)
-        result = _r_verify(state.graph, target, "check", None, self.verifier)
+        verb_name, context = "check", None
+        if (self.solve_claims and isinstance(node, Fact)
+                and node.source == "derived"):
+            # A derived fact shaped like a solve-claim ("x = 5") is checked
+            # by substitution into its parent goal's equation; the verifier
+            # falls back to the fail-closed decide path if either side does
+            # not parse. Ground facts keep the plain decide path verbatim.
+            from .verifier_adapter import parse_solve_claim
+            if parse_solve_claim(statement) is not None:
+                parent = _owning_goal_statement(state.graph, target)
+                if parent is not None:
+                    verb_name, context = "solve_check", parent
+        result = _r_verify(state.graph, target, verb_name, context,
+                           self.verifier)
         g = result.graph if hasattr(result, "graph") else state.graph
         reward = 0.0
         if (rewardable and INTERMEDIATE_VERIFIER_REWARD > 0
@@ -260,7 +286,7 @@ class DeliberationMDP:
         """One constrained generation from view ++ suffix, either backend."""
         from .lenses import render_view, schema_for, suffix
         view = render_view(state.graph, target)
-        tail = suffix(verb, target, state)
+        tail = suffix(verb, target, state, solve_claims=self.solve_claims)
         schema = schema_for(verb, target, state)
         seed = int(rng.integers(2 ** 31 - 1)) if rng is not None else None
         if self.encoder is not None:
