@@ -60,10 +60,16 @@ exactly this: when the controller acts on a subgoal, the frozen model is
 shown that subgoal's small neighborhood rather than the entire history. The
 nested state is the substrate that makes such focusing possible, and the
 verifier is what keeps the learning signal honest. The deployment claim is
-correspondingly a \emph{compute-frontier} claim, not a raw-accuracy claim: a
-few-million-parameter controller choosing actions at budget $B{=}0$, against
-baselines that spend an LLM forward pass (or many) per decision
-(\cref{sec:experimental-setup}).
+correspondingly a \emph{compute-frontier} claim, not a raw-accuracy claim:
+a few-million-parameter controller choosing actions at search budget
+$B{=}0$, against baselines that spend an LLM forward pass (or many) per
+decision (\cref{sec:experimental-setup}). One honesty note attaches to
+that claim: the controller's heads are cheap, but its \emph{encoder} need
+not be. Under the first-version encoder (the frozen LLM's own hidden
+states at marker positions), every decision still costs one LLM prefill to
+embed the state; the per-decision cost becomes negligible only under the
+later graph-encoder rung (\cref{sec:method-controller}). The frontier
+claim is therefore made per encoder rung, never blended across them.
 
 \paragraph{Contributions.} No single element below is new on its own
 (\cref{sec:related}); the contribution is the conjunction, and an

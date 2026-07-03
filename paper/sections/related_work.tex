@@ -60,8 +60,11 @@ the generator's own weights; ROVER \citep{rover} derives an RLVR method from
 Q-values of a fixed random policy, again training the LLM. SWEET-RL
 \citep{sweetrl} learns a step-level critic with privileged information for
 multi-turn agents, optimized with DPO. We keep the generator frozen and
-place the entire learned capacity in an external controller small enough
-that its per-decision cost is negligible next to one LLM forward pass.
+place the entire learned capacity in an external controller whose heads
+are small enough to be negligible next to one LLM forward pass; whether
+the full per-decision cost is negligible depends on the encoder rung
+(\cref{sec:method-controller}), and the evaluation accounts for it
+explicitly rather than assuming it.
 
 \paragraph{External modules over frozen LLMs.}
 RLPrompt \citep{rlprompt} and TEMPERA \citep{tempera} are the direct
@@ -83,11 +86,22 @@ priors into value-based RL more broadly \citep{linvit, llmpriorsrl}. PNLC
 \citep{pnlc} learns an offline goal-conditioned value critic that guides a
 frozen LLM's action refinement without any external action policy; we learn
 the action policy itself, and anchor its value on a symbolic verifier rather
-than a learned critic. UniR \citep{unir} attaches an external reasoning
-module to a frozen LLM at the logit level with supervised verifiable-reward
-guidance; our module acts at the operation level via off-policy Q-learning.
-DSPy \citep{dspy} optimizes LM-program orchestration without RL or a learned
-controller network. In concurrent work, Active Context Curation
+than a learned critic. UniR \citep{unir} trains an external reasoning
+module with policy-gradient RL on verifiable reward and composes it with
+the frozen backbone at the logit level; our module acts at the operation
+level, is orders of magnitude smaller, and is trained by off-policy
+Q-learning. RLoT \citep{rlot} trains an inference-time RL navigator of
+under 3K parameters that selects among five prompted reasoning blocks for
+a frozen LLM, the strongest existing precedent for the
+tiny-external-controller axis; it differs on the other load-bearing axes:
+its reward comes from a learned process reward model (which we forbid),
+its actions are coarse prompting blocks rather than typed operations on a
+symbolic state, and it has no pointer, no forest, and no verifier. LLM-Modulo \citep{llmmodulo} argues
+the position that LLMs should generate while external sound modules
+verify and control, which this system instantiates with a trained rather
+than hand-written controller. DSPy \citep{dspy} optimizes LM-program
+orchestration without RL or a learned controller network. In concurrent
+work, Active Context Curation
 \citep{contextcuration} trains a lightweight RL policy (a 7B model) to prune
 the working memory of a frozen executor; this is the closest existing work
 on our lens axis, and differs in that our context scoping is not a dedicated
@@ -140,9 +154,14 @@ self-critique is unreliable without external grounding. V-STaR
 \citep{vstar} trains a verifier and STaR \citep{star} bootstraps from
 self-generated rationales, both placing learned components where we require
 a symbolic check. AlphaGeometry \citep{alphageometry} and AlphaProof
-demonstrate that hard-verifier-anchored systems with tiny operation
-vocabularies reach the strongest reliability, which motivated our
-aggressive verb-set minimization. Self-Backtracking \citep{selfbacktrack}
+\citep{alphaproof} demonstrate that hard-verifier-anchored systems with
+tiny operation vocabularies reach the strongest reliability, which
+motivated our aggressive verb-set minimization; the formal theorem-proving
+line reaches the same conclusion with RL agents over proof states, from
+tactic-level RL without human proofs \citep{tacticzero} to hypertree
+search over a proof-assistant verifier \citep{htps}, though in those
+systems the policy is a large LM rather than an external controller.
+Self-Backtracking \citep{selfbacktrack}
 internalizes pruning as a learned, emittable action, the precedent for our
 \textsc{Abandon} verb surviving at $B{=}0$ where no search controller
 exists. The primary evaluation instrument is a purpose-built,

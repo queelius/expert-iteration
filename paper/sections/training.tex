@@ -12,18 +12,28 @@ Q_{\mathrm{target}}(s', \textit{v}', \textit{t}'),
 \qquad
 \mathcal{L}_Q = \big(Q(s, \textit{verb}, \textit{target}) - y\big)^2,
 \]
-with a replay buffer and a periodically synced target network. The acting
-policy is derived from $Q$ by a masked softmax at temperature $\tau$, and
-the verb and pointer heads are trained to match it. A learned $Q$ is the
-natural object in this setting: it folds the expensive expectation over LLM
-transitions into a cheap action value, so at deployment the controller
-selects an action without sampling any LLM transition to look ahead.
-Off-policy learning is load-bearing: the same buffer accepts random
-exploration, teacher trajectories (\cref{sec:training-ladder}), and
-search-generated experience (\cref{sec:training-mcts}) with no change to
-the update. Under terminal-only reward, one-step bootstrapping is fragile;
-we regress on n-step and Monte Carlo returns from the verifier terminal,
-which requires no search in the loop.
+with a replay buffer and a periodically synced target network. The roles
+are: the verb and pointer heads \emph{act} (they are the deployed policy),
+and $Q$ \emph{criticizes}: a masked softmax over $Q$ at temperature $\tau$
+supplies the distribution toward which the heads are trained. A learned
+$Q$ is the natural object in this setting: it folds the expensive
+expectation over LLM transitions into a cheap action value, so at
+deployment the controller selects an action without sampling any LLM
+transition to look ahead. Off-policy learning is load-bearing: the same
+buffer accepts random exploration, teacher trajectories
+(\cref{sec:training-ladder}), and search-generated experience
+(\cref{sec:training-mcts}) with no change to the update. Under
+terminal-only reward, one-step bootstrapping is fragile; we regress on
+n-step and Monte Carlo returns from the verifier terminal, which requires
+no search in the loop. The price of doing so without correction must be
+stated rather than hidden: uncorrected n-step and Monte Carlo returns
+estimate $Q^{\mu}$, the value of the behavior policy $\mu$ that generated
+the trajectory (the teacher, an exploring variant of the current heads, or
+search), not $Q^{*}$. We accept this bias in v1, on the grounds that the
+behavior mixture tracks the improving policy closely and that under sparse
+terminal reward long uncorrected returns carry the only usable signal;
+importance-weighted or truncated corrections (Retrace-style) are the
+sanctioned upgrade if the bias proves material.
 
 \subsection{The three-rung ladder}
 \label{sec:training-ladder}

@@ -1,8 +1,8 @@
 \section{Preliminary Findings from the Rung-1 Campaign}
 \label{sec:preliminary}
 
-Before any controller is trained, the LLM-as-controller rung (LC in
-\cref{tab:grid}) was run live, instrumented, and iterated under a
+Before any controller is trained, the LLM-as-controller rung (\textsc{lc}
+in \cref{tab:grid}) was run live, instrumented, and iterated under a
 controlled-experiment discipline: one manipulation per experiment, the
 outcome measure and its reading registered before the run, every
 trajectory and every raw controller reply logged. This section reports
@@ -18,9 +18,10 @@ claim.
 On a linearly solvable distribution the optimal policy is a chain of
 \textsc{Compute}, \textsc{Verify}, \textsc{Commit}: the structural verbs
 have nothing to do, so no amount of running such a benchmark elicits the
-behavior the action space exists for. Casework (published with full
-provenance; 300 problems in v1) is a synthetic family of case-analysis
-problems built to demand structure, generated in reverse: the solution
+behavior the action space exists for. Casework (300 problems in v1,
+constructed with full per-record provenance and prepared for public
+release) is a synthetic family of case-analysis problems built to demand
+structure, generated in reverse: the solution
 structure is sampled first, the statement rendered around it, and every
 label re-derived independently (SymPy for equation families, exhaustive
 enumeration for counting families) before a record ships. Answers are
@@ -50,9 +51,12 @@ mini teacher & 1 & 4--5 \\
 gpt-4.1 teacher & 1 & 4 \\
 \bottomrule
 \end{tabular}
-\caption{Observation design dominates controller capability. The render
-effect replicates across both models; the capability effect is null in
-both columns.}
+\caption{Observation design, not controller capability, moved the
+outcome ($n{=}20$ per cell). The render effect replicates across both
+models; the capability effect is null in both columns. One caveat: the
+tree-render arm shipped bundled with two smaller interface fixes
+(rejection feedback and a safer fallback policy), so the render is the
+dominant, not the perfectly isolated, manipulation.}
 \label{tab:2x2}
 \end{table}
 
@@ -88,21 +92,25 @@ Direct-prompt baselines on the casework families, identical scoring:
 \toprule
 Family & Qwen2.5-1.5B-instruct & gpt-4.1-mini \\
 \midrule
+\multicolumn{3}{@{}l@{}}{\emph{shipped in casework-v1 (48 problems each)}} \\
 quadratic roots (f3) & 75\% & 100\% \\
 absolute value, both live (f1a) & 40\% & 100\% \\
 absolute value, side condition (f1b) & 35\% & 100\% \\
 piecewise, dead branch (f2a) & 31\% & 100\% \\
 piecewise, both live (f2b) & 15\% & 100\% \\
+casework-v1 train, all five (240) & 39.2\% & 100\% \\
+\midrule
+\multicolumn{3}{@{}l@{}}{\emph{additional calibrated families (40-problem batches, not in v1)}} \\
 tiered-pricing word problems (f7) & 5\% & 98\% \\
 integer counting (f8) & 5\% & 100\% \\
-\midrule
-casework-v1 train (240) & 39.2\% & 100\% \\
 \bottomrule
 \end{tabular}
-\caption{The generator families span a measured difficulty ladder on the
-deployment-class model while remaining trivial for a mini-tier API model.
-Dead-case problems are disproportionately hard for the small model (33\%
-versus 43\% on live-case problems), consistent with domain-restriction
+\caption{Direct-prompt accuracy per family. The five families shipped in
+casework-v1 span 15--75\% on the deployment-class model while remaining
+trivial for a mini-tier API model; f7 and f8 are calibrated generator
+families held out of v1 that extend the ladder to 5\%. Dead-case
+problems are disproportionately hard for the small model (33\% versus
+43\% on live-case problems), consistent with domain-restriction
 discipline being the failure axis the \textsc{Abandon} verb targets.}
 \label{tab:ladder}
 \end{table}
@@ -117,5 +125,7 @@ now concrete: the trained controller orchestrating Qwen2.5-1.5B must beat
 39.2\% on casework-v1 to demonstrate value over the same frozen model
 prompted directly. About 14\% of the small model's direct replies were
 unusable (no parseable answer); these score as failures for the direct
-baseline and preview the masked-action rate the harness must absorb in
-the generator role.
+baseline and preview the masked-action rate the deliberation harness
+(the full loop of \cref{sec:method}: state, lenses, verifier, and
+controller around the frozen generator) must absorb in the generator
+role.

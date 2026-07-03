@@ -15,24 +15,25 @@ training and will not be adjusted post hoc.
 
 \begin{table}[h]
 \centering
-\small
-\begin{tabular}{@{}llp{0.45\linewidth}@{}}
+\footnotesize
+\begin{tabular}{@{}lp{0.42\linewidth}p{0.30\linewidth}@{}}
 \toprule
 Row & System & Role \\
 \midrule
-B0 & Base LLM, greedy decode & raw capability floor \\
-B1 & Base LLM, best-of-$N$, FLOP-matched & cheap deliberation \\
-LC & LLM-as-controller (teacher picks actions, small model generates) & the orchestration baseline \\
-B2 & Learned controller, $B{=}0$ (no search) & fast mode \\
-B3 & Learned controller, $B$ small (light MCTS) & light search \\
-B4 & Learned controller, $B$ large (heavy MCTS) & heavy search \\
-B5 & Larger reasoning model, greedy decode & capability ceiling \\
+\textsc{base} & Base LLM, greedy decode & raw capability floor \\
+\textsc{bo-n} & Base LLM, best-of-$N$, FLOP-matched & cheap deliberation \\
+\textsc{lc} & LLM-as-controller (teacher picks actions, small model generates) & the orchestration baseline \\
+\textsc{fast} & Learned controller, search budget $B{=}0$ & fast mode \\
+\textsc{light} & Learned controller, $B$ small (light MCTS) & light search \\
+\textsc{heavy} & Learned controller, $B$ large (heavy MCTS) & heavy search \\
+\textsc{ceiling} & Larger reasoning model, greedy decode & capability ceiling \\
 \bottomrule
 \end{tabular}
-\caption{Pre-registered baseline grid. The LC row exists because the frozen
-LLM handed the whole structured state may pick good actions zero-shot; the
-learned controller's claim is made against it on compute, not necessarily on
-raw accuracy.}
+\caption{Pre-registered baseline grid ($B$ throughout denotes the
+test-time search budget of \cref{sec:training-mcts}). The \textsc{lc} row
+exists because the frozen LLM handed the whole structured state may pick
+good actions zero-shot; the learned controller's claim is made against it
+on compute, not necessarily on raw accuracy.}
 \label{tab:grid}
 \end{table}
 
@@ -46,7 +47,8 @@ elsewhere.
 \paragraph{Win condition, stated in advance.} The learned controller is not
 required to out-perform the LLM-as-controller row in fast-mode accuracy. It
 earns its keep on the compute frontier (an under-5M-parameter network at
-$B{=}0$ versus an LLM forward pass per action choice) and as the search
+$B{=}0$ versus an LLM forward pass per action choice, accounted per
+encoder rung as \cref{sec:introduction} requires) and as the search
 prior. A sanity ablation (random Q head, uniform policy, fixed MCTS) must be
 visibly worse than the trained rows, confirming that training rather than
 the scaffold does the work.
@@ -64,13 +66,14 @@ instruct variant (base isolates the loop's contribution from reasoning
 post-training), seeds, dataset splits, and decoding parameters}
 
 \paragraph{Datasets and instruments.} Alongside GSM8K and MATH, the
-evaluation uses casework, a published synthetic dataset with per-record
-provenance whose labels are verified by construction plus an independent
-re-derivation, and whose families span a measured 5--75\% difficulty
-ladder on the deployment-class generator
-(\cref{sec:prelim-calibration}). Every formative experiment is logged in
-a repository ledger with the manipulation, measure, and reading
-registered before the run.
+evaluation uses casework, a synthetic dataset (constructed with
+per-record provenance and prepared for public release) whose labels are
+verified by construction plus an independent re-derivation. Its five
+shipped families span a measured 15--75\% difficulty range on the
+deployment-class generator, and two additional calibrated families
+extend the ladder to 5\% (\cref{sec:prelim-calibration}). Every
+formative experiment is logged in a repository ledger with the
+manipulation, measure, and reading registered before the run.
 
 \paragraph{Ablations.} Pre-registered: (i) MCTS-off versus MCTS-on training
 (the additive-accelerator claim); (ii) pointer head versus verb-only action

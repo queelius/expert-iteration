@@ -2,7 +2,13 @@
 \label{sec:method}
 
 We formulate deliberation as a finite-horizon discounted MDP
-$(S, A, P, R, \gamma)$ induced by a frozen language model. This section
+$(S, A, P, R, \gamma)$ induced by a frozen language model: $S$ the set of
+reasoning-forest states, $A$ the typed actions of
+\cref{sec:method-actions}, $P(s' \mid s, a)$ the transition probability
+(sampled, never enumerated, because it integrates over the frozen model's
+continuations), $R(s, a, s')$ the reward of \cref{sec:method-reward}, and
+$\gamma \in (0, 1]$ the discount factor. Episodes run for at most
+$T_{\max}$ turns (the depth limit). This section
 specifies the state (\cref{sec:method-state}), the action space and lens
 semantics (\cref{sec:method-actions}), the controller network
 (\cref{sec:method-controller}), and the reward (\cref{sec:method-reward}).
@@ -36,8 +42,27 @@ ablation, deferred with the move from answer verification to proof
 verification.
 
 A worked forest for $|x-3| + |x+2| = 7$ by case analysis, exercising every
-node kind and both closure polarities, is pinned by an executable
-integration test in the accompanying artifact.
+node kind and both closure polarities, is:
+
+{\small
+\begin{verbatim}
+GOAL solve |x-3| + |x+2| = 7          (root; connective: exhaustive_case)
++- GOAL case x < -2:   -(x-3) - (x+2) = 7
+|  +- FACT (1 - 7)/2 = -3  [derived]  -> VerifierCall(ok) -> [verified]
+|  (committed: witness is the verified fact; x = -3 checks x < -2)
++- GOAL case -2 <= x <= 3:   (3-x) + (x+2) = 5, constant
+|  +- HYPOTHESIS "5 = 7 has a solution"        [never verified]
+|  (abandoned: the branch contributes nothing)
++- GOAL case x > 3:   (x-3) + (x+2) = 7
+   +- FACT (7 + 1)/2 = 4   [derived]  -> VerifierCall(ok) -> [verified]
+   (committed: x = 4 checks x > 3)
+(root committed on the aggregate max(4, -3) = 4 when the largest solution
+ is asked; positive closure twice, negative closure once)
+\end{verbatim}
+}
+
+\noindent The same forest is pinned by an executable integration test in
+the code accompanying this paper.
 
 \subsection{Actions: verbs as lenses}
 \label{sec:method-actions}
@@ -51,9 +76,13 @@ localized write $\mathrm{apply}(s,t,o)$ (the lens \emph{put}): the update to
 the target's neighborhood given LLM output $o$; and a reward, zero for
 almost every verb. The transition samples
 $o \sim \mathrm{LLM}(\cdot \mid \mathrm{view}(s,t) \mathbin{+\!\!+} \mathrm{suffix}_v)$
-and sets $s' = \mathrm{apply}(s,t,o)$. Because $P(s' \mid s, a)$ integrates
-over LLM continuations, the MDP is generative: transitions are sampled,
-never enumerated.
+and sets $s' = \mathrm{apply}(s,t,o)$, where $\mathrm{suffix}_v$ is the
+verb's fixed instruction block, the output fields, their constraints, and
+a one-shot example for $v$, appended ($\mathbin{+\!\!+}$ is string
+concatenation) after the rendered view: the prompt is the scoped reading
+of the state followed by what to do with it. Because $P(s' \mid s, a)$
+integrates over LLM continuations, the MDP is generative: transitions are
+sampled, never enumerated.
 
 The verb set is six core verbs plus one optional
 (\cref{tab:verbs}), one per operation family that the prior-art vocabulary
@@ -115,9 +144,10 @@ evidence for (i) is stark: under a flat id-ordered rendering of the same
 state, a controller at roughly $5\times$ the price gained nothing (1/20 versus 1/20 on
 case-analysis problems), while restoring the tree structure at fixed
 controller capability improved outcomes four- to five-fold. No controller,
-at any capability, can act on structure the observation erases; the same
-serialization feeds the learned encoder, so the finding transfers to the
-trained controller by construction. Two structural guards accompany the
+at any capability, can act on structure the observation erases; because
+the same serialization feeds the learned encoder, we expect (though the
+trained controller does not yet exist to confirm it) the requirement to
+carry over. Two structural guards accompany the
 render: an exhaustive \textsc{Split} names its full case set in one call,
 so a goal that already has children is not re-splittable, and a
 \textsc{Compute} whose statement duplicates a fact already attached to the
@@ -132,9 +162,11 @@ variable, growing set of targets, the encoder emits a pair: a global
 readout $g$ and one vector $h_k$ per live node. The verb head maps an
 adapter embedding of $g$ to masked logits over verbs; the pointer head
 scores each candidate node against a query from $(g, \textit{verb})$,
-realizing $\pi(\textit{verb} \mid s)\,\pi(\textit{target} \mid s,
-\textit{verb})$; the Q head scores $Q(s, \textit{verb}, \textit{target})$
-per legal pair. Promoting the target into the action is what fixes credit
+realizing the factored policy $\pi(a \mid s)$, the probability of taking
+action $a$ in state $s$, as $\pi(\textit{verb} \mid s)\,\pi(\textit{target}
+\mid s, \textit{verb})$; the Q head scores
+$Q(s, \textit{verb}, \textit{target})$, the expected discounted return of
+taking that pair in $s$, per legal pair. Promoting the target into the action is what fixes credit
 assignment: a value over verbs alone averages over every target the LLM
 might pick, so the agent never learns \emph{which node to act on}.
 

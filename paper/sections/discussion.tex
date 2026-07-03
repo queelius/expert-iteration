@@ -20,6 +20,25 @@ architectural, and \cref{sec:related} names the nearest neighbor on every
 axis, including concurrent work on learned context curation
 \citep{contextcuration}.
 
+\paragraph{Is the combination just engineering?} The strongest version of
+the objection is that each ingredient is published, so assembling them is
+integration work rather than research. Two answers, one conceptual and
+one empirical. Conceptually, the elements are not independent modules:
+the pointer head presupposes a state whose nodes are stable and typed,
+the lens presupposes that acting and scoping are the same decision, and
+the verifier-only reward is only trainable at all because the typed
+action space gives credit assignment something to bind to; remove any one
+element and the others lose their function, which is the signature of an
+architecture rather than a pipeline. Empirically, the formative campaign
+(\cref{sec:preliminary}) shows the elements interact non-additively:
+raising controller capability roughly $5\times$ moved nothing while the
+observation carried the structure poorly (1/20 in both cells of
+\cref{tab:2x2}), and restoring the structural rendering at fixed
+capability moved outcomes four- to five-fold. A combination whose value
+were merely additive engineering would not produce that interaction
+pattern; the structured state, the typed actions, and the observation
+design succeed or fail jointly, which is precisely the claim.
+
 \paragraph{Limitations.}
 The verifier boundary is the trust boundary: the system is only as sound as
 the symbolic checker and the discipline that the check's expected value is
