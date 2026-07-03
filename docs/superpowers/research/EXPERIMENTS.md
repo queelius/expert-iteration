@@ -68,11 +68,30 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   design's deployment target is a LOCAL SMALL generator (Qwen
   1.5B/3B-class); the decisive comparison is small-model-direct vs
   small-model-plus-controller, so the 40-70% band must be measured on
-  the deployment-class model, which plausibly sits in it on casework-v1
-  AS SHIPPED. Casework-v2 dataset assembly is therefore deferred until
-  the direct baseline is re-run against the local small model (the
-  design-true-regime prerequisite, no OpenAI cost); f7/f8 stay in the
-  generator as calibrated-and-ready families.
+  the deployment-class model.
+- **Round 3 result (07-03): RESOLVED on the deployment model.**
+  Qwen2.5-1.5B-instruct direct, local CPU via Ollama, zero API cost,
+  same scoring as always:
+
+  | config | Qwen-1.5B | mini |
+  |--------|-----------|------|
+  | casework-v1 train (240) | **39.2%** | 100% |
+  | f3 / f1a / f1b / f2a / f2b | 75 / 40 / 35 / 31 / 15% | 100% |
+  | f7 tiered word problems | 5.0% | 98% |
+  | f8 integer counting | 5.0% | 100% |
+
+  Casework-v1 as shipped sits at the 40% band edge for the deployment
+  model, with a per-family spread from 15% to 75%: v2 is a MIXING
+  exercise over existing families, not new generator work. Dead-case
+  problems are harder for Qwen (33% vs 43%), the design's predicted
+  failure axis. ~14% of Qwen replies are unusable even with the
+  type-loose schema. The decisive comparison now has a concrete target:
+  Qwen-1.5B + trained controller must beat 39% on casework-v1.
+  Incidental method note: the small model returns schema-spirited but
+  type-loose JSON (reasoning as a list, answer as a bare number); the
+  baseline schema was loosened to measure math rather than JSON
+  pedantry, and the same looseness will show up as masked actions in
+  the harness's generator role.
 
 ### E13: solve-claim COMPUTE ablation - RESOLVED 07-03: DO NOT ADOPT
 - Manipulation: solve-claim COMPUTE on vs off, same teacher (mini), same
