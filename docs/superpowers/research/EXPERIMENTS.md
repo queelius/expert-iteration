@@ -167,6 +167,19 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   anyway (decision data is the product) but at reduced scale.
 - Cost: ~$0.10 teacher-side; local CPU generator (~40 min).
 
+### E16: generator capability (Qwen-1.5B -> 3B), interface held fixed
+- Manipulation (single, vs E15): the local generator only. Two runs:
+  (a) 3B direct baseline on casework-240 (re-anchors the decisive-
+  comparison target); (b) the standard design-true probe.
+- Measure: (a) direct %; (b) wins, COMPUTE mask rate (E15: 65%), and
+  split-content quality (junk-children rate, by inspection).
+- Reading: probe wins > 0 with COMPUTE mask under ~35% => 3B clears the
+  content cliff; design-true collection uses 3B and the target becomes
+  the 3B direct number. Still 0 wins with junk content => 1.5B/3B class
+  is below the content floor for typed generation; escalate to the GPU
+  box (7B) or start Phase B on mini-as-both data only.
+- Cost: ~$0.10 teacher-side; local CPU (baseline ~2h + probe ~1h).
+
 ## Method notes
 
 - 20-episode probes distinguish 5% from 70%, not 20% from 30%: treat
