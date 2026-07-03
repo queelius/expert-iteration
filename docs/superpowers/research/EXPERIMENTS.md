@@ -16,9 +16,9 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
 
 | id | date | manipulation (single) | measure | result | cost |
 |----|------|----------------------|---------|--------|------|
-| E1 | 07-02 | none (baseline system run): mini teacher+generator on GSM8K x500 | solve rate; verb mix | 70.8%; split+abandon 0.5% (structural collapse) | ~$1.50 |
+| E1 | 07-02 | none (baseline system run): mini teacher+generator on GSM8K x500 | solve rate; verb mix | 70.8%; split+abandon 0.5% (structural collapse). **QUARANTINED 07-03**: collected under the flat pre-E9 render, so the accuracy numbers characterize a superseded interface and the trajectories are excluded from behavior-cloning (observations in the superseded format, not re-renderable post hoc). Retained as the lab record; GSM8K re-enters as a pre-registered eval target once the casework loop shows progress | ~$1.50 |
 | E2 | 07-02 | remove the harness: mini direct chain-of-thought, same 500 problems, same scoring | solve rate | 94.4%; overlap one-sided (harness-only wins: 3) | $0.13 |
-| E3 | 07-02 | problem distribution: GSM8K -> casework-v1 (structure required) | structural verb share | 0.5% -> 12-32% across probes; split 20/20 episodes | $0.15/probe |
+| E3 | 07-02 | problem distribution: GSM8K -> casework-v1 (structure required) | structural verb share | 0.5% -> 12-23% across non-degenerate probes (probe 1 hit 31.9% by pathological re-splitting; excluded per the findings memo); split 20/20 episodes | $0.15/probe |
 | E4 | 07-02 | action space: SPLIT restricted to childless goals (after probe-1 re-split loop) | solve rate; split count | splits 97 -> 25; solve still 0/20 (failure moved downstream) | $0.15 |
 | E5 | 07-02 | lens: COMPUTE taught solve-for-x re-expression + dup-COMPUTE masked | solve rate | 0/20 -> 2/20; first complete case arcs | $0.15 |
 | E6 | 07-02 | prompt: commit-each-case playbook (contained a self-inflicted placeholder-id bug) | solve rate; fallback | 1/20; fallback 18.6% (measured the bug, not the design) | $0.15 |

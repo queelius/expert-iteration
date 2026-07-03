@@ -12,45 +12,30 @@ what that formative campaign measured. Its numbers are small-$n$
 pre-registered grid, which remains unrun; nothing here is a headline
 claim.
 
-\subsection{The orchestration baseline on GSM8K}
-\label{sec:prelim-gsm8k}
-
-With gpt-4.1-mini serving as both controller-teacher and generator, 500
-GSM8K training problems yielded a 70.8\% solve rate (354/500) across
-3{,}906 logged decisions. The same model prompted directly, scored by the
-same symbolic check, solves 94.4\% of the same problems, and the overlap
-is one-sided: the harness rescued 3 problems the direct prompt missed,
-the direct prompt solved 121 the harness lost. Decomposing those 121
-losses: in 45, the generator had produced the correct value and the
-controller discarded it (looped past it without committing, or committed
-unverified intermediate evidence); most of the remainder are turn-budget
-exhaustion driven by the same control failures. Structural verbs
-essentially never fired (\textsc{Split} plus \textsc{Abandon} were 0.5\%
-of decisions): GSM8K is linearly solvable, so the optimal policy is a
-chain and the forest never earns its keep. Two conclusions: the
-orchestration tax is real and mostly control-side, and eliciting the
-structured action space requires a distribution that demands structure.
-
 \subsection{A structure-demanding dataset}
 \label{sec:prelim-casework}
 
-Casework (published with full provenance; 300 problems in v1) is a
-synthetic family of case-analysis problems built in reverse: the solution
+On a linearly solvable distribution the optimal policy is a chain of
+\textsc{Compute}, \textsc{Verify}, \textsc{Commit}: the structural verbs
+have nothing to do, so no amount of running such a benchmark elicits the
+behavior the action space exists for. Casework (published with full
+provenance; 300 problems in v1) is a synthetic family of case-analysis
+problems built to demand structure, generated in reverse: the solution
 structure is sampled first, the statement rendered around it, and every
 label re-derived independently (SymPy for equation families, exhaustive
 enumeration for counting families) before a record ships. Answers are
 single integers by construction: multi-solution problems ask a scalar
 question about the solution set (the sum, the largest, the survivor), so
 the casework is required for correctness while the terminal check stays a
-single comparison. On this distribution the structural verbs went from
-0.5\% of decisions to 12--23\%, with \textsc{Split} in 20 of 20 probe
-episodes and \textsc{Abandon} firing on the dead-case families.
+single comparison. On this distribution the structural verbs fire:
+12--23\% of decisions across probes, with \textsc{Split} in 20 of 20
+episodes and \textsc{Abandon} on the dead-case families.
 
 \subsection{Information versus capability}
 \label{sec:prelim-obs}
 
 The central formative result is a $2\times2$: controller capability
-(gpt-4.1-mini versus gpt-4.1, roughly $40\times$ price) crossed with
+(gpt-4.1-mini versus gpt-4.1, roughly $5\times$ the price) crossed with
 observation design (flat id-ordered rendering versus the tree rendering
 of \cref{sec:method}), on the same 20 casework problems.
 
@@ -77,7 +62,7 @@ dischargeable, so it re-computes verified facts and attempts illegal
 commits regardless of how capable it is. The remaining failure axes were
 then eliminated one at a time, each by a single-manipulation probe with a
 pre-registered reading: prompt engineering (two iterations, including one
-that measured its own bug), controller capability ($40\times$, null),
+that measured its own bug), controller capability (a $5\times$-price teacher, null),
 controller completion budget ($64 \to 192$ tokens: the unparseable-reply
 count was unchanged, killing a truncation hypothesis), and step
 granularity (a substitution-verified solve-claim form of

@@ -214,12 +214,12 @@
   \textbf{Threats a reviewer will raise}
   \begin{enumerate}
     \item TS-LLM read as ``same loop, different reward source''
-    \item ArCHer (off-policy value RL that trains the LLM's own token
-          policy) + GSoS + verifiable-reward RL: ``each ingredient is
-          published, the combination is engineering''
+    \item ArCHer (value RL that trains the LLM itself) + GSoS +
+          verifiable-reward RL: ``each ingredient is published, the
+          combination is engineering''
     \item Active Context Curation as concurrent work on the lens axis
   \end{enumerate}
-  \medskip
+  \smallskip
   \textbf{What survives: the conjunction, claimed as such}
   \begin{itemize}
     \item Tiny \emph{external} controller (neither the LLM nor an LLM-sized critic)
@@ -234,118 +234,25 @@
   conjunction, not a new RL algorithm.
 \end{frame}
 
-% ---------------------------------------------------------------- results 1
-\begin{frame}{Rung 1 is live: teacher-as-controller on GSM8K}
-  \begin{columns}[T]
-    \begin{column}{0.52\textwidth}
-      \textbf{Setup}
-      \begin{itemize}
-        \item gpt-4.1-mini as both controller-teacher and generator
-        \item 500 GSM8K problems, depth limit 16, hard token budget
-        \item Verifier: SymPy; ground equations only
-      \end{itemize}
-      \medskip
-      \textbf{Headline numbers}
-      \begin{itemize}
-        \item \alert{70.8\%} solved (354/500)
-        \item 3{,}906 decisions; 10 fallbacks (0.26\%)
-        \item median 7 turns; full sweep about \$1.50
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.44\textwidth}
-      \textbf{Verb usage (3{,}906 decisions)}
-      \begin{center}
-        \footnotesize
-        \begin{tabular}{lr}
-          \toprule
-          \verbword{compute} & 2339 \\
-          \verbword{verify} & 1116 \\
-          \verbword{commit} & 414 \\
-          \verbword{form\_hypothesis} & 16 \\
-          \verbword{abandon} & 11 \\
-          \verbword{split} & 10 \\
-          \bottomrule
-        \end{tabular}
-      \end{center}
-      \medskip
-      \footnotesize The verify-iterate loop works: failed checks are
-      surfaced as \texttt{(verify failed xN)} and the teacher reformulates
-      instead of retrying.
-    \end{column}
-  \end{columns}
-\end{frame}
-
-% ---------------------------------------------------------------- honesty
-\begin{frame}{Honesty check: the same model does better without us}
-  \begin{center}
-    \begin{tabular}{lr}
-      \toprule
-      Same model (gpt-4.1-mini), same 500 problems, same scoring & solved \\
-      \midrule
-      Direct prompt, free-form step-by-step reasoning & \alert{94.4\%} (472/500) \\
-      Inside the deliberation harness & 70.8\% (354/500) \\
-      \bottomrule
-    \end{tabular}
-  \end{center}
-  \footnotesize One-sided overlap: the harness solved only 3 problems the
-  direct prompt missed; the direct prompt solved 121 the harness lost.
-  \normalsize
-  \begin{block}{Why this is not (yet) a dealbreaker}
-    \begin{itemize}
-      \item Rung 1's product is \emph{typed decision data}, not benchmark
-            accuracy
-      \item The harness constrains the generator on purpose; the accuracy
-            tax buys a machine-checkable, verifier-vouched trace
-      \item The claim lives at the \emph{small}-model frontier: small
-            generator + trained controller vs the same small model prompted
-            directly. Lose that margin, lose the approach.
-    \end{itemize}
-  \end{block}
-\end{frame}
-
-% ---------------------------------------------------------------- results 2
-\begin{frame}{Diagnosis: healthy linear skill, collapsed structure}
-  \begin{itemize}
-    \item The dominant trajectory is \verbword{compute} $\to$
-          \verbword{verify} $\to$ \verbword{commit}: correct play, because
-          \alert{GSM8K is linearly solvable}
-    \item Structural verbs (\verbword{split}, \verbword{abandon}) appear in
-          under 1\% of decisions: behavior cloning on this data alone would
-          learn a linear-chain policy
-    \item This is a \emph{dataset} property, not a system failure: the AND-OR
-          forest never earns its keep on problems with no cases
-  \end{itemize}
-  \begin{block}{The fix: generate our own problems}
-    The verifier can \emph{decide} answers (SymPy solves the task), so we can
-    generate problems in reverse: choose the case structure and answer set
-    first, synthesize the statement around it. Ground truth by construction,
-    unlimited scale, difficulty as a curriculum knob. Absolute values,
-    piecewise casework, inequalities, ``find all solutions'': each makes
-    \verbword{split} and \verbword{abandon} genuinely optimal.
-  \end{block}
-\end{frame}
-
-% ---------------------------------------------------------------- casework
 \begin{frame}{Casework: structure fires, and information beat capability}
-  \textbf{The dataset did its job} (\texttt{casework-v1}: 300 SymPy-verified
-  problems, published with provenance): structural verbs went from
-  \alert{0.5\%} of decisions (GSM8K) to \alert{12--23\%}, with
-  \verbword{split} in 20/20 probe episodes.
+  \textbf{The dataset did its job} (\texttt{casework-v1}: 300
+  SymPy-verified problems with provenance): on a linear benchmark the
+  chain policy is optimal, so structural verbs never fire; on casework
+  they reach \alert{12--23\%} of decisions (\verbword{split} in 20/20
+  episodes).
 
   \textbf{Solve rate isolated the bottleneck by experiment:}
   \begin{itemize}
-    \item a $40\times$-price teacher (gpt-4.1), \emph{flat} state render:
+    \item a $5\times$-price teacher (gpt-4.1), \emph{flat} state render:
           1/20, unchanged from the small teacher
     \item fixed \emph{observation} (tree render, commit-readiness,
-          rejection feedback), same small teacher:
-          \alert{4--5$\times$} across replicates, wins in 4 of 5
-          families; the render effect replicates under the large
-          teacher too (4/20)
+          rejection feedback), same small teacher: \alert{4--5$\times$}
+          across replicates (and 4/20 under the large teacher)
   \end{itemize}
   \begin{block}{Why this strengthens the thesis}
     No controller can act on structure the lens erases. The residual
-    menu-ignoring errors are impossible for a pointer head softmaxing
-    over the legal menu; the teacher's mistakes are the training signal.
+    menu-ignoring errors are impossible for a pointer head restricted to
+    the legal menu; the teacher's mistakes are the training signal.
   \end{block}
 \end{frame}
 
@@ -374,7 +281,7 @@
   \begin{block}{The decisive comparison, now concrete}
     Qwen2.5-1.5B + trained controller must beat \alert{39.2\%} on
     casework-v1. Every teacher-side alternative (prompts, a
-    $40\times$-price teacher, completion budget, solve-claim steps)
+    $5\times$-price teacher, completion budget, solve-claim steps)
     measured null; the trained controller is the remaining lever.
   \end{block}
 \end{frame}
@@ -384,17 +291,17 @@
   \begin{enumerate}
     \item \textbf{Design-true collection} (probe running): hosted teacher
           decides, \emph{local} Qwen-1.5B writes all content, so
-          trajectories reflect the deployed model's state distribution;
-          then the full behavior-cloning collection
+          trajectories reflect the deployed state distribution
     \item \textbf{Phase B}: per-node encoder + pointer head,
           behavior-cloning warm-start on rung-1 trajectories, then
           $Q$-learning fine-tune against the verifier; the probes'
-          controller failures (illegal intents, repetition after
-          rejection) are its labeled negatives
+          controller failures are its labeled negatives
     \item \textbf{The decisive comparison}: Qwen-1.5B + trained controller
           vs the same model prompted directly; the target is
           \alert{39.2\%} on casework-v1, and the approach succeeds or
           fails on that margin
+    \item \textbf{Standard benchmarks later}: GSM8K/MATH enter as
+          evaluation targets once the casework loop shows progress
   \end{enumerate}
   \medskip
   \begin{block}{One-sentence summary}

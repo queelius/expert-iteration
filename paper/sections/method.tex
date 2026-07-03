@@ -114,7 +114,7 @@ observation after a masked action is near-identical to the one before it,
 and a low-temperature controller repeats the same choice indefinitely.
 (iv) The turn counter shows the horizon (\texttt{TURN 7/16}). The formative
 evidence for (i) is stark: under a flat id-ordered rendering of the same
-state, a $40\times$ larger controller gained nothing (1/20 versus 1/20 on
+state, a controller at roughly $5\times$ the price gained nothing (1/20 versus 1/20 on
 case-analysis problems), while restoring the tree structure at fixed
 controller capability improved outcomes four- to five-fold. No controller,
 at any capability, can act on structure the observation erases; the same
@@ -163,7 +163,15 @@ r_T =
 -1 & \text{verifier rejects the committed root answer,}
 \end{cases}
 \]
-with intermediate reward zero. If sparsity blocks progress, the only
+with intermediate reward zero, except for one constant housekeeping term:
+a masked action (an illegal or failed operation, for example a rejected
+duplicate \textsc{Compute} or an unusable generation) advances the turn
+and receives a fixed $-0.01$. This constant carries no task information,
+is not produced by the verifier or by any model, and cannot be gamed
+upward; it exists so that a wasted turn is strictly worse than a legal
+one. The anchor invariant is therefore precisely: no \emph{learned} or
+\emph{content-dependent} reward enters anywhere, and every non-constant
+reward is verifier-decided. If sparsity blocks progress, the only
 sanctioned remedy is a gated, capped intermediate reward through
 \textsc{Verify} (novel promotions only, deduplicated per target, cumulative
 cap, tautologies rejected). Two design rules follow the strongest available

@@ -498,6 +498,15 @@ AlphaGeometry, rStar-Math, R1, Tulu-3) are hard-verifier-anchored.
   this channel's coefficient is 0: every intermediate reward, including
   `VERIFY`'s, is 0.
 - Root `COMMIT` returns the terminal verdict, $+1$ correct, $-1$ incorrect.
+- A masked action (an illegal or failed operation: a stale target from a
+  search tree, a rejected duplicate `COMPUTE`, an unusable generation)
+  advances the turn and receives a fixed housekeeping constant of $-0.01$
+  (`MASKED_ACTION_REWARD` in the implementation). This constant carries no
+  task information, is not produced by the verifier or by any model, and
+  cannot be gamed upward; it exists only to make a wasted turn strictly
+  worse than a legal one. The anchor invariant, stated precisely: no
+  learned or content-dependent reward enters anywhere, and every
+  non-constant reward is verifier-decided.
 
 The first version uses terminal-only reward:
 
