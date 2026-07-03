@@ -4,7 +4,21 @@ Runs the controller-teacher loop on a list of problems and writes one
 JSONL trajectory log (the Phase-B behavior-cloning dataset) plus a
 summary line per problem. With --backend echo it needs no model at all
 (a smoke run of the full interface); with --backend http it talks to any
-OpenAI-compatible server for BOTH the controller and the generator.
+OpenAI-compatible server; with --backend openai it talks to
+api.openai.com using the key from --api-key-env.
+
+The controller (teacher) and the generator can use DIFFERENT backends,
+which is the design's intended collection regime (design.md section 7.3):
+a strong API teacher picks (verb, target) while the small deployed
+generator writes all content, so trajectories reflect the deployed
+model's state distribution. Example:
+
+    python experiments/run_llm_controller.py \
+        --backend http --base-url http://gpu-box:11434/v1 \
+        --model qwen2.5:1.5b-instruct \
+        --controller-backend openai --controller-model gpt-4.1-mini \
+        --problems experiments/problems/gsm8k-train-500.jsonl \
+        --workers 3 --token-budget 15000000 --out trajectories.jsonl
 """
 
 from __future__ import annotations
@@ -27,6 +41,20 @@ DEMO_PROBLEMS = [
     {"problem": "What is 6*7?", "answer": "42"},
     {"problem": "What is 12 + 30?", "answer": "42"},
 ]
+
+
+def _make_client(backend: str, base_url: str, model, api_key_env: str):
+    """One generation client for a role. echo ignores the other params."""
+    if backend == "echo":
+        return EchoLLMClient()
+    import os
+    resolved = ("https://api.openai.com/v1" if backend == "openai"
+                else base_url)
+    api_key = os.environ.get(api_key_env) or None
+    if backend == "openai" and not api_key:
+        raise SystemExit(f"backend openai needs a key in ${api_key_env}")
+    return OpenAICompatibleLLMClient(base_url=resolved, model=model,
+                                     api_key=api_key)
 
 
 def _client_tokens(*clients) -> int:
@@ -53,6 +81,7 @@ def _run_one(i, p, args, gen_client, ctrl_client, write_lock, fh):
         log_fn=buffer.append,
         episode_id=i,
         meta={"backend": args.backend, "model": args.model,
+              "controller_backend": args.controller_backend or args.backend,
               "controller_model": args.controller_model or args.model,
               "seed": args.seed, "problem_index": i})
     with write_lock:
@@ -72,6 +101,12 @@ def main() -> None:
     ap.add_argument("--model", default=None)
     ap.add_argument("--controller-model", default=None,
                     help="teacher model; defaults to --model")
+    ap.add_argument("--controller-backend",
+                    choices=["echo", "http", "openai"], default=None,
+                    help="teacher backend; defaults to --backend. Lets a "
+                         "strong API teacher drive a local generator.")
+    ap.add_argument("--controller-base-url", default=None,
+                    help="teacher base URL; defaults to --base-url")
     ap.add_argument("--api-key-env", default="OPENAI_API_KEY",
                     help="environment variable holding the bearer token "
                          "(used by http and openai backends when set)")
@@ -89,23 +124,12 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    if args.backend == "echo":
-        gen_client = EchoLLMClient()
-        ctrl_client = EchoLLMClient()
-    else:
-        import os
-        base_url = ("https://api.openai.com/v1" if args.backend == "openai"
-                    else args.base_url)
-        api_key = os.environ.get(args.api_key_env) or None
-        if args.backend == "openai" and not api_key:
-            raise SystemExit(
-                f"--backend openai needs a key in ${args.api_key_env}")
-        gen_client = OpenAICompatibleLLMClient(
-            base_url=base_url, model=args.model, api_key=api_key)
-        ctrl_client = OpenAICompatibleLLMClient(
-            base_url=base_url,
-            model=args.controller_model or args.model,
-            api_key=api_key)
+    gen_client = _make_client(args.backend, args.base_url, args.model,
+                              args.api_key_env)
+    ctrl_client = _make_client(args.controller_backend or args.backend,
+                               args.controller_base_url or args.base_url,
+                               args.controller_model or args.model,
+                               args.api_key_env)
 
     if args.problems is not None:
         problems = [json.loads(l) for l in args.problems.read_text().splitlines() if l.strip()]
