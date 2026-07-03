@@ -110,7 +110,20 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   The remaining lever is the one the design names: a trained controller
   with perfect menu fidelity by construction (Phase B). Cost: $0.20.
 
-### E14: design-true regime probe (teacher controller + local Qwen generator)
+### E14: design-true regime probe - RESOLVED 07-03: fix the generator interface first
+- **Result: 0/20 wins**, 303 decisions, masked 34%, teacher fallbacks 30%.
+  The failure is precisely localized to the generator-facing schemas:
+  SPLIT masked 62/99 (63%) and COMPUTE 40/73 (55%), form_hypothesis 0/12.
+  Qwen cannot reliably satisfy the strict payload schemas (enum + typed
+  array), the same type-loose-JSON axis E12 round 3 found; and a masked
+  SPLIT leaves the goal childless so SPLIT stays legal and the teacher
+  re-orders it (99 split attempts / 20 episodes). Per the pre-registered
+  reading: fix the generator-facing lens/schema interface (lenient
+  coercion at the payload boundary, mirroring the baseline-schema fix)
+  BEFORE the full design-true collection; Phase B's premise is untouched.
+- Original registration follows.
+
+### E14 (original registration): design-true regime probe (teacher controller + local Qwen generator)
 - Configuration: gpt-4.1-mini (OpenAI) picks (verb, target); Qwen2.5-1.5B
   (local Ollama CPU) writes all content; casework-v1 first-20; tree view;
   structured prompt; solve-claims off.
