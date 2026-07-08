@@ -197,23 +197,21 @@ unless noted. "mini" = gpt-4.1-mini. Run files in `experiments/runs/`.
   box (7B) or start Phase B on mini-as-both data only.
 - Cost: ~$0.10 teacher-side; local CPU (baseline ~2h + probe ~1h).
 
-### E17 - RESOLVED 07-07: NULL; instrument before any further probe
-- Manipulation: COMPUTE suffix lists the target's existing facts with
-  "must be different from all of these" (the E16-prescribed fix).
-- Result: **0/20**; COMPUTE mask RATE unchanged (118/143 = 83% vs E16
-  82%) though total masks fell (39% vs 52%) as the teacher shifted mix;
-  teacher fallbacks rose back to 30% (E16: 8%); commit:0 became legal in
-  only 1 of 20 episodes. New failure texture: nested re-splitting of
-  case goals and abandonment of solvable cases.
-- Reading: the duplicate LISTING did not break the loop, which means the
-  masked computes are NOT (only) duplicates: they are rejected for
-  reasons the trajectory log does not record (parse failures vs
-  duplicate vs reductio Err are indistinguishable post hoc). Three
-  consecutive 0/20s with narrowing-but-blind diagnostics is the stop
-  signal. NEXT (E18 prerequisite, no-cost code change): log the
-  generator's raw payload and the mask REASON into the trajectory record
-  at _do_llm_verb, so the next probe is a diagnosis rather than a guess.
-  The design-true collection stays gated on that.
+### E17 - RESOLVED 07-07: NULL; design-true probing halted
+- Manipulation (single, vs E16): COMPUTE suffix lists the target's
+  existing facts with "must be different from all of these".
+- Result: **0/20**; COMPUTE mask 83% vs E16's 82% (UNCHANGED, the
+  pre-registered failure); overall mask 52% -> 39% but teacher fallbacks
+  rebounded 8% -> 30%; root aggregation barely attempted (5 tries);
+  commit:0 legal in 1/20 episodes; episodes now die in varied ways
+  (nested case-splitting, abandoned live cases).
+- Verdict: the duplicate list did not break the loop, and the failure is
+  no longer one mechanism: with a 1.5B-3B generator the ~10-step
+  protocol always finds a weakest link. Four design-true probes
+  (E14-E17) at 0/20 is the stop signal, same rule as the E6-E7 prompt
+  saturation. Design-true collection is BLOCKED on generator quality
+  (7B-class on the GPU box when free), not on any single interface fix.
+  Phase B proceeds on the mini-as-both casework data (which has wins).
 
 ## Method notes
 
