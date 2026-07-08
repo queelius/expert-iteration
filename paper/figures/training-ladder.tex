@@ -1,0 +1,89 @@
+% ---------------------------------------------------------------------------
+% Figure: the three-rung training ladder, with MCTS as a visually subordinate
+% optional side-loop (dashed) feeding the same replay buffer and losses.
+% Requires in the preamble: \usepackage{tikz} and
+%   \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.misc}
+% ---------------------------------------------------------------------------
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    font=\footnotesize,
+    rung/.style={draw, rounded corners=2pt, align=left, inner sep=5pt,
+                 text width=36mm},
+    r1/.style={rung, fill=gray!10, draw=gray!60},
+    r2/.style={rung, fill=orange!12, draw=orange!70!black},
+    r3/.style={rung, fill=orange!22, draw=orange!70!black, thick},
+    buffer/.style={draw, fill=blue!8, draw=blue!45!black, align=center,
+                   inner sep=4pt, rounded corners=6pt},
+    mcts/.style={draw, dashed, fill=gray!5, draw=gray!55, align=left,
+                 inner sep=4pt, text width=36mm, font=\scriptsize},
+    lab/.style={font=\scriptsize, align=center},
+    arr/.style={-{Stealth[length=2.2mm]}, semithick},
+    opt/.style={{Stealth[length=2mm]}-{Stealth[length=2mm]}, thin, dashed,
+                gray!45!black},
+    opt1/.style={-{Stealth[length=2mm]}, thin, dashed, gray!45!black}]
+
+  % ---- the three rungs (the spine, left to right) ----
+  \node[r1] (rung1) at (0,0)
+    {\textbf{Rung 1: LLM-as-}\\ \textbf{controller (no training)}\\[2pt]
+     {\scriptsize controller-teacher picks $(\textit{verb},
+      \textit{target})$; the small frozen generator fills content under the
+      lens; the verifier checks}};
+  \node[r2] (rung2) at (5.7,0)
+    {\textbf{Rung 2: behavior-cloning warm start}\\[2pt]
+     {\scriptsize verb and pointer heads imitate the teacher's actions; $Q$
+      head regressed on Monte Carlo returns from teacher trajectories}};
+  \node[r3] (rung3) at (11.4,0)
+    {\textbf{Rung 3: off-policy}\\ \textbf{$Q$-learning (the spine)}\\[2pt]
+     {\scriptsize n-step / Monte Carlo returns from the verifier terminal;
+      target network; heads distilled toward softmax over $Q$}};
+
+  \draw[arr] (rung1) -- node[lab, above=0.4mm] {validated\\ interface}
+    (rung2);
+  \draw[arr] (rung2) -- node[lab, above=0.4mm] {warm-started\\ heads}
+    (rung3);
+
+  % ---- the shared replay buffer ----
+  \node[buffer] (buf) at (5.7,-2.55)
+    {Replay buffer\\[-1pt] \scriptsize transitions $(s, a, r, s')$,
+     $a = (\textit{verb}, \textit{target})$};
+
+  \draw[arr] (rung1.south) |- (buf.west);
+  \node[lab] at (1.7,-2.9) {teacher trajectories};
+  \draw[arr] (buf.north) -- (rung2.south);
+  \node[lab, anchor=east] at (5.5,-1.85) {offline imitation data};
+  \draw[arr] ([xshift=-14mm]rung3.south) |- ([yshift=1.5mm]buf.east);
+  \node[lab] at (8.55,-1.95) {self-generated\\ experience};
+  \draw[arr] ([yshift=-1.5mm]buf.east) -| ([xshift=-5mm]rung3.south);
+  \node[lab] at (7.9,-3.38) {sampled minibatches};
+
+  % ---- MCTS: optional, strictly additive, visually subordinate ----
+  \node[mcts, text width=46mm] (mcts) at (11.85,-4.75)
+    {\textbf{MCTS: optional,}\\ \textbf{strictly additive}\\[2pt]
+     better behavior: search-guided rows into the \emph{same} buffer\\
+     better targets: $\hat{Q}_{\mathrm{MCTS}}(s,a)$, visit counts\\
+     deployment: budget $B$ simulations, the test-time compute knob
+     ($B{=}0$: heads alone)};
+
+  \draw[opt] (mcts.north) -- ([xshift=5mm]rung3.south);
+  \node[lab, anchor=west, align=left, gray!45!black] at (11.95,-2.6)
+    {priors: heads, $Q$\\ targets: $\hat{Q}$, visits};
+  \draw[opt1] (mcts.west) -| (buf.south);
+  \node[lab, gray!45!black] at (7.4,-4.45) {extra rows};
+\end{tikzpicture}
+\caption{The three-rung controller-training ladder
+(\cref{sec:training-ladder}). Rung 1 trains nothing: an LLM
+controller-teacher orchestrates the small frozen generator to validate the
+interface and produce bootstrap trajectories. Rung 2 warm-starts the verb
+and pointer heads by behavior cloning and the $Q$ head by Monte Carlo
+regression. Rung 3 is the spine: off-policy value-based $Q$-learning with
+n-step or Monte Carlo returns whose only reward source is the symbolic
+verifier. Because the core is off-policy, MCTS (dashed, bottom right) is a
+strictly additive option, never the spine: it contributes better behavior
+(higher-quality rows into the same replay buffer) and better targets
+($\hat{Q}_{\mathrm{MCTS}}$ and visit-count distributions), and at deployment
+a budget $B$ of PUCT simulations is the test-time compute knob
+(\cref{sec:training-mcts}). RL first, MCTS second.}
+\label{fig:training-ladder}
+\end{figure}

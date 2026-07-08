@@ -1,0 +1,129 @@
+% ---------------------------------------------------------------------------
+% Figure: episode timeline. The worked forest of \cref{sec:method-state}
+% (solve |x-3| + |x+2| = 7 by exhaustive cases) evolving over an episode.
+% Semantic status colors follow the verifier: green = verifier-vouched or
+% committed, gray/faded = abandoned, white = open, yellow = unverified
+% hypothesis. Requires in the preamble: \usepackage{tikz} and
+%   \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.misc}
+% ---------------------------------------------------------------------------
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    font=\scriptsize,
+    nd/.style={draw, circle, inner sep=0.6pt, minimum size=4.6mm,
+               font=\tiny, align=center},
+    goal/.style={nd, fill=white, draw=black!70},
+    committed/.style={nd, fill=green!22, draw=green!45!black, very thick},
+    fact/.style={nd, fill=green!22, draw=green!45!black},
+    hyp/.style={nd, fill=yellow!35, draw=yellow!50!black},
+    dead/.style={nd, fill=gray!18, draw=gray!55, text=gray!60!black},
+    tedge/.style={draw=black!55, line width=0.5pt},
+    dedge/.style={draw=gray!55, line width=0.5pt},
+    stp/.style={-{Stealth[length=2mm]}, semithick},
+    steplab/.style={font=\tiny, align=center},
+    panel/.style={font=\scriptsize, align=center}]
+
+  % Panel geometry: root at (0,0); children at x = -0.85, 0, 0.85, y = -0.85;
+  % grandchildren directly below their parent at y = -1.7; caption at -2.45.
+
+  % ---------------- panel (i): the root goal ----------------
+  \begin{scope}[shift={(0,0)}]
+    \node[goal] (p1r) at (0,0) {$G$};
+    \node[panel] at (0,-2.45) {(i) initial state\\ root \textsc{Goal}: solve\\
+      $|x{-}3| + |x{+}2| = 7$};
+  \end{scope}
+
+  % ---------------- panel (ii): after Split ----------------
+  \begin{scope}[shift={(3.4,0)}]
+    \node[goal] (p2r) at (0,0) {$G$};
+    \node[goal] (p2a) at (-0.85,-0.85) {$G_1$};
+    \node[goal] (p2b) at (0,-0.85) {$G_2$};
+    \node[goal] (p2c) at (0.85,-0.85) {$G_3$};
+    \draw[tedge] (p2r) -- (p2a);
+    \draw[tedge] (p2r) -- (p2b);
+    \draw[tedge] (p2r) -- (p2c);
+    \node[panel] at (0,-2.45) {(ii) three case subgoals\\
+      $x < -2$, $-2 \le x \le 3$,\\ $x > 3$ (exhaustive)};
+  \end{scope}
+
+  % ---------------- panel (iii): first case closed positively ----------------
+  \begin{scope}[shift={(6.8,0)}]
+    \node[goal] (p3r) at (0,0) {$G$};
+    \node[committed] (p3a) at (-0.85,-0.85) {$G_1$};
+    \node[goal] (p3b) at (0,-0.85) {$G_2$};
+    \node[goal] (p3c) at (0.85,-0.85) {$G_3$};
+    \node[fact] (p3f) at (-0.85,-1.7) {$F$\,\checkmark};
+    \draw[tedge] (p3r) -- (p3a);
+    \draw[tedge] (p3r) -- (p3b);
+    \draw[tedge] (p3r) -- (p3c);
+    \draw[tedge] (p3a) -- (p3f);
+    \node[panel] at (0,-2.45) {(iii) $G_1$ committed on\\
+      verified fact $x = -3$\\ (positive closure)};
+  \end{scope}
+
+  % ---------------- panel (iv): dead branch pruned, third case closed --------
+  \begin{scope}[shift={(10.2,0)}]
+    \node[goal] (p4r) at (0,0) {$G$};
+    \node[committed] (p4a) at (-0.85,-0.85) {$G_1$};
+    \node[dead] (p4b) at (0,-0.85) {$G_2$};
+    \node[committed] (p4c) at (0.85,-0.85) {$G_3$};
+    \node[fact] (p4f) at (-0.85,-1.7) {$F$\,\checkmark};
+    \node[dead] (p4h) at (0,-1.7) {$H$};
+    \node[fact] (p4g) at (0.85,-1.7) {$F$\,\checkmark};
+    \draw[tedge] (p4r) -- (p4a);
+    \draw[dedge] (p4r) -- (p4b);
+    \draw[tedge] (p4r) -- (p4c);
+    \draw[tedge] (p4a) -- (p4f);
+    \draw[dedge] (p4b) -- (p4h);
+    \draw[tedge] (p4c) -- (p4g);
+    \node[panel] at (0,-2.45) {(iv) $G_2$ abandoned\\ (negative closure);\\
+      $G_3$ committed on $x = 4$};
+  \end{scope}
+
+  % ---------------- panel (v): root commit, terminal verdict ----------------
+  \begin{scope}[shift={(13.6,0)}]
+    \node[committed] (p5r) at (0,0) {$G$};
+    \node[committed] (p5a) at (-0.85,-0.85) {$G_1$};
+    \node[dead] (p5b) at (0,-0.85) {$G_2$};
+    \node[committed] (p5c) at (0.85,-0.85) {$G_3$};
+    \node[fact] (p5f) at (-0.85,-1.7) {$F$\,\checkmark};
+    \node[dead] (p5h) at (0,-1.7) {$H$};
+    \node[fact] (p5g) at (0.85,-1.7) {$F$\,\checkmark};
+    \draw[tedge] (p5r) -- (p5a);
+    \draw[dedge] (p5r) -- (p5b);
+    \draw[tedge] (p5r) -- (p5c);
+    \draw[tedge] (p5a) -- (p5f);
+    \draw[dedge] (p5b) -- (p5h);
+    \draw[tedge] (p5c) -- (p5g);
+    \node[font=\scriptsize\bfseries, green!40!black] at (0,0.55)
+      {$r_T = +1$};
+    \node[panel] at (0,-2.45) {(v) root committed on\\
+      $\max(4,-3){=}4$; verifier\\ accepts: terminal};
+  \end{scope}
+
+  % ---------------- step arrows between panels ----------------
+  \draw[stp] (0.5,-0.85) -- node[steplab, above=0.5mm]
+    {\textsc{Split}\\(root)} (2.3,-0.85);
+  \draw[stp] (4.55,-0.85) -- node[steplab, above=0.5mm]
+    {\textsc{Compute},\\ \textsc{Verify},\\ \textsc{Commit} ($G_1$)}
+    (5.65,-0.85);
+  \draw[stp] (7.95,-0.85) -- node[steplab, above=0.5mm]
+    {\textsc{FormHyp},\\ \textsc{Abandon} ($G_2$);\\ close $G_3$}
+    (9.05,-0.85);
+  \draw[stp] (11.35,-0.85) -- node[steplab, above=0.5mm]
+    {\textsc{Commit}\\(root)} (12.45,-0.85);
+\end{tikzpicture}
+\caption{An episode over the worked forest of \cref{sec:method-state}: solve
+$|x{-}3| + |x{+}2| = 7$ by exhaustive cases, asked for the largest solution.
+Circles are forest nodes: $G$ goals, $F$ facts, $H$ hypotheses; green with a
+check mark means verifier-vouched (a \textsc{VerifierCall} succeeded), thick
+green means committed, gray means abandoned (a forward prune that retains
+history), and white means open. Each panel is one immutable state; the
+arrows between panels name the $(\textit{verb}, \textit{target})$ actions
+applied. Structure never gates: $G_2$ contributes nothing and is abandoned,
+yet the root commits on the aggregate of its two verified branches, and only
+that root \textsc{Commit} is terminal and verifier-gated, yielding the
+episode's sole task reward $r_T = +1$.}
+\label{fig:episode-timeline}
+\end{figure}

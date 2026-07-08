@@ -14,6 +14,10 @@ semantics (\cref{sec:method-actions}), the controller network
 (\cref{sec:method-controller}), and the reward (\cref{sec:method-reward}).
 Training is deferred to \cref{sec:training}.
 
+% Main architecture figure (one rollout step; frozen/trained color coding).
+% To enable: uncomment the \input below and the tikz lines in main.tex.
+\input{figures/architecture-simple}
+
 \subsection{State: an immutable reasoning forest}
 \label{sec:method-state}
 
@@ -41,28 +45,12 @@ recorded as non-gating metadata; whether checked aggregation helps is an
 ablation, deferred with the move from answer verification to proof
 verification.
 
-A worked forest for $|x-3| + |x+2| = 7$ by case analysis, exercising every
-node kind and both closure polarities, is:
+A worked episode for $|x-3| + |x+2| = 7$ by case analysis, exercising
+every node kind and both closure polarities, appears in
+\cref{fig:episode-timeline}; the same forest is pinned by an executable
+integration test in the code accompanying this paper.
 
-{\small
-\begin{verbatim}
-GOAL solve |x-3| + |x+2| = 7          (root; connective: exhaustive_case)
-+- GOAL case x < -2:   -(x-3) - (x+2) = 7
-|  +- FACT (1 - 7)/2 = -3  [derived]  -> VerifierCall(ok) -> [verified]
-|  (committed: witness is the verified fact; x = -3 checks x < -2)
-+- GOAL case -2 <= x <= 3:   (3-x) + (x+2) = 5, constant
-|  +- HYPOTHESIS "5 = 7 has a solution"        [never verified]
-|  (abandoned: the branch contributes nothing)
-+- GOAL case x > 3:   (x-3) + (x+2) = 7
-   +- FACT (7 + 1)/2 = 4   [derived]  -> VerifierCall(ok) -> [verified]
-   (committed: x = 4 checks x > 3)
-(root committed on the aggregate max(4, -3) = 4 when the largest solution
- is asked; positive closure twice, negative closure once)
-\end{verbatim}
-}
-
-\noindent The same forest is pinned by an executable integration test in
-the code accompanying this paper.
+\input{figures/episode-timeline}
 
 \subsection{Actions: verbs as lenses}
 \label{sec:method-actions}

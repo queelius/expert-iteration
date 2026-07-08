@@ -1,0 +1,162 @@
+% ---------------------------------------------------------------------------
+% Figure: main architecture (one rollout step).
+% Requires in the preamble: \usepackage{tikz} and
+%   \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.misc}
+% Conventions (following AlphaZero-style loop diagrams, RLPrompt's
+% frozen-vs-trained color coding, and the snowflake/flame icon standard):
+% warm fill + flame = the one trained component; gray fill + snowflake =
+% frozen weights; light red = symbolic machinery with no parameters at all;
+% solid arrows = data flow during a rollout; dashed red arrow = the reward
+% (learning signal), terminating only on the trained component.
+% ---------------------------------------------------------------------------
+
+% Small inline icons (shared across figure files; \providecommand so that
+% inputting several figure files never redefines them).
+\providecommand{\iconfrozen}{%
+  \tikz[baseline=-0.55ex]{%
+    \foreach \a in {0,60,...,300} {%
+      \draw[line width=0.5pt, cyan!60!blue] (0,0) -- (\a:0.105);
+      \draw[line width=0.4pt, cyan!60!blue] (\a:0.062) -- ++(\a+55:0.038);
+      \draw[line width=0.4pt, cyan!60!blue] (\a:0.062) -- ++(\a-55:0.038);
+    }%
+  }%
+}
+\providecommand{\icontrained}{%
+  \tikz[baseline=-0.4ex]{%
+    \fill[orange!85!red] (0,-0.09)
+      .. controls (-0.10,-0.02) and (-0.075,0.10) .. (0.005,0.17)
+      .. controls (-0.015,0.09) and (0.05,0.085) .. (0.058,0.03)
+      .. controls (0.10,-0.01) and (0.08,-0.075) .. (0,-0.09) -- cycle;
+    \fill[yellow!88!orange] (0.004,-0.07)
+      .. controls (-0.042,-0.018) and (-0.028,0.038) .. (0.006,0.082)
+      .. controls (0.002,0.036) and (0.034,0.028) .. (0.032,-0.006)
+      .. controls (0.046,-0.038) and (0.03,-0.062) .. (0.004,-0.07) -- cycle;
+  }%
+}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    font=\footnotesize,
+    box/.style={draw, rounded corners=2pt, align=center, inner sep=4pt,
+                minimum height=9mm},
+    trained/.style={box, fill=orange!20, draw=orange!70!black, thick},
+    frozen/.style={box, fill=gray!14, draw=gray!55},
+    symbolic/.style={box, fill=red!8, draw=red!55!black},
+    state/.style={box, fill=green!12, draw=green!45!black},
+    lensbox/.style={box, fill=blue!9, draw=blue!45!black},
+    head/.style={draw=orange!70!black, fill=orange!8, rounded corners=1pt,
+                 align=center, inner sep=2pt, font=\scriptsize,
+                 minimum width=11mm, minimum height=5.5mm},
+    lab/.style={font=\scriptsize, align=center},
+    arr/.style={-{Stealth[length=2.2mm]}, semithick},
+    rew/.style={-{Stealth[length=2.2mm]}, thick, dashed, red!65!black}]
+
+  % ---- learned controller (composite; the only trained component) ----
+  \node[head] (verbh) at (0,0.42) {verb\\head};
+  \node[head, right=1.6mm of verbh] (ptrh) {pointer\\head};
+  \node[head, right=1.6mm of ptrh] (qh) {$Q$\\head};
+  \node[head, minimum width=39mm, below=1.6mm of ptrh.south, anchor=north]
+    (enc) {pluggable encoder $\to (g, \{h_k\})$};
+  \begin{scope}[on background layer]
+    \node[trained, fit=(verbh)(ptrh)(qh)(enc), inner sep=5pt,
+          label={[font=\scriptsize\bfseries, orange!60!black,
+                  align=center]above:{%
+            \icontrained\ Learned controller\\
+            (to be trained, \cref{sec:training})}}]
+      (ctrl) {};
+  \end{scope}
+
+  % ---- lens, frozen LLM, forest, verifier ----
+  \node[lensbox] (lens) at (5.8,1.95)
+    {Lens for verb $v$\\[-1pt]
+     \scriptsize get: $\mathrm{view}(s,t)$,\\[-2pt]
+     \scriptsize a scoped read $+$ JSON\\[-2pt]
+     \scriptsize schema $+$ $\mathrm{suffix}_v$};
+  \node[frozen] (llm) at (10.3,1.95)
+    {\iconfrozen\ Frozen LLM (generator)\\[-1pt]
+     \scriptsize never trained\\[-2pt]
+     \scriptsize $o \sim \mathrm{LLM}(\cdot \mid \mathrm{view}(s,t)
+       \mathbin{+\!\!+} \mathrm{suffix}_v)$};
+  \node[state] (forest) at (12.95,-0.35)
+    {Reasoning forest $s$\\[-1pt]
+     \scriptsize immutable, typed nodes:\\[-2pt]
+     \scriptsize goals, hypotheses, facts,\\[-2pt]
+     \scriptsize verifier-call records};
+  \node[symbolic] (ver) at (6.35,-2.0)
+    {Symbolic verifier\\[-1pt]
+     \scriptsize oracle; no parameters, no learning};
+
+  % ---- action fan-out ----
+  \coordinate (branch) at (4.45,0.08);
+  \draw[arr] (ctrl.east) -- node[lab, above=0.4mm]
+    {$(\textit{verb},$\\ $\textit{target})$} (branch);
+  \draw[arr] (branch) |- (lens.west);
+  \node[lab, anchor=west] at (4.6,0.95)
+    {\textsc{Split} / \textsc{FormHypothesis} / \textsc{ComputeSubexpr}};
+  \draw[arr] (branch) -- (ver.north);
+  \node[lab, anchor=west, align=left] at (5.85,-0.55)
+    {\textsc{Verify} / \textsc{Commit} / \textsc{Abandon}\\
+     \textbf{(no LLM call)}};
+
+  % ---- generative path ----
+  \draw[arr] (lens) -- (llm);
+  \draw[arr] (llm.east) -| (forest.north);
+  \node[lab, anchor=west, align=left] at (13.15,1.4)
+    {sanitized\\ write-back:\\ $s' {=} \mathrm{apply}(s,t,o)$};
+
+  % ---- verifier path into the state ----
+  \draw[arr] (ver.east) -| (forest.south);
+  \node[lab, anchor=west, align=left] at (8.55,-1.6)
+    {\textsc{VerifierCall} record;\\ witness-gated promotion};
+
+  % ---- observation back to the controller (outer loop, bottom) ----
+  \draw[arr] (forest.east) -- ++(0.3,0) -- (15.0,-3.75) -- (0.7,-3.75)
+    -- (ctrl.south -| 0.7,0);
+  \node[lab] at (7.9,-4.05)
+    {observation: rendered forest (parent tags, evidence and rejection
+     notices, turn counter)};
+
+  % ---- reward (learning signal; the only reward source) ----
+  \draw[rew] (ver.south) -- (6.35,-3.15) -- (2.3,-3.15)
+    -- (ctrl.south -| 2.3,0);
+  \node[lab, red!65!black] at (4.6,-3.45)
+    {terminal $r_T = \pm 1$ at root \textsc{Commit}: the only reward source};
+
+  % ---- legend ----
+  \begin{scope}[shift={(-0.9,-4.85)}, font=\scriptsize]
+    \node[trained, minimum height=4mm, minimum width=7mm, inner sep=1pt,
+          anchor=west] (lg1) at (0,0) {};
+    \node[right=1mm of lg1, anchor=west] (lg1t) {\icontrained\ trained};
+    \node[frozen, minimum height=4mm, minimum width=7mm, inner sep=1pt,
+          right=3.5mm of lg1t] (lg2) {};
+    \node[right=1mm of lg2, anchor=west] (lg2t)
+      {\iconfrozen\ frozen weights};
+    \node[symbolic, minimum height=4mm, minimum width=7mm, inner sep=1pt,
+          right=3.5mm of lg2t] (lg3) {};
+    \node[right=1mm of lg3, anchor=west] (lg3t) {symbolic (no parameters)};
+    \draw[arr] ([xshift=3.5mm]lg3t.east) -- ++(0.65,0)
+      node[right=0.5mm, anchor=west] (lg4t) {data flow};
+    \draw[rew] ([xshift=3.5mm]lg4t.east) -- ++(0.65,0)
+      node[right=0.5mm, anchor=west] {reward};
+  \end{scope}
+\end{tikzpicture}
+\caption{One rollout step of the lens-structured context MDP
+(\cref{sec:method}). The learned controller (verb head, pointer head, $Q$
+head over a pluggable encoder) is the \emph{only} component that is ever
+trained; it is untrained at rung 1 and acquires its weights in rungs 2--3 of
+\cref{sec:training}. It emits a typed action $a = (\textit{verb},
+\textit{target})$. Generative verbs pass through the lens, which renders a
+scoped view of the target's neighborhood into the frozen LLM and writes the
+sanitized output back into the immutable reasoning forest.
+\textsc{Verify}, \textsc{Commit}, and \textsc{Abandon} never call the LLM:
+the policy can neither author what is checked nor what it is checked
+against. The symbolic verifier is the only reward source (dashed red):
+terminal $r_T = \pm 1$ at a root \textsc{Commit}, $0$ at the depth limit
+with no root commit, and zero task reward elsewhere (a masked action costs
+a constant $-0.01$; \cref{sec:method-reward}). Framing: RL first, MCTS
+second; the central object is this agent learning over the induced context
+MDP, and MCTS (\cref{fig:training-ladder}) is a strictly additive
+accelerator, never the spine.}
+\label{fig:architecture}
+\end{figure}

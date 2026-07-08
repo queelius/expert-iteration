@@ -15,6 +15,11 @@
 % ---------- Graphics, color, tables ----------
 \usepackage{graphicx}
 \usepackage{xcolor}
+% Required by the figures in figures/ (architecture, training-ladder,
+% episode-timeline); uncomment together with their \input lines in
+% sections/method.tex and sections/training.tex.
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.misc}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{enumitem}
@@ -62,6 +67,14 @@ over a Structured Reasoning State}
 \input{sections/results}
 \input{sections/discussion}
 \input{sections/conclusion}
+
+\appendix
+\section{Detailed rollout-step architecture}
+\label{app:architecture}
+
+\Cref{fig:architecture} expands \cref{fig:architecture-simple} to one full rollout step: the factored heads over the pluggable encoder, the verb-specific lens fields, the sanitized write-back, and the no-LLM verifier path.
+
+\input{figures/architecture}
 
 \bibliographystyle{plainnat}
 \bibliography{references}

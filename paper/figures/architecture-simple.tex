@@ -1,0 +1,39 @@
+% Simple main-body architecture: five boxes, one loop. The detailed
+% rollout-step figure lives in the appendix.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm,
+                inner sep=4pt, font=\small},
+    lab/.style={font=\footnotesize},
+    arr/.style={-{Stealth[length=2mm]}, thick}]
+  \node[box, fill=orange!20] (ctrl) at (0,0)
+    {Controller $\pi_\theta, Q_\psi$\\ \scriptsize trained (Phase B); $<$5M params};
+  \node[box, fill=blue!10] (lens) at (5.2,0)
+    {Lens\\ \scriptsize scoped view};
+  \node[box, fill=gray!15] (llm) at (9.4,0)
+    {LLM\\ \scriptsize frozen};
+  \node[box, fill=green!12] (forest) at (9.4,-2.6)
+    {Reasoning forest\\ \scriptsize immutable state};
+  \node[box, fill=red!12] (ver) at (4.4,-2.6)
+    {Symbolic verifier\\ \scriptsize no learning};
+
+  \draw[arr] (ctrl) -- node[lab, above] {$(\textit{verb},\textit{target})$} (lens);
+  \draw[arr] (lens) -- node[lab, above] {prompt} (llm);
+  \draw[arr] (llm) -- node[lab, right] {write-back} (forest);
+  \draw[arr] (forest) -- node[lab, below=4mm, midway]
+    {\textsc{Verify}/\textsc{Commit}} (ver);
+  \draw[arr, dashed, red!70!black] (ver.west)
+    -| node[lab, above, pos=0.22] {terminal $r_T = \pm 1$}
+    ([xshift=-7mm]ctrl.south);
+  \draw[arr] (forest.south) -- ++(0,-0.9)
+    -| node[lab, below, pos=0.25] {observation} ([xshift=7mm]ctrl.south);
+\end{tikzpicture}
+\caption{The loop, at a glance. The controller (the only trained
+component) picks a typed action; the lens scopes what the frozen LLM
+sees; output writes back into the immutable forest;
+\textsc{Verify}/\textsc{Commit} go to the symbolic verifier without any
+LLM call, and the terminal verdict is the only reward (dashed). The
+detailed rollout-step figure appears in \cref{app:architecture}.}
+\label{fig:architecture-simple}
+\end{figure}
