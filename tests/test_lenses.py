@@ -162,3 +162,17 @@ def test_compute_suffix_stays_ground_for_non_equation_goals():
     s = DeliberationState(g, 0)
     on = suffix(Verb.COMPUTE, 0, s, solve_claims=True)
     assert "GROUND equation" in on              # no equation, no solve-claim form
+
+
+def test_compute_suffix_lists_existing_facts_as_rejected_duplicates():
+    # E17: the generator is memoryless; without seeing the goal's existing
+    # facts it re-emits its rejected statement on every retry.
+    g = new_graph("p")
+    g = compute(g, 0, "5 + 3 = 8", premise_ids=()).graph
+    s = DeliberationState(g, 1)
+    text = suffix(Verb.COMPUTE, 0, s)
+    assert '"5 + 3 = 8"' in text
+    assert "must be different" in text
+    # a goal with no facts carries no duplicate block
+    g2 = new_graph("q")
+    assert "must be different" not in suffix(Verb.COMPUTE, 0, DeliberationState(g2, 0))

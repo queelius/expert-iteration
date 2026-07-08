@@ -221,6 +221,19 @@ def _fields_description(verb: Verb, state: DeliberationState,
     if verb is Verb.COMPUTE:
         ids = _live_premise_ids(state.graph)
         opts = ", ".join(str(i) for i in ids) if ids else "(none yet)"
+        # Duplicate awareness (E17): a compute that repeats a statement
+        # already on this goal is rejected by the MDP, and a memoryless
+        # generator re-prompted for the same target re-emits the same
+        # rejected text forever unless told what already exists.
+        dup = ""
+        if target is not None:
+            tgt_node = get(state.graph, target)
+            existing = [f'"{get(state.graph, fid).statement}"'
+                        for fid in getattr(tgt_node, "facts", ())]
+            if existing:
+                dup = ("\nAlready on this goal (REJECTED if repeated; your "
+                       "statement must be different from all of these): "
+                       + ", ".join(existing) + "\n")
         solve_sym = (_goal_equation_symbol(state, target)
                      if solve_claims and target is not None else None)
         if solve_sym is not None:
@@ -238,6 +251,7 @@ def _fields_description(verb: Verb, state: DeliberationState,
                 "this step uses\n"
                 "Example:\n"
                 f'  {{"statement": "{solve_sym} = 5", "premises": []}}'
+                + dup
             )
         return (
             "Produce a JSON object with these fields:\n"
@@ -255,6 +269,7 @@ def _fields_description(verb: Verb, state: DeliberationState,
             "step uses\n"
             "Example:\n"
             '  {"statement": "(4 + 16)/4 = 5", "premises": []}'
+            + dup
         )
     raise ValueError(f"{verb} takes no LLM generation")
 
