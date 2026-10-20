@@ -10,10 +10,12 @@
 
 **Spec:** The approved scope below records the repository-organization proposal discussed with the user on 2026-10-20. Existing scientific contracts remain governed by `CLAUDE.md`, `design.md`, and the experiment ledger.
 
-**Status:** Implementation in progress (2026-10-20). Tasks 1-4 have initial
-deliverables and focused verification; Task 5 is in progress. Detailed checks,
-limitations, and decisions are in `docs/release-readiness.md`. Task 6 has not
-started. Remaining unchecked steps are not claims of completed verification.
+**Status:** Local archive implementation and standalone candidate checks
+completed on 2026-10-20. Tasks 1-4 have their bounded first-release deliverables.
+Task 5 produced a verified compact candidate; broader historical-suite and
+publication-clearance limits remain explicit in `docs/release-readiness.md`.
+Task 6 has not started. Unchecked items below remain outside the completed
+scope or require the separate publication gate.
 
 ## Approved Scope
 
@@ -87,10 +89,10 @@ consumed by Task 2, and the release exclusions consumed by Task 5.
 
 - [ ] Record branch, HEAD, tracked modifications, untracked files, and relevant ignored files. Do not assume the current commit contains the later research.
 - [ ] Inventory the classical examples, completed experiments, proposed work, partial runs, quarantined runs, and sibling-owned follow-ups.
-- [ ] For each candidate public finding, record its precise wording, experiment IDs, raw files, analysis dependencies, independent problem count, repeated-measure structure, and known limitations.
+- [x] For each candidate public finding, record its precise wording, experiment IDs, raw files, analysis dependencies, independent problem count, repeated-measure structure, and known limitations.
 - [ ] Use JSON records with `id`, `statement`, `experiment_ids`, `status`, `inputs`, `analysis`, `unit_of_analysis`, `limitations`, and `exclusions`. Each input records a relative path and SHA-256. Status is one of `candidate`, `verified`, or `excluded`; excluded entries include a reason.
 - [ ] Start with three candidate comparisons: E20's imitation-controller transfer test; the E41/E42 fixed-revision and routing comparison; and E47's context-locality and target-selection screen. Add E19/E22 only if the underlying action labels, split, and comparator can be independently checked without new model calls.
-- [ ] Distinguish recalculating a metric from saved outcomes from replaying and rechecking symbolic correctness. Record which level is possible for each finding; summaries alone do not count as independent reproduction.
+- [x] Distinguish recalculating a metric from saved outcomes from replaying and rechecking symbolic correctness. Record which level is possible for each finding; summaries alone do not count as independent reproduction.
 - [ ] Audit licenses and provenance of code, vendored code, datasets, saved model responses, and checkpoints. Check repository remote and visibility read-only. Inventory sensitive operational material without copying secrets into the report.
 - [ ] Define a small release allowlist and explicit exclusions. If key evidence is missing, narrow the public claim or exclude it rather than repairing the gap by assertion.
 
@@ -113,12 +115,12 @@ replay/summary functions where available; implement only the selected analyses.
 - [ ] Inspect the selected record schemas and existing replay functions before writing readers. Explicitly dispatch on supported record contracts; reject unknown contracts.
 - [ ] Write failing tests for a tiny paired fixture with known counts, including one win, one loss, one tie, and repeated observations from one problem.
 - [ ] Write failing tests for missing inputs, hash mismatch, duplicate problem/arm/repetition keys, an unexpected contract, and a partial or quarantined input incorrectly marked as headline evidence.
-- [ ] Add a test that denies outbound network access during reproduction. Do not merely unset API keys.
-- [ ] Implement validation and table generation. Derive counts from records; never paste ledger totals into the computation.
+- [x] Add a test that denies outbound network access during reproduction. Do not merely unset API keys.
+- [x] Implement validation and table generation. Derive counts from records; never paste ledger totals into the computation.
 - [ ] Preserve paired comparisons and use the original problem/state grouping for uncertainty where applicable. Show unique problem counts separately from calls and repetitions. Label descriptive results and exploratory analyses explicitly.
-- [ ] Run `uv run pytest -q tests/test_archive_reproduction.py`.
+- [x] Run `uv run pytest -q tests/test_archive_reproduction.py`.
 - [ ] Reproduce the selected actual artifacts twice into separate temporary directories and compare generated values. Investigate any discrepancy against the ledger; retain both the old claim and a dated correction if necessary.
-- [ ] Mark a claim `verified` only after the supported reproduction level succeeds. Record the command, environment, result, and remaining limits.
+- [x] Mark a claim `verified` only after the supported reproduction level succeeds. Record the command, environment, result, and remaining limits.
 
 **Done when:** A reader can regenerate every selected headline number offline,
 and damaged, incomplete, or misidentified evidence produces a clear failure.
@@ -137,7 +139,7 @@ set, expected output structure, seed, and bounded runtime to Task 4.
 - [ ] Explain the state, available moves, reward, policy, search visits, and learning update in plain language before presenting the general loop.
 - [ ] Write a smoke test for the documented command with a fixed seed and small budget, checking finite outputs and completion without network access.
 - [ ] Check the example against the existing exact-solver tests. Do not require or imply universal monotonic improvement from one demonstration.
-- [ ] Run `uv run pytest -q tests/test_archive_tutorial.py tests/test_expert_iteration.py tests/test_mcts.py tests/test_value_iteration.py`.
+- [x] Run `uv run pytest -q tests/test_archive_tutorial.py tests/test_expert_iteration.py tests/test_mcts.py tests/test_value_iteration.py`.
 - [ ] Document that the teaching example illustrates mechanics, not a new empirical claim about LLM training or compute efficiency.
 
 **Done when:** A clean local environment can run the example without API
@@ -155,12 +157,12 @@ their scientific, safety, attribution, or preservation rules.
 **Interfaces:** These pages consume only verified Task 2 tables, the Task 3
 tutorial, and explicit historical/proposal labels from Task 1.
 
-- [ ] Replace stale README implementation claims with a concise description of the archive and links for learning, checking findings, and exploring code.
+- [x] Replace stale README implementation claims with a concise description of the archive and links for learning, checking findings, and exploring code.
 - [ ] Explain the original expert-iteration motivation separately from frozen-LLM orchestration. Distinguish designed RL fine-tuning from executed behavior-cloning tests.
-- [ ] Write one section per selected finding: question, comparison, evidence, limitation, practical lesson, and reproduction command.
+- [x] Write one section per selected finding: question, comparison, evidence, limitation, practical lesson, and reproduction command.
 - [ ] State that the tested fixed policy was stronger only within the documented comparison; do not generalize this to all workflows or controllers.
 - [ ] Explain why the E47 locality result is not proof of better decomposition or a learnable target selector. Preserve small-sample and reused-development-state caveats.
-- [ ] Document three reproduction levels: offline analysis, local tutorial, and optional hosted reruns. Make clear which model revisions or provider behavior cannot be recreated exactly.
+- [x] Document three reproduction levels: offline analysis, local tutorial, and optional hosted reruns. Make clear which model revisions or provider behavior cannot be recreated exactly.
 - [ ] Link sibling projects with verified canonical URLs where public. Do not make local `../` paths necessary for using this archive.
 - [ ] Label historical specs and unfinished paper drafts without rewriting their recorded history. Keep debugging detail in the ledger rather than making it the public narrative.
 - [ ] Check every reader-facing local link and every numerical statement against the generated tables. Record the review in `docs/release-readiness.md`.
@@ -180,11 +182,11 @@ Record verification in `docs/release-readiness.md`.
 source commit for publication. It must not depend on uncommitted files.
 
 - [ ] Resolve license choices with the owner. Preserve component-specific licenses and predecessor credits; do not blanket-relicense third-party material.
-- [ ] Use Alexander Richard Towell, ORCID `0000-0001-6443-9897`, and `lex@metafunctor.com` in new citation metadata. Disclose substantial AI assistance and actual review scope.
+- [x] Use Alexander Richard Towell, ORCID `0000-0001-6443-9897`, and `lex@metafunctor.com` in new citation metadata. Disclose substantial AI assistance and actual review scope.
 - [ ] Audit the publication file set and any Git history that would become public for credentials, private operational material, and redistribution problems. Do not rewrite history or change visibility automatically.
 - [ ] Establish the required environment from actual imports. Run `uv run pytest -q`; record failures and skips rather than quoting historical test counts.
 - [ ] Measure focused coverage using pytest-cov in the verification environment. Cover all new error-handling paths in the analysis and tutorial code; report meaningful gaps rather than imposing an arbitrary repository-wide percentage.
-- [ ] Make offline analysis and tutorial checks runnable in CI without secrets or model downloads. Avoid silently running hosted experiments.
+- [x] Make offline analysis and tutorial checks runnable in CI without secrets or model downloads. Avoid silently running hosted experiments.
 - [ ] Assemble the packet from explicit source/evidence paths, with environment instructions, license notices, generated tables, and SHA-256 checksums. Include all transitive data dependencies.
 - [ ] Test the staged packet in a fresh environment with no sibling directories or model caches and network disabled after dependencies are installed.
 - [ ] Stage and commit only reviewed explicit paths, including required existing uncommitted work. Never sweep unrelated edits into the release.

@@ -1,6 +1,6 @@
 # Research Archive Release Readiness
 
-Updated: 2026-10-20. Status: preparation in progress, not published.
+Updated: 2026-10-20. Status: local release candidate verified; not published.
 
 ## Scope and Progress
 
@@ -8,10 +8,10 @@ Plan: [public archive implementation](superpowers/plans/2026-10-20-public-resear
 This record tracks work, decisions, and checks. It is not a scientific result.
 
 - Evidence inventory: selected first-release scope recorded.
-- Offline table reproduction: eight comparisons reconstructed, 16 tests passed.
-- Teaching example: short-budget CLI added; 23 tutorial/classical tests passed.
+- Offline table reproduction: eight comparisons reconstructed and hash-bound.
+- Teaching example: short-budget CLI added and tested.
 - Reader guide: overview, findings, reproduction, tutorial, and project map written.
-- Standalone packet and publication checks: pending.
+- Standalone packet: 59 tests passed in a fresh environment; publication checks remain.
 - Publication, GitHub read-only archival, and local move: not performed.
 
 Recommended GitHub name: retain `expert-iteration`. Reader-facing title:
@@ -62,7 +62,7 @@ the start. The packet builder reads only committed bytes, never unstaged work.
 | Unfinished paper and old slide decks | Historical drafts, not publication-ready results |
 | Sibling decomposition/intervention projects | Separate ownership; links only after checking destinations |
 
-Every selected input will have a SHA-256 in `analysis/claims.json`.
+Every selected input has a SHA-256 in `analysis/claims.json`.
 Historical records remain untouched. The publication packet is allowlisted,
 not a recursive copy of the dirty checkout.
 
@@ -125,8 +125,39 @@ run is covered by the focused tests. Model inference was not performed.
   counts.
 - Kernel network-namespace isolation was attempted but denied by this
   environment (`unshare` could not write the UID map). Standalone verification
-  will instead deny Python socket operations and run without provider
-  credentials. This is not an OS-level network sandbox.
+  instead denied Python socket connect, address lookup, and bind operations
+  through an interpreter audit hook, and ran with an empty inherited
+  environment except PATH and a temporary HOME. This is not an OS-level
+  network sandbox.
+
+## Standalone Candidate Check
+
+The first packet was built from local commit
+`7d3ffbc4cafd0224541f8aabf5f6b0b9494308d7`, extracted into a fresh temporary
+directory, and checked against every hash in its `ARCHIVE-MANIFEST.json`.
+It contains 128 source/evidence files plus the manifest, not a copy of the
+whole working checkout.
+
+Only the package's base and `dev` dependencies were installed there. Neither
+Torch nor SymPy was installed, and no sibling checkout was on the import path.
+The standalone analysis reproduced both table files byte for byte. All
+**59 included tests passed in 5.48 seconds** under the socket-denying audit
+hook, with no provider credentials inherited.
+
+The dependency environment was Python 3.11.15, NumPy 2.4.6, pytest 9.1.1,
+iniconfig 2.3.1, packaging 26.3, pluggy 1.7.0, and Pygments 2.21.0.
+This is a test of the compact packet's stated scope, not the wider historical
+suite or an independent rerun of model inference.
+
+The final candidate is rebuilt after this documentation update. Its exact
+source commit and checksums are in `ARCHIVE-MANIFEST.json` inside the ZIP and
+the separate `docs/archive-verification.json` receipt in the source repository.
+No ZIP upload or public tag is implied by that receipt.
+
+An inherited extra blank line at EOF in `phase_b_baselines.py` was reported by
+the full staged whitespace check. It was preserved rather than editing
+historical code for formatting. The new archive changes passed their scoped
+whitespace check.
 
 ## Rights and Destination Review
 
@@ -143,10 +174,12 @@ run is covered by the focused tests. Model inference was not performed.
 
 ## Release Blockers
 
-- Third-party and dataset rights need review; preserve existing notices.
+- Saved model-response redistribution and any third-party rights still need
+  a release-specific review; original-code and new-notes licenses are settled.
 - Sensitive content and reachable Git history need a publication audit before
   changing visibility or uploading the entire repository.
-- Existing uncommitted research must not be swept into a commit without review.
+- Unselected historical working material remains uncommitted. Preserve it and
+  review it separately before publishing the whole repository.
 - No public version DOI or publication receipt exists for this archive
   preparation. Local source pin and packet verification are recorded below
   when complete.
@@ -158,3 +191,6 @@ owner; pin its source; search existing Zenodo records; create or reuse a record
 family; publish only authorized contents; download and hash-check the deposit;
 link from the central research index; then archive GitHub read-only.
 Record public disclosure dates separately from the archive publication date.
+
+No paid experiments were run during archive preparation. No remote push,
+visibility change, GitHub archival, Zenodo deposit, or local move was performed.
