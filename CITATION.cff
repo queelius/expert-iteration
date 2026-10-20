@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "Cite the exact archived version when available. This working archive has no release DOI yet."
+title: "Expert Iteration: Experiments and Lessons"
+type: software
+authors:
+  - family-names: Towell
+    given-names: Alexander Richard
+    email: lex@metafunctor.com
+    orcid: "https://orcid.org/0000-0001-6443-9897"
+    affiliation: Southern Illinois University Edwardsville
+repository-code: "https://github.com/queelius/expert-iteration"
+abstract: >-
+  A research archive and teaching resource on search-assisted policy learning
+  and frozen-language-model orchestration. Includes local examples, selected
+  historical outcomes, offline metric reconstruction, and bounded negative
+  findings. Not a claim of a novel successful controller or a completed
+  off-policy reinforcement-learning efficiency study.
+keywords:
+  - expert iteration
+  - reinforcement learning
+  - Monte Carlo tree search
+  - language model orchestration
+  - negative results
+  - reproducibility

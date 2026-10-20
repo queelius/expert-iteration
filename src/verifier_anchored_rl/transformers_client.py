@@ -46,7 +46,9 @@ from typing import Any, Mapping
 from .constrained_json import build_prefix_allowed_tokens_fn
 from .llm_client import (
     LLMResponseError,
+    SCHEMA_VALIDATION_LEGACY_COERCE_V1,
     _parse_json_lenient,
+    _require_schema_validation_mode,
     _validate_against_schema,
 )
 
@@ -124,7 +126,9 @@ class TransformersLLMClient:
         temperature: float = 1.0,
         max_tokens: int = 512,
         seed: int | None = None,
+        schema_validation_mode: str = SCHEMA_VALIDATION_LEGACY_COERCE_V1,
     ) -> dict[str, Any]:
+        _require_schema_validation_mode(schema_validation_mode)
         import torch
 
         messages = [
@@ -185,7 +189,11 @@ class TransformersLLMClient:
 
             try:
                 parsed = _parse_json_lenient(content)
-                _validate_against_schema(parsed, schema)
+                _validate_against_schema(
+                    parsed,
+                    schema,
+                    schema_validation_mode=schema_validation_mode,
+                )
                 return parsed
             except LLMResponseError as e:
                 last_err = e

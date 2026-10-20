@@ -1,9 +1,10 @@
 [project]
 name = "verifier-anchored-rl"
 version = "0.1.0"
-description = "Approximate Q-learning over verifiable context MDPs, with MCTS as policy improvement operator."
+description = "Research archive of search-assisted policy learning and frozen-LLM orchestration experiments."
 readme = "README.md"
-authors = [{name = "Alexander Towell", email = "atowell@siue.edu"}]
+authors = [{name = "Alexander Richard Towell", email = "lex@metafunctor.com"}]
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["numpy"]
 

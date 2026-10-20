@@ -12,13 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from .controller_observation import build_controller_observation
 from .deliberation_mdp import (
     DeliberationAction, DeliberationMDP, DeliberationState,
-    MASKED_ACTION_REWARD, Verb,
+    OutcomeCode, Verb,
 )
-from .lenses import global_prefix
 from .llm_client import LLMClient, LLMResponseError
-from .reductio import get
 
 CONTROLLER_SYSTEM = (
     "You are the controller of a mathematical deliberation. The state is a "
@@ -132,24 +131,36 @@ class LLMController:
     system: str = CONTROLLER_SYSTEM
     last_choice_fallback: bool = False
     last_raw_response: object = None
+    last_controller_observation: dict | None = None
     # Decision-making wants near-greedy sampling; the menu is small and the
     # cost of a bad pick is a wasted turn, so keep the temperature low.
     temperature: float = 0.2
     max_tokens: int = 64
 
     def choose(self, mdp: DeliberationMDP, state: DeliberationState, *,
-               rng=None, feedback: str | None = None) -> DeliberationAction:
+               rng=None) -> DeliberationAction:
         menu = _menu(mdp, state)
         if not menu:
             raise ValueError("no legal actions; state is terminal")
+        observation = build_controller_observation(mdp, state)
+        self.last_controller_observation = observation
+        feedback = observation["previous_outcome"]
+        nodes_by_id = {node["id"]: node for node in observation["nodes"]}
         by_key = dict(menu)
         lines = []
         for key, a in menu:
-            stmt = get(state.graph, a.target).statement
+            stmt = nodes_by_id[a.target]["statement"]
             lines.append(f"  {key}  (target: {stmt})")
-        feedback_block = f"\n\n{feedback}" if feedback else ""
+        feedback_block = ""
+        if feedback is not None and feedback["code"] == "rejected":
+            feedback_block = (
+                f'\n\nYour previous action "{feedback["action"]}" was '
+                f'REJECTED ({feedback["reason"]}). Do not repeat it; '
+                "choose a different action."
+            )
+        state_text = observation["state_text"]
         user = (
-            f"{global_prefix(state, mdp.depth_limit)}"
+            f"{state_text}"
             f"{feedback_block}\n\n"
             f"Verb: CONTROLLER_CHOICE\n\n"
             f"Legal actions:\n" + "\n".join(lines) + "\n\n"
@@ -180,7 +191,11 @@ class LLMController:
                 folded = {k.casefold(): a for k, a in menu}
                 chosen = folded.get(key.casefold())
         except LLMResponseError as exc:
-            self.last_raw_response = repr(exc)
+            self.last_raw_response = (
+                exc.raw_response
+                if exc.raw_response is not None
+                else repr(exc)
+            )
             chosen = None
         self.last_choice_fallback = chosen is None
         if chosen is not None:
@@ -220,51 +235,61 @@ def run_episode(mdp: DeliberationMDP, controller: LLMController, rng,
     state = mdp.initial_state()
     total = 0.0
     calls = 0
-    feedback: str | None = None
     while not mdp.is_terminal(state):
         legal = mdp.actions(state)
         if not legal:
             break
-        action = controller.choose(mdp, state, rng=rng, feedback=feedback)
+        action = controller.choose(mdp, state, rng=rng)
         calls += 1
         next_state, reward = mdp.sample_transition(state, action, rng)
         total += reward
         chosen_key = f"{action.verb.value}:{action.target}"
-        masked = reward == MASKED_ACTION_REWARD
-        # A masked action leaves the graph unchanged; without an explicit
-        # rejection notice the next observation is near-identical and a
-        # low-temperature controller repeats the same choice forever.
-        feedback = (
-            f'Your previous action "{chosen_key}" was REJECTED and wasted a '
-            f"turn (duplicate fact, unusable generation, or stale target). "
-            f"Do not repeat it; choose a different action."
-            if masked else None)
+        masked = (
+            next_state.previous_outcome.code is OutcomeCode.REJECTED
+        )
+        transition_debug = getattr(mdp, "last_transition_debug", None)
         if log_fn is not None:
             rec = {
                 "episode": episode_id,
                 "problem": mdp.problem,
                 "turn": state.turn,
-                "state_render": global_prefix(state, mdp.depth_limit),
+                "state_render": controller.last_controller_observation["state_text"],
+                "controller_observation": controller.last_controller_observation,
                 "legal": [f"{a.verb.value}:{a.target}" for a in legal],
                 "chosen": chosen_key,
                 "reward": reward,
                 "masked": masked,
                 "terminal": mdp.is_terminal(next_state),
                 "fallback": controller.last_choice_fallback,
+                "outcome": next_state.previous_outcome.as_record(),
             }
+            if transition_debug is not None:
+                rec["transition_debug"] = transition_debug
             if controller.last_choice_fallback:
                 # The raw reply is the only diagnostic for WHY a fallback
                 # happened; discarding it made probe 4 undiagnosable.
-                rec["raw_response"] = repr(controller.last_raw_response)
+                rec["raw_response"] = controller.last_raw_response
+            policy_record = getattr(controller, "last_policy_record", None)
+            if policy_record is not None:
+                rec["policy"] = policy_record
             log_fn(rec)
         state = next_state
     if log_fn is not None:
+        summary_meta = dict(meta or {})
+        summary_meta.update({
+            "observation_schema": (
+                controller.last_controller_observation["schema_version"]
+                if controller.last_controller_observation is not None
+                else None
+            ),
+            "mdp_contract": mdp.contract_record(),
+        })
         log_fn({
             "episode": episode_id,
             "summary": True,
             "total_reward": total,
             "turns": state.turn,
             "llm_calls": calls,
-            "meta": meta or {},
+            "meta": summary_meta,
         })
     return EpisodeSummary(reward=total, turns=state.turn, llm_calls=calls)

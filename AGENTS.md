@@ -1,5 +1,10 @@
 # Agent instructions (Codex and others)
 
+Current task (2026-10-20): archive preparation. Start with `README.md`,
+`docs/release-readiness.md`, and the public research archive implementation
+plan under `docs/superpowers/plans/`. Do not restart the historical Phase B
+critical path below. Preserve the scientific and repository rules.
+
 Read, in this order:
 1. `HANDOFF.md`: full project state, results, and next steps (2026-07-09).
 2. `CLAUDE.md`: repo rules; the content applies to ANY agent, not just

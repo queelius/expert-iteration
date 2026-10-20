@@ -1,5 +1,9 @@
 # Handoff: update the paper from bilbo (latest insights and results)
 
+> Historical handoff, not an active instruction. As of 2026-10-20, this
+> repository is being prepared as a research archive. The manuscript remains
+> unfinished. Start with `README.md` and `docs/release-readiness.md`.
+
 **Date:** 2026-06-19. **From:** frodo (GPU box, running the experiment). **To:**
 bilbo (your local Claude Code session, owning the paper).
 

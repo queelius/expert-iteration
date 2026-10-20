@@ -17,7 +17,7 @@ from enum import Enum
 
 from .reductio import (
     Fact, Goal, Graph, Hypothesis, NodeId,
-    get, holds, is_abandoned, is_verified, new_graph, solved,
+    VerifierCall, get, holds, is_abandoned, is_verified, new_graph, solved,
 )
 from .reductio import abandon as _r_abandon
 from .reductio import commit as _r_commit
@@ -34,15 +34,73 @@ class Verb(Enum):
 
 
 @dataclass(frozen=True)
-class DeliberationState:
-    graph: Graph
-    turn: int
-
-
-@dataclass(frozen=True)
 class DeliberationAction:
     verb: Verb
     target: NodeId
+
+
+class OutcomeCode(Enum):
+    APPLIED = "applied"
+    REJECTED = "rejected"
+
+
+class RejectionReason(Enum):
+    COMMIT_REJECTED = "commit_rejected"
+    DUPLICATE_COMPUTE = "duplicate_compute"
+    GENERATION_ERROR = "generation_error"
+    PAYLOAD_APPLY_ERROR = "payload_apply_error"
+    REDUCTIO_REJECTED = "reductio_rejected"
+    REJECTED = "rejected"
+    STALE_ACTION = "stale_action"
+
+
+ACTION_SEMANTICS_VERSION = "goal-commit-v1"
+TRANSITION_SEMANTICS_VERSION = "deliberation-transition-v1.1"
+APPLY_SEMANTICS_VERSION = "legacy-coercion-v1"
+PREVIOUS_OUTCOME_SCHEMA = "action-outcome-v1"
+VERIFIER_CONTRACT_VERSION = "math-verifier-v1"
+ACTION_TARGET_KINDS = {
+    "split": ("goal",),
+    "form_hypothesis": ("goal",),
+    "compute": ("goal",),
+    "verify": ("fact", "hypothesis"),
+    "commit": ("goal",),
+    "abandon": ("goal", "hypothesis"),
+}
+
+
+@dataclass(frozen=True)
+class ActionOutcome:
+    action: DeliberationAction
+    code: OutcomeCode
+    reason: RejectionReason | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.action, DeliberationAction):
+            raise ValueError("outcome action must be a DeliberationAction")
+        if not isinstance(self.code, OutcomeCode):
+            raise ValueError("outcome code must be an OutcomeCode")
+        if self.reason is not None and not isinstance(
+                self.reason, RejectionReason):
+            raise ValueError("outcome reason must be a RejectionReason")
+        if self.code is OutcomeCode.APPLIED and self.reason is not None:
+            raise ValueError("an applied outcome cannot have a rejection reason")
+        if self.code is OutcomeCode.REJECTED and self.reason is None:
+            raise ValueError("a rejected outcome requires a bounded reason")
+
+    def as_record(self) -> dict[str, str | None]:
+        return {
+            "action": f"{self.action.verb.value}:{self.action.target}",
+            "code": self.code.value,
+            "reason": self.reason.value if self.reason is not None else None,
+        }
+
+
+@dataclass(frozen=True)
+class DeliberationState:
+    graph: Graph
+    turn: int
+    previous_outcome: ActionOutcome | None = None
 
 
 def _is_open_goal(graph: Graph, node_id: NodeId) -> bool:
@@ -50,6 +108,43 @@ def _is_open_goal(graph: Graph, node_id: NodeId) -> bool:
     return (isinstance(n, Goal)
             and not solved(graph, node_id)
             and not is_abandoned(graph, node_id))
+
+
+def _parent_goal_id(graph: Graph, node_id: NodeId) -> NodeId | None:
+    """The structural owner of a goal, hypothesis, or fact."""
+    for node in graph.nodes:
+        if not isinstance(node, Goal):
+            continue
+        if node_id in node.children + node.candidates + node.facts:
+            return node.id
+    return None
+
+
+def _has_closed_ancestor(graph: Graph, node_id: NodeId) -> bool:
+    """Whether any owning goal above ``node_id`` is solved or abandoned."""
+    parent = _parent_goal_id(graph, node_id)
+    while parent is not None:
+        if solved(graph, parent) or is_abandoned(graph, parent):
+            return True
+        parent = _parent_goal_id(graph, parent)
+    return False
+
+
+def _verification_rejected(
+    graph: Graph,
+    node_id: NodeId,
+    verb: str = "check",
+    expected: str | None = None,
+) -> bool:
+    """Whether the immutable claim has already failed deterministic VERIFY."""
+    return any(
+        isinstance(node, VerifierCall)
+        and node.target == node_id
+        and node.verb == verb
+        and node.expected == expected
+        and not node.success
+        for node in graph.nodes
+    )
 
 
 def _owning_goal_statement(graph: Graph, fact_id: NodeId) -> str | None:
@@ -60,17 +155,51 @@ def _owning_goal_statement(graph: Graph, fact_id: NodeId) -> str | None:
     return None
 
 
-def _witnesses(graph: Graph, goal: Goal) -> tuple[NodeId, ...]:
+def _verification_context(
+    graph: Graph, node_id: NodeId, solve_claims: bool
+) -> tuple[str, str | None]:
+    """Return the deterministic symbolic route for a claim."""
+    node = get(graph, node_id)
+    if solve_claims and isinstance(node, Fact) and node.source == "derived":
+        from .verifier_adapter import parse_solve_claim
+
+        if parse_solve_claim(node.statement) is not None:
+            owner = _owning_goal_statement(graph, node_id)
+            if owner is not None:
+                return "solve_check", owner
+    return "check", None
+
+
+def _witnesses(
+    graph: Graph,
+    goal: Goal,
+    trusted_givens_committable: bool = False,
+) -> tuple[NodeId, ...]:
     """Discharging, non-abandoned witnesses of a goal, ascending by id (most recent last)."""
     out = [wid for wid in goal.candidates
            if is_verified(graph, wid) and not is_abandoned(graph, wid)]
-    out += [wid for wid in goal.facts
-            if holds(graph, wid) and not is_abandoned(graph, wid)]
+    out += [
+        wid
+        for wid in goal.facts
+        if (
+            isinstance(get(graph, wid), Fact)
+            and (
+                trusted_givens_committable
+                or get(graph, wid).source != "given"
+            )
+            and holds(graph, wid)
+            and not is_abandoned(graph, wid)
+        )
+    ]
     return tuple(sorted(out))
 
 
 def available_actions(state: DeliberationState,
-                      depth_limit: int | None = None
+                      depth_limit: int | None = None, *,
+                      reject_repeated_verify: bool = True,
+                      active_subtrees_only: bool = True,
+                      solve_claims: bool = False,
+                      trusted_givens_committable: bool = False,
                       ) -> tuple[DeliberationAction, ...]:
     """Every legal (verb, target) pair, computed in one place.
 
@@ -83,6 +212,8 @@ def available_actions(state: DeliberationState,
     acts: list[DeliberationAction] = []
     for node in g.nodes:
         nid = node.id
+        if active_subtrees_only and _has_closed_ancestor(g, nid):
+            continue
         if isinstance(node, Goal):
             if not _is_open_goal(g, nid):
                 continue
@@ -94,18 +225,28 @@ def available_actions(state: DeliberationState,
                 acts.append(DeliberationAction(Verb.SPLIT, nid))
             acts.append(DeliberationAction(Verb.FORM_HYPOTHESIS, nid))
             acts.append(DeliberationAction(Verb.COMPUTE, nid))
-            if _witnesses(g, node):
+            if _witnesses(g, node, trusted_givens_committable):
                 acts.append(DeliberationAction(Verb.COMMIT, nid))
             acts.append(DeliberationAction(Verb.ABANDON, nid))
         elif isinstance(node, Hypothesis):
             if is_abandoned(g, nid):
                 continue
             if not is_verified(g, nid):
-                acts.append(DeliberationAction(Verb.VERIFY, nid))
+                verify_verb, verify_expected = _verification_context(
+                    g, nid, solve_claims)
+                if not (reject_repeated_verify
+                        and _verification_rejected(
+                            g, nid, verify_verb, verify_expected)):
+                    acts.append(DeliberationAction(Verb.VERIFY, nid))
                 acts.append(DeliberationAction(Verb.ABANDON, nid))
         elif isinstance(node, Fact):
             if node.source == "derived" and not is_verified(g, nid):
-                acts.append(DeliberationAction(Verb.VERIFY, nid))
+                verify_verb, verify_expected = _verification_context(
+                    g, nid, solve_claims)
+                if not (reject_repeated_verify
+                        and _verification_rejected(
+                            g, nid, verify_verb, verify_expected)):
+                    acts.append(DeliberationAction(Verb.VERIFY, nid))
     return tuple(acts)
 
 
@@ -115,7 +256,10 @@ def available_actions(state: DeliberationState,
 
 TERMINAL_SUCCESS_REWARD = 1.0    # root COMMIT, verifier accepts
 TERMINAL_FAILURE_REWARD = -1.0   # root COMMIT, verifier rejects
-MASKED_ACTION_REWARD = -0.01     # LLM failure / stale action; turn advances
+MASKED_ACTION_REWARD = 0.0       # live contract: verifier-only reward
+LEGACY_MASKED_ACTION_REWARD = -0.01
+SYMBOLIC_ONLY_REWARD = "symbolic-only-v1"
+LEGACY_MASK_PENALTY_REWARD = "legacy-mask-penalty-v1"
 INTERMEDIATE_VERIFIER_REWARD = 0.0     # v1: terminal-only reward
 MAX_INTERMEDIATE_VERIFIER_REWARD = 0.2  # cap if the channel is ever enabled
 
@@ -183,7 +327,13 @@ class DeliberationMDP:
                  givens: tuple[str, ...] = (), depth_limit: int = 16,
                  llm_client=None, encoder=None, verifier=None,
                  system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-                 solve_claims: bool = False):
+                 solve_claims: bool = False,
+                 reject_repeated_verify: bool = True,
+                 active_subtrees_only: bool = True,
+                 render_committed_outcomes: bool = True,
+                 generation_temperature: float = 0.0,
+                 reward_contract: str = SYMBOLIC_ONLY_REWARD,
+                 trusted_givens_committable: bool = False):
         from .verifier_adapter import MathVerifier
         self.problem = problem
         self.expected_answer = expected_answer
@@ -196,6 +346,28 @@ class DeliberationMDP:
         # Solve-claim COMPUTE (spec 2026-07-03): off by default; the E13
         # control arm requires byte-identical behavior when False.
         self.solve_claims = solve_claims
+        self.trusted_givens_committable = trusted_givens_committable
+        # Independently switchable v1.1 repairs. Keeping the switches explicit
+        # lets the experiment ledger isolate one legality manipulation at a
+        # time while new runs use the coherent defaults.
+        self.reject_repeated_verify = reject_repeated_verify
+        self.active_subtrees_only = active_subtrees_only
+        self.render_committed_outcomes = render_committed_outcomes
+        self.generation_temperature = float(generation_temperature)
+        if reward_contract not in {
+            SYMBOLIC_ONLY_REWARD, LEGACY_MASK_PENALTY_REWARD
+        }:
+            raise ValueError(f"unknown reward contract {reward_contract!r}")
+        self.reward_contract = reward_contract
+        self.masked_action_reward = (
+            LEGACY_MASKED_ACTION_REWARD
+            if reward_contract == LEGACY_MASK_PENALTY_REWARD
+            else MASKED_ACTION_REWARD
+        )
+        # Observational diagnostics only: reset and populated on every
+        # transition so trajectory logs retain raw generator output and the
+        # exact reason for a masked no-op (handoff task 28).
+        self.last_transition_debug: dict | None = None
 
     # -- environment contract -------------------------------------------------
 
@@ -203,7 +375,44 @@ class DeliberationMDP:
         return DeliberationState(new_graph(self.problem, self.givens), 0)
 
     def actions(self, state: DeliberationState) -> tuple[DeliberationAction, ...]:
-        return available_actions(state, depth_limit=self.depth_limit)
+        return available_actions(
+            state,
+            depth_limit=self.depth_limit,
+            reject_repeated_verify=self.reject_repeated_verify,
+            active_subtrees_only=self.active_subtrees_only,
+            solve_claims=self.solve_claims,
+            trusted_givens_committable=(
+                self.trusted_givens_committable
+            ),
+        )
+
+    def contract_record(self) -> dict:
+        """Exact transition settings that data and checkpoints must bind."""
+        verifier_type = type(self.verifier)
+        return {
+            "action_semantics": ACTION_SEMANTICS_VERSION,
+            "action_target_kinds": {
+                verb: list(kinds)
+                for verb, kinds in ACTION_TARGET_KINDS.items()
+            },
+            "transition_semantics": TRANSITION_SEMANTICS_VERSION,
+            "apply_semantics": APPLY_SEMANTICS_VERSION,
+            "previous_outcome_schema": PREVIOUS_OUTCOME_SCHEMA,
+            "verifier_contract": VERIFIER_CONTRACT_VERSION,
+            "verifier_implementation": (
+                f"{verifier_type.__module__}.{verifier_type.__qualname__}"
+            ),
+            "reward_contract": self.reward_contract,
+            "depth_limit": self.depth_limit,
+            "solve_claims": self.solve_claims,
+            "trusted_givens_committable": (
+                self.trusted_givens_committable
+            ),
+            "reject_repeated_verify": self.reject_repeated_verify,
+            "active_subtrees_only": self.active_subtrees_only,
+            "render_committed_outcomes": self.render_committed_outcomes,
+            "generation_temperature": self.generation_temperature,
+        }
 
     def is_terminal(self, state: DeliberationState) -> bool:
         g = state.graph
@@ -214,40 +423,52 @@ class DeliberationMDP:
     def sample_transition(self, state: DeliberationState,
                           action: DeliberationAction, rng
                           ) -> tuple[DeliberationState, float]:
+        self.last_transition_debug = {"generator_payload": None,
+                                      "mask_reason": None}
         if action not in set(self.actions(state)):
-            return self._masked(state)      # stale action from a search tree
-        if action.verb is Verb.VERIFY:
-            return self._do_verify(state, action.target)
-        if action.verb is Verb.COMMIT:
-            return self._do_commit(state, action.target)
-        if action.verb is Verb.ABANDON:
-            return self._do_abandon(state, action.target)
-        return self._do_llm_verb(state, action, rng)     # Task 6
+            next_state, reward = self._masked(state, "stale_action")
+        elif action.verb is Verb.VERIFY:
+            next_state, reward = self._do_verify(state, action.target)
+        elif action.verb is Verb.COMMIT:
+            next_state, reward = self._do_commit(state, action.target)
+        elif action.verb is Verb.ABANDON:
+            next_state, reward = self._do_abandon(state, action.target)
+        else:
+            next_state, reward = self._do_llm_verb(
+                state, action, rng)     # Task 6
+
+        raw_reason = self.last_transition_debug.get("mask_reason")
+        if raw_reason is not None:
+            reason = RejectionReason(raw_reason or "rejected")
+            outcome = ActionOutcome(
+                action, OutcomeCode.REJECTED, reason)
+        else:
+            outcome = ActionOutcome(action, OutcomeCode.APPLIED)
+        return (
+            DeliberationState(
+                next_state.graph, next_state.turn, outcome),
+            reward,
+        )
 
     # -- the three no-LLM verbs ----------------------------------------------
 
-    def _masked(self, state: DeliberationState
+    def _masked(self, state: DeliberationState, reason: str = "rejected"
                 ) -> tuple[DeliberationState, float]:
+        if self.last_transition_debug is None:
+            self.last_transition_debug = {"generator_payload": None,
+                                          "mask_reason": reason}
+        else:
+            self.last_transition_debug["mask_reason"] = reason
         return (DeliberationState(state.graph, state.turn + 1),
-                MASKED_ACTION_REWARD)
+                self.masked_action_reward)
 
     def _do_verify(self, state: DeliberationState, target: NodeId
                    ) -> tuple[DeliberationState, float]:
         node = get(state.graph, target)
         statement = node.statement
         rewardable = _verification_is_rewardable(state.graph, target, statement)
-        verb_name, context = "check", None
-        if (self.solve_claims and isinstance(node, Fact)
-                and node.source == "derived"):
-            # A derived fact shaped like a solve-claim ("x = 5") is checked
-            # by substitution into its parent goal's equation; the verifier
-            # falls back to the fail-closed decide path if either side does
-            # not parse. Ground facts keep the plain decide path verbatim.
-            from .verifier_adapter import parse_solve_claim
-            if parse_solve_claim(statement) is not None:
-                parent = _owning_goal_statement(state.graph, target)
-                if parent is not None:
-                    verb_name, context = "solve_check", parent
+        verb_name, context = _verification_context(
+            state.graph, target, self.solve_claims)
         result = _r_verify(state.graph, target, verb_name, context,
                            self.verifier)
         g = result.graph if hasattr(result, "graph") else state.graph
@@ -260,10 +481,14 @@ class DeliberationMDP:
     def _do_commit(self, state: DeliberationState, target: NodeId
                    ) -> tuple[DeliberationState, float]:
         goal = get(state.graph, target)
-        witness = _witnesses(state.graph, goal)[-1]     # most recent
+        witness = _witnesses(
+            state.graph,
+            goal,
+            self.trusted_givens_committable,
+        )[-1]     # most recent
         result = _r_commit(state.graph, target, witness)
         if not hasattr(result, "graph"):                # cannot happen if avail
-            return self._masked(state)
+            return self._masked(state, "commit_rejected")
         g = result.graph
         reward = 0.0
         if target == g.root_id:
@@ -285,21 +510,35 @@ class DeliberationMDP:
                   target: NodeId, rng) -> dict:
         """One constrained generation from view ++ suffix, either backend."""
         from .lenses import render_view, schema_for, suffix
-        view = render_view(state.graph, target)
+        view = render_view(
+            state.graph,
+            target,
+            include_committed_outcomes=self.render_committed_outcomes,
+        )
         tail = suffix(verb, target, state, solve_claims=self.solve_claims)
         schema = schema_for(verb, target, state)
         seed = int(rng.integers(2 ** 31 - 1)) if rng is not None else None
         if self.encoder is not None:
             prefill = self.encoder.encode(view)
             payload, _n_tokens = self.encoder.instantiate_json(
-                prefill, tail, schema, seed=seed)
+                prefill,
+                tail,
+                schema,
+                seed=seed,
+                temperature=self.generation_temperature,
+            )
             return payload
         if self.llm_client is None:
             raise RuntimeError(
                 "DeliberationMDP needs an llm_client or an encoder for "
                 f"{verb.name}")
         return self.llm_client.complete_json(
-            self.system_prompt, view + tail, schema, seed=seed)
+            self.system_prompt,
+            view + tail,
+            schema,
+            seed=seed,
+            temperature=self.generation_temperature,
+        )
 
     @staticmethod
     def _coerce_child(c) -> str:
@@ -336,8 +575,16 @@ class DeliberationMDP:
         from .reductio import split as _r_split
         try:
             payload = self._generate(state, action.verb, action.target, rng)
-        except (LLMResponseError, RuntimeError):
-            return self._masked(state)
+            self.last_transition_debug["generator_payload"] = payload
+        except (LLMResponseError, RuntimeError) as exc:
+            self.last_transition_debug["generator_error"] = repr(exc)
+            cause = getattr(exc, "cause", None)
+            if cause is not None:
+                self.last_transition_debug["generator_error_cause"] = repr(cause)
+            raw = getattr(exc, "raw_response", None)
+            if raw is not None:
+                self.last_transition_debug["generator_error_raw"] = raw
+            return self._masked(state, "generation_error")
         try:
             if action.verb is Verb.SPLIT:
                 children = tuple(
@@ -361,7 +608,7 @@ class DeliberationMDP:
                 existing = getattr(tgt, "facts", ())
                 if any(get(state.graph, fid).statement == stmt
                        for fid in existing):
-                    return self._masked(state)
+                    return self._masked(state, "duplicate_compute")
                 # Coerce premises leniently: ints or int-shaped strings that
                 # name LIVE nodes survive; everything else is dropped rather
                 # than failing the whole action (E14 boundary fix).
@@ -376,8 +623,10 @@ class DeliberationMDP:
                         premises.append(pid)
                 result = _r_compute(state.graph, action.target, stmt,
                                     tuple(premises))
-        except (KeyError, TypeError, ValueError):
-            return self._masked(state)
+        except (KeyError, TypeError, ValueError) as exc:
+            self.last_transition_debug["apply_error"] = repr(exc)
+            return self._masked(state, "payload_apply_error")
         if not hasattr(result, "graph"):        # reductio Err
-            return self._masked(state)
+            self.last_transition_debug["reductio_error"] = repr(result)
+            return self._masked(state, "reductio_rejected")
         return DeliberationState(result.graph, state.turn + 1), 0.0

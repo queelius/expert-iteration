@@ -1,0 +1,71 @@
+{
+  "schema_version": "research-archive-claims-v1",
+  "reproduction_level": "Recount saved record-level outcomes; not a fresh model run or full symbolic/transport replay.",
+  "inputs": {
+    "e20_direct": {
+      "path": "experiments/runs/2026-07-09-E20-direct-qwen15b-test20.jsonl",
+      "sha256": "7890ca86c8a2a91b581aa4eed29cd944b3351f50e924ae352497cbeb0af47899",
+      "schemas": ["unversioned"],
+      "disposition": "complete"
+    },
+    "e20_controller": {
+      "path": "experiments/runs/2026-07-09-E20-controller-qwen15b-test20.jsonl",
+      "sha256": "0bb96242b249e29eedc26cf05829ad8cb8d476726c7fe8311dd9bc72e6fde758",
+      "schemas": ["unversioned"],
+      "disposition": "complete"
+    },
+    "e41": {
+      "path": "experiments/runs/2026-07-17-E41-paired-revision-prompt-qwen25-3b-casework-test60.jsonl",
+      "sha256": "58e25eee19fa9f16506d6253e1e7c6ae73b326126f1b13feba00a3c6cd7645f6",
+      "schemas": ["e39-shared-prefix-revision-source-v1", "workspace-paired-revision-prompt-case-v1", "workspace-paired-revision-prompt-header-v1", "workspace-paired-revision-prompt-summary-v1", "workspace-paired-revision-prompt-transition-v1"],
+      "disposition": "complete"
+    },
+    "e42": {
+      "path": "experiments/runs/2026-07-17-E42-paired-routing-prompt-gpt41mini-e41replay-casework-test60.jsonl",
+      "sha256": "8f886f109e9ba8f4f7d25aed6db2cbc1ae0140ffd92bcd51ac16cf6dcd0bd64d",
+      "schemas": ["e41-independent-revision-replay-v1", "workspace-paired-routing-prompt-case-v1", "workspace-paired-routing-prompt-decision-v1", "workspace-paired-routing-prompt-header-v1", "workspace-paired-routing-prompt-summary-v1"],
+      "disposition": "complete"
+    },
+    "e47": {
+      "path": "experiments/runs/2026-07-18-E47P-target-local-factorial12.jsonl",
+      "sha256": "75944f77775728bea2a65939457f28f9d6e730e36cba10c6123c47f9d3c155b2",
+      "schemas": ["action-lens-case-summary-v1", "action-lens-factorial-header-v1", "action-lens-run-summary-v1", "action-lens-source-state-v1", "action-lens-transition-v1"],
+      "disposition": "complete"
+    }
+  },
+  "claims": [
+    {
+      "id": "e20",
+      "statement": "The tested imitation controller did not transfer successfully to the Qwen worker.",
+      "experiment_ids": ["E20"],
+      "status": "verified",
+      "inputs": ["e20_direct", "e20_controller"],
+      "analysis": "e20",
+      "unit_of_analysis": "20 original problems",
+      "limitations": ["Behavior cloning, not completed off-policy RL.", "Small, single-seed test.", "Metrics reconstructed from recorded correctness and per-turn rewards."],
+      "exclusions": ["No claim that small controllers are inherently unsuitable."]
+    },
+    {
+      "id": "revision_routing",
+      "statement": "On shared saved problems, a fixed independent revision yielded more correct candidates than the tested coordinator selected.",
+      "experiment_ids": ["E41", "E42"],
+      "status": "verified",
+      "inputs": ["e41", "e42"],
+      "analysis": "revision_routing",
+      "unit_of_analysis": "60 reused original problems, paired",
+      "limitations": ["E42 replays E41 worker output.", "The fixed workflow uses a revision on every problem; routing uses fewer worker calls.", "Not an equal-cost comparison or fresh independent confirmation.", "E41 candidate correctness is not an executed terminal SUBMIT reward."],
+      "exclusions": ["No general coordinator disadvantage or efficiency claim."]
+    },
+    {
+      "id": "locality",
+      "statement": "Child-local context helped relative to full context in a small development screen, but the discovery-selected fixed child tied direct prompting.",
+      "experiment_ids": ["E47P"],
+      "status": "verified",
+      "inputs": ["e47"],
+      "analysis": "locality",
+      "unit_of_analysis": "12 source states; repeated calls within state",
+      "limitations": ["72 evaluation child pairs are not 72 independent problems.", "Development screen, not confirmation.", "Descriptive reconstruction; original grouped uncertainty remains in the ledger.", "Discovery and evaluation share problems, with different repetitions."],
+      "exclusions": ["No evidence here that semantic target selection generalizes.", "No new statistical significance claim."]
+    }
+  ]
+}

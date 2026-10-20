@@ -1,83 +1,78 @@
-# verifier-anchored-rl
+# Expert Iteration: Experiments and Lessons
 
-Approximate $Q$-learning over verifiable context MDPs, with Monte Carlo Tree
-Search as a sample-efficient policy improvement operator and a test-time
-compute knob. The project develops the chain that begins with the Bellman
-equation, moves through tabular and approximate $Q$-learning, exploration,
-and MCTS, and finally generalizes to LLM deliberation over a verifiable
-context MDP. A methodology paper accompanies the implementation: the
-framework paper at `paper/`.
+A research archive about learning to guide search and coordinating a frozen
+language model. It contains runnable teaching examples, experimental code,
+saved model outputs, and lessons from comparisons that did not establish the
+hoped-for controller advantage.
 
+**Status:** being prepared for archival release. This is not a finished
+methodology paper or a claim of a new successful algorithm. The GitHub
+repository has not yet been marked read-only.
 
-This repository ships the classical-MDP scaffold (Phase 1 plus the MCTS
-planner from Phase 2 of the design document). It implements:
+## Start Here
 
-- a `FiniteMDP` / `GenerativeMDP` protocol pair (PEP 544 structural typing),
-- a small stochastic Gridworld environment with noisy moves and terminal
-  goal / pit rewards,
-- an exact value iteration solver,
-- a depth-limited expectimax planner with optional memoization,
-- a chance-node MCTS planner with PUCT selection and per-edge reward backup,
-- pytest coverage tying the four planners together, including the
-  hand-computable S/A/G/B triangulation invariant.
+- [Understand the research](docs/research-overview.md): what we wanted to learn,
+  what we built, and what we actually tested.
+- [Read the findings](docs/findings.md): three bounded comparisons and their
+  limitations.
+- [Check the numbers](docs/reproduction.md): regenerate tables from saved
+  records without buying model access.
+- [Run the teaching example](docs/tutorial.md): a small policy-learning and
+  search loop on a grid.
+- [Explore the project](docs/project-map.md): code, historical plans, and
+  separate follow-up projects.
 
-The expert iteration training loop and the LLM-context extension are
-scheduled for later phases; see `design.md` for the roadmap.
+## What We Learned
 
-## Where things live
+The tested imitation controller did not transfer successfully to a different
+worker model. In a later shared-output comparison, always taking an independent
+revision produced more correct candidates than the tested coordinator selected.
+Focused context helped relative to full context in a small screen, but the
+selected fixed child workflow did not beat direct prompting.
 
-| Path | Purpose |
-|------|---------|
-| `design.md` | Authoritative design specification (Phase 1, 2, 3, and the LLM-context MDP target) |
-| `paper/` | Methodology paper: Verifier-Anchored Reinforcement Learning for Small Language Model Deliberation |
-| `src/verifier_anchored_rl/` | The Python package |
-| `tests/` | Pytest suite |
-| `experiments/` | Standalone scripts that exercise the package end to end |
+These are different experiments, not a single cumulative benchmark. They do
+not show that small controllers are inherently unsuitable, or that the original
+RL/search idea failed. See the [findings](docs/findings.md) for denominators,
+controls, costs, and limits.
 
-## Install
+## Quick Offline Check
 
-The package uses a standard PEP 621 layout with a `src/` directory. Editable
-install from the repository root:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Python 3.11 or newer is required. The only runtime dependency is `numpy`;
-`pytest` is the only dev dependency. No PyTorch, no LLM libraries, and no
-network access are needed for the classical-MDP scaffold.
-
-## Run the tests
+From the repository root, with Python 3.11 or newer:
 
 ```bash
-pytest -v
+python analysis/reproduce.py --output-dir /tmp/expert-iteration-tables
 ```
 
-The suite covers the Gridworld dynamics (transition probabilities sum to
-one, wall and boundary stay-in-place, terminal-state convention, reward
-attribution), the value-iteration solver (the hand-computable S/A/G/B
-example from `design.md` section 10.2, plus Gridworld sanity checks), the
-expectimax planner (agreement with value iteration on both the toy MDP and
-a small Gridworld), and the MCTS planner (visit-count properties, PUCT
-prior respect, convergence toward value iteration's $Q$ on S/A/G/B and
-small gridworlds, and per-edge backup correctness).
+This uses only the Python standard library. It checks the hashes of five
+selected input files and rebuilds eight descriptive comparisons from individual
+records, not copied aggregate totals. It does not rerun models or independently
+recheck all mathematical answers.
 
-## Run the experiments
+For the tutorial and focused tests:
 
 ```bash
-python experiments/run_value_iteration.py
-python experiments/run_mcts.py
+python -m pip install -e ".[dev]"
+python -m pytest -q tests/test_archive_reproduction.py tests/test_archive_tutorial.py
 ```
 
-The first script builds the canonical example layout from `design.md`
-(section 5.1), runs value iteration with `gamma = 0.99`, and prints the
-optimal value table and the greedy policy as ASCII grids. The second runs
-MCTS from the start state with 2000 simulations and compares its
-recommended action and visit-count policy against value iteration.
+The wider historical suite requires additional optional dependencies; see
+[reproduction](docs/reproduction.md). Installation can use the network, but the
+table analysis and teaching example do not.
 
-## What is not implemented yet
+## Scope, Credit, and License
 
-The expert iteration training loop and policy distillation, the LLM-context
-MDP extension, and any neural-network or LLM-backed components are
-scheduled for later dispatches. The `design.md` file is the source of truth
-for what each phase contains.
+The original aim was **RL first, MCTS second**: improve a learned policy, with
+search as an optional accelerator. The tabular teaching implementation exists.
+Later frozen-LLM experiments tested teacher control and imitation, but did not
+complete the planned off-policy RL study.
+
+Author: **Alexander Richard Towell**, Southern Illinois University Edwardsville.
+Substantial AI assistance was used in coding, experimentation, and writing.
+Automated tests and AI review are not human peer review.
+
+Original code is [MIT licensed](LICENSE). The new research notes are
+[CC BY 4.0](LICENSES/README.md); dataset and third-party terms remain separate.
+See [CITATION.cff](CITATION.cff). No DOI is claimed for this release preparation.
+
+See [release readiness](docs/release-readiness.md) for current verification,
+exclusions, and publication blockers.

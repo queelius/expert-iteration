@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+Current work (2026-10-20): prepare a pedagogical research archive, not new
+controller experiments. Read `README.md`, `docs/release-readiness.md`, and
+`docs/superpowers/plans/2026-10-20-public-research-archive.md`.
+The research description below is historical; its invariants still apply.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this repository is

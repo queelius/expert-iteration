@@ -1,0 +1,38 @@
+{
+  "schema_version": "research-archive-packet-v1",
+  "files": [
+    "README.md",
+    "LICENSE",
+    "LICENSES/README.md",
+    "CITATION.cff",
+    "pyproject.toml",
+    "uv.lock",
+    "docs/research-overview.md",
+    "docs/findings.md",
+    "docs/reproduction.md",
+    "docs/tutorial.md",
+    "docs/project-map.md",
+    "docs/release-readiness.md",
+    "docs/superpowers/plans/2026-10-20-public-research-archive.md",
+    "analysis/claims.json",
+    "analysis/reproduce.py",
+    "analysis/tables.json",
+    "analysis/tables.md",
+    "analysis/packet.json",
+    "analysis/build_packet.py",
+    "experiments/run_expert_iteration.py",
+    "tests/__init__.py",
+    "tests/test_archive_reproduction.py",
+    "tests/test_archive_tutorial.py",
+    "tests/test_expert_iteration.py",
+    "tests/test_mcts.py",
+    "tests/test_value_iteration.py",
+    "tests/test_archive_packet.py",
+    "datasets/casework-v1/README.md"
+  ],
+  "trees": [
+    {"path": "src/verifier_anchored_rl", "suffix": ".py"}
+  ],
+  "evidence_manifest": "analysis/claims.json",
+  "scope": "Selected saved-outcome metric reconstruction and classical teaching example. Not all historical hosted replay dependencies are included. Local release candidate; publication requires the rights and privacy checks in docs/release-readiness.md."
+}

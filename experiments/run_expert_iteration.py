@@ -21,6 +21,8 @@ Run from the repository root::
 
 from __future__ import annotations
 
+import argparse
+
 import numpy as np
 
 from verifier_anchored_rl.eval import evaluate_policy, evaluate_with_search
@@ -34,7 +36,18 @@ from verifier_anchored_rl.policies import TabularPolicy
 from verifier_anchored_rl.value_iteration import value_iteration
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> dict[str, float | int]:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--iterations", type=int, default=10)
+    parser.add_argument("--episodes", type=int, default=20)
+    parser.add_argument("--simulations", type=int, default=50)
+    parser.add_argument("--evaluation-episodes", type=int, default=100)
+    parser.add_argument("--max-steps", type=int, default=50)
+    parser.add_argument("--evaluation-max-steps", type=int, default=100)
+    parser.add_argument("--seed", type=int, default=2026)
+    args = parser.parse_args(argv)
+    if any(value <= 0 for name, value in vars(args).items() if name != "seed"):
+        parser.error("all training, search, and evaluation budgets must be positive")
     layout = [
         "S..G",
         ".#.P",
@@ -55,10 +68,10 @@ def main() -> None:
     # ---- Expert iteration training -----------------------------------
     policy: TabularPolicy = TabularPolicy()
     config = ExpertIterationConfig(
-        num_iterations=10,
-        episodes_per_iteration=20,
-        max_episode_steps=50,
-        mcts_simulations_per_step=50,
+        num_iterations=args.iterations,
+        episodes_per_iteration=args.episodes,
+        max_episode_steps=args.max_steps,
+        mcts_simulations_per_step=args.simulations,
         mcts_c_puct=1.0,
         mcts_temperature=1.0,
         discount=gamma,
@@ -81,8 +94,8 @@ def main() -> None:
             f"{r.mean_episode_length:>12.2f} {r.num_examples:>14d}"
         )
 
-    rng = np.random.default_rng(2026)
-    run_expert_iteration(
+    rng = np.random.default_rng(args.seed)
+    rounds = run_expert_iteration(
         env=env,
         initial_state_fn=lambda r: env.start,
         policy=policy,
@@ -93,8 +106,8 @@ def main() -> None:
     print()
 
     # ---- Post-training evaluation ------------------------------------
-    eval_episodes = 100
-    eval_max_steps = 100
+    eval_episodes = args.evaluation_episodes
+    eval_max_steps = args.evaluation_max_steps
 
     fast_rng = np.random.default_rng(11)
     fast = evaluate_policy(
@@ -117,7 +130,7 @@ def main() -> None:
         env=env,
         initial_state_fn=lambda r: env.start,
         policy=policy,
-        mcts_simulations=50,
+        mcts_simulations=args.simulations,
         discount=gamma,
         num_episodes=eval_episodes,
         max_steps=eval_max_steps,
@@ -125,7 +138,7 @@ def main() -> None:
         c_puct=config.mcts_c_puct,
     )
     print(
-        f"Search mode (B = 50): mean_return = {search['mean_return']:+.4f} "
+        f"Search mode (B = {args.simulations}): mean_return = {search['mean_return']:+.4f} "
         f"(std = {search['std_return']:.4f}), "
         f"mean_episode_length = {search['mean_episode_length']:.2f}"
     )
@@ -140,6 +153,13 @@ def main() -> None:
         "(Smaller gaps are better; fast mode reflects the parametric policy "
         "alone, search mode reflects policy + MCTS together.)"
     )
+    return {
+        "iterations": len(rounds),
+        "training_examples": sum(r.num_examples for r in rounds),
+        "optimal_value": V_vi[env.start],
+        "fast_return": fast["mean_return"],
+        "search_return": search["mean_return"],
+    }
 
 
 if __name__ == "__main__":

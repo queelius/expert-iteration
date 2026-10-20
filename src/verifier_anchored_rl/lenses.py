@@ -45,7 +45,8 @@ def _is_closed_goal(graph: Graph, node_id: NodeId) -> bool:
         solved(graph, node_id) or is_abandoned(graph, node_id))
 
 
-def _detail(graph: Graph, node) -> str:
+def _detail(graph: Graph, node, *,
+            include_committed_outcomes: bool = True) -> str:
     if isinstance(node, Goal):
         out = node.statement
         if node.connective is not None:
@@ -58,6 +59,14 @@ def _detail(graph: Graph, node) -> str:
             ws = _witnesses(graph, node)
             if ws:
                 out += f" (evidence: node {ws[-1]} verified)"
+        elif solved(graph, node.id) and include_committed_outcomes:
+            witness_id = dict(graph.solved_by).get(node.id)
+            if witness_id is not None:
+                witness = get(graph, witness_id)
+                out += (
+                    f" (outcome: node {witness_id} "
+                    f"{witness.statement})"
+                )
         return out
     if isinstance(node, (Hypothesis, Fact)):
         return f"{node.statement}{_verify_marker(graph, node.id)}"
@@ -100,7 +109,8 @@ def _subtree_ids(graph: Graph, node_id: NodeId) -> set[NodeId]:
     return acc
 
 
-def render_view(graph: Graph, target: NodeId) -> str:
+def render_view(graph: Graph, target: NodeId, *,
+                include_committed_outcomes: bool = True) -> str:
     """The grounded-local view: problem, ancestor path, target subtree.
 
     Rendered AS A TREE: children are indented under their parent and every
@@ -129,7 +139,9 @@ def render_view(graph: Graph, target: NodeId) -> str:
         kind = type(node).__name__.upper()
         tag = (f"[{kind} id={nid}]" if parent is None
                else f"[{kind} id={nid} parent={parent}]")
-        line = "  " * depth + f"{tag} {_detail(graph, node)}"
+        detail = _detail(
+            graph, node, include_committed_outcomes=include_committed_outcomes)
+        line = "  " * depth + f"{tag} {detail}"
         if _is_closed_goal(graph, nid) and nid != target:
             verdict = "solved" if solved(graph, nid) else "abandoned"
             line += f" ({verdict})"
@@ -143,7 +155,8 @@ def render_view(graph: Graph, target: NodeId) -> str:
 
 
 def global_prefix(state: DeliberationState,
-                  depth_limit: int | None = None) -> str:
+                  depth_limit: int | None = None, *,
+                  include_committed_outcomes: bool = True) -> str:
     """The whole-forest serialization used for the global state embedding.
 
     With a depth_limit the turn marker shows the budget ([TURN 3/16]);
@@ -151,8 +164,12 @@ def global_prefix(state: DeliberationState,
     """
     turn = (f"[TURN {state.turn}/{depth_limit}]" if depth_limit is not None
             else f"[TURN {state.turn}]")
-    return (f"State:\n{render_view(state.graph, state.graph.root_id)}"
-            f"\n{turn}")
+    view = render_view(
+        state.graph,
+        state.graph.root_id,
+        include_committed_outcomes=include_committed_outcomes,
+    )
+    return f"State:\n{view}\n{turn}"
 
 
 def _live_premise_ids(graph: Graph) -> list[NodeId]:
