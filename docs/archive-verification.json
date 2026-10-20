@@ -1,0 +1,59 @@
+{
+  "schema_version": "research-archive-verification-v1",
+  "verified_date": "2026-10-20",
+  "publication_status": "local candidate only; no push, public release, deposit, visibility change, or archival performed",
+  "source_commit": "bd12c113c7c7ff0ae17bcc5cf5800fb25818cfc7",
+  "packet": {
+    "path": "dist/expert-iteration-2026-10-20-rc1.zip",
+    "sha256": "85166d938300eae92011c9b21254ae170fe59bed11834ed041d0e8264ccceaad",
+    "bytes": 853883,
+    "source_files": 128,
+    "embedded_manifest": "ARCHIVE-MANIFEST.json",
+    "all_embedded_hashes_checked": true
+  },
+  "verification": {
+    "fresh_extraction": true,
+    "fresh_virtual_environment": true,
+    "python": "3.11.15",
+    "numpy": "2.4.6",
+    "pytest": "9.1.1",
+    "torch_installed": false,
+    "sympy_installed": false,
+    "inherited_environment": "cleared except PATH and a temporary HOME",
+    "network_control": "Python audit hook denies socket.connect, socket.getaddrinfo, socket.bind; not an OS sandbox",
+    "os_network_namespace": "unavailable: UID-map permission denied",
+    "table_reconstruction": "8 comparisons; JSON and Markdown match packet copies byte for byte",
+    "tests": {"passed": 59, "failed": 0, "elapsed_seconds": 5.31},
+    "coverage_from_working_checkout": {
+      "combined_percent": 98,
+      "scope": "analysis/reproduce.py, analysis/build_packet.py, experiments/run_expert_iteration.py",
+      "branch_coverage_enabled": true
+    },
+    "review": "Separate AI code review found no critical or important issues in archive additions; not human peer review."
+  },
+  "reproduction_command": "python analysis/reproduce.py --output-dir /tmp/expert-iteration-tables",
+  "packet_build_command": "python analysis/build_packet.py --revision bd12c113c7c7ff0ae17bcc5cf5800fb25818cfc7 --output dist/expert-iteration-2026-10-20-rc1.zip",
+  "scope": "Recount saved record-level outcomes and run the classical teaching example. Not independent mathematical rescoring, complete historical transport replay, fresh inference, or a certification of the whole historical suite.",
+  "historical_suite": {
+    "passed": 876,
+    "skipped": 64,
+    "failed": 7,
+    "errors": 1,
+    "timeout_seconds_per_test": 120,
+    "missing_torch_followup": "4 passed, 1 CUDA-only skip after installing CPU Torch",
+    "remaining_timeouts": [
+      "tests/reasoning_v2/test_boundary_exact_probe.py::test_prepare_binds_strict_mode_raw_control_and_unchanged_e28_requests",
+      "tests/reasoning_v2/test_boundary_exact_probe.py::test_strict_corrected_replication_retries_numeric_raw_and_replays_artifact",
+      "tests/reasoning_v2/test_boundary_exact_probe.py::test_second_numeric_reply_is_terminal_unusable_and_diagnosed"
+    ],
+    "full_suite_rerun_after_torch_install": false
+  },
+  "remaining_release_gates": [
+    "Review saved model-response redistribution and any third-party rights.",
+    "Audit reachable Git history and unselected files before making the entire repository public.",
+    "Review uncommitted historical material separately; do not discard it.",
+    "Approve exact public destination and release scope.",
+    "Search existing Zenodo records before creating a record family.",
+    "Publish and verify downloads before marking GitHub read-only or moving the local checkout."
+  ]
+}
