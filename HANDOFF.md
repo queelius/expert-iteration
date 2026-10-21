@@ -4,6 +4,14 @@
 > Start with `README.md` and `docs/release-readiness.md` for the current work.
 > Do not resume the old experimental critical path merely from this handoff.
 
+Public archive update (2026-10-21): version 1.0.0 is published at
+https://doi.org/10.5281/zenodo.23526852. Exact source and download verification
+are in `docs/publication.json`. The central contribution ID is
+`expert-iteration-lessons`, indexed at
+https://github.com/queelius/research-records/tree/main/records/expert-iteration-lessons.
+Read-only archival follows the publication-receipt commit. The historical
+research and current archive verification are distinct records.
+
 (Replaces the stale 2026-06-18 handoff, which described the pre-redesign
 outer loop.) Written for resuming this project in another agent/tool.
 Read this file, then `CLAUDE.md` (rules), `design.md` (system spec,

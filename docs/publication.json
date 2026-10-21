@@ -1,6 +1,6 @@
 {
   "schema_version": "research-archive-publication-v1",
-  "state": "prepared",
+  "state": "published",
   "title": "Expert Iteration: Experiments and Lessons",
   "version": "1.0.0",
   "record_id": "expert-iteration-lessons",
@@ -8,7 +8,10 @@
   "source_repository": "https://github.com/queelius/expert-iteration",
   "zenodo_deposition_id": 23526852,
   "version_doi": "10.5281/zenodo.23526852",
-  "reserved_doi_is_not_publication": true,
+  "concept_doi": "10.5281/zenodo.23526851",
+  "record_url": "https://zenodo.org/records/23526852",
+  "github_release": "https://github.com/queelius/expert-iteration/releases/tag/v1.0.0",
+  "first_confirmed_public_disclosure": {"date": "2026-10-21", "url": "https://github.com/queelius/expert-iteration", "basis": "Previously private repository made public and README verified without authentication; private development dates are not disclosure dates."},
   "duplicate_search": {
     "date": "2026-10-21",
     "source": "authenticated owned Zenodo depositions, complete pagination",
@@ -18,9 +21,15 @@
   },
   "license": {"original_code": "MIT", "new_notes": "CC-BY-4.0", "third_party": "See NOTICE and LICENSES"},
   "review": "docs/publication-review.md",
-  "publication_date": null,
-  "source_commit": null,
-  "files": [],
-  "github_archived": false,
+  "publication_date": "2026-10-21",
+  "source_commit": "a535c2b34f18894d3228090dce048b30ade3badd",
+  "files": [
+    {"filename": "expert-iteration-v1.0.0.zip", "bytes": 863122, "sha256": "611b41a69aa0728c860a4d165e3486584ee9817e47c32ac20af5a3f063c74f88"},
+    {"filename": "CITATION.cff", "bytes": 1067, "sha256": "063e23c1d2855bf6900fbbc136481976e4df27ec20a14c264cf0f0ebcf02be6e"},
+    {"filename": "release-1.0.0.json", "bytes": 1716, "sha256": "e84146de266b75af0cde915551a76848812b11a1b7dfa217af48a300840c2198"},
+    {"filename": "RELEASE-1.0.0.md", "bytes": 4319, "sha256": "c78a85fe36e40505fed2cd229416bc32199da129262c640f988763e80fb84a4c"}
+  ],
+  "public_download_verification": {"date": "2026-10-21", "hosts": ["Zenodo", "GitHub Releases"], "authenticated": false, "files_per_host": 4, "all_sha256_matched": true},
+  "github_archival": {"requested": true, "sequence": "Archive after committing and pushing this publication receipt and updating the central record.", "verification_url": "https://api.github.com/repos/queelius/expert-iteration", "final_state_receipt": "https://github.com/queelius/research-records/tree/main/records/expert-iteration-lessons"},
   "local_checkout_moved": false
 }

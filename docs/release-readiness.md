@@ -1,6 +1,6 @@
 # Research Archive Release Readiness
 
-Updated: 2026-10-21. Status: publication checks completed; final publication
+Updated: 2026-10-21. Status: version 1.0.0 published and downloads verified; final publication
 receipt is maintained in the source repository at `docs/publication.json`.
 
 ## Scope and Progress
@@ -14,7 +14,10 @@ This record tracks work, decisions, and checks. It is not a scientific result.
 - Reader guide: overview, findings, reproduction, tutorial, and project map written.
 - Standalone packet: 59 tests passed in a fresh environment; publication checks remain.
 - Privacy and rights review: completed for this research release.
-- Publication and GitHub archival: follow the final publication receipt.
+- Publication: GitHub release and Zenodo version DOI are public; four files
+  from each service were downloaded without authentication and hash-checked.
+- GitHub archival: follows the final receipt commit; the central record
+  captures the verified final state.
 - Local move: left to the owner after publication.
 
 Recommended GitHub name: retain `expert-iteration`. Reader-facing title:

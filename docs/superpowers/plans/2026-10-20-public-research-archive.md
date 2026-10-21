@@ -10,12 +10,13 @@
 
 **Spec:** The approved scope below records the repository-organization proposal discussed with the user on 2026-10-20. Existing scientific contracts remain governed by `CLAUDE.md`, `design.md`, and the experiment ledger.
 
-**Status:** Local archive implementation and standalone candidate checks
-completed on 2026-10-20. Tasks 1-4 have their bounded first-release deliverables.
-Task 5 produced a verified compact candidate; broader historical-suite and
-publication-clearance limits remain explicit in `docs/release-readiness.md`.
-Task 6 has not started. Unchecked items below remain outside the completed
-scope or require the separate publication gate.
+**Status:** The bounded archive and its verification were completed on
+2026-10-20. Publication review, GitHub release, Zenodo publication, public
+download verification, and central indexing were completed on 2026-10-21.
+See `docs/publication.json` and the central record `expert-iteration-lessons`.
+GitHub read-only archival follows the final receipt commit; its verified state
+is recorded centrally. Remaining unchecked historical-scope steps are not
+claims of completed full-suite or independent mathematical verification.
 
 ## Approved Scope
 
@@ -205,13 +206,13 @@ in `docs/release-readiness.md`. Add a curated record in
 **Interfaces:** Consumes the verified Task 5 packet. Produces a public source
 release, an exact-version archival DOI, and a central-index link.
 
-- [ ] Present the exact release scope, destination, license decisions, and unresolved issues to the user. Resolve any required approval before disclosure, especially repository visibility.
-- [ ] Check official GitHub/Zenodo instructions at execution time and reread the central publishing guide. Search existing deposits with complete pagination; reuse an appropriate version family.
-- [ ] Publish a reviewed GitHub release from the pinned commit if the destination is authorized. If the current repository cannot safely be public, propose a clean public export without changing the working repository.
-- [ ] Create or reuse a Zenodo draft using the configured uploader and existing authentication, without printing tokens. Reserve a DOI before finalizing citation metadata when needed.
-- [ ] Verify metadata, file contents, original disclosure dates, source links, licenses, and the distinction between research artifact and peer-reviewed publication. Keep one coherent record/version family.
-- [ ] Publish when authorized and ready, then download every deposited file and compare hashes. Verify the public source, record, and exact-version DOI.
-- [ ] Update the central index with canonical source and DOI links, evidence scope, disclosure dates, and verification receipt. Citation/index follow-up commits must not silently alter the archived evidence.
+- [x] Present the exact release scope, destination, license decisions, and unresolved issues to the user. Resolve any required approval before disclosure, especially repository visibility.
+- [x] Check official GitHub/Zenodo instructions at execution time and reread the central publishing guide. Search existing deposits with complete pagination; reuse an appropriate version family.
+- [x] Publish a reviewed GitHub release from the pinned commit if the destination is authorized. If the current repository cannot safely be public, propose a clean public export without changing the working repository.
+- [x] Create or reuse a Zenodo draft using the configured uploader and existing authentication, without printing tokens. Reserve a DOI before finalizing citation metadata when needed.
+- [x] Verify metadata, file contents, original disclosure dates, source links, licenses, and the distinction between research artifact and peer-reviewed publication. Keep one coherent record/version family.
+- [x] Publish when authorized and ready, then download every deposited file and compare hashes. Verify the public source, record, and exact-version DOI.
+- [x] Update the central index with canonical source and DOI links, evidence scope, disclosure dates, and verification receipt. Citation/index follow-up commits must not silently alter the archived evidence.
 
 **Done when:** Another person can reach the source, cite the exact archived
 version, download it, and reproduce the selected findings without private access.

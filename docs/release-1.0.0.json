@@ -1,0 +1,38 @@
+{
+  "schema_version": "research-archive-release-v1",
+  "title": "Expert Iteration: Experiments and Lessons",
+  "version": "1.0.0",
+  "author": "Alexander Richard Towell",
+  "orcid": "0000-0001-6443-9897",
+  "doi": "10.5281/zenodo.23526852",
+  "source_commit": "a535c2b34f18894d3228090dce048b30ade3badd",
+  "source_repository": "https://github.com/queelius/expert-iteration",
+  "release_tag": "v1.0.0",
+  "packet": {
+    "filename": "expert-iteration-v1.0.0.zip",
+    "bytes": 863122,
+    "sha256": "611b41a69aa0728c860a4d165e3486584ee9817e47c32ac20af5a3f063c74f88",
+    "source_files": 133,
+    "embedded_manifest": "ARCHIVE-MANIFEST.json"
+  },
+  "citation": {
+    "filename": "CITATION.cff",
+    "bytes": 1067,
+    "sha256": "063e23c1d2855bf6900fbbc136481976e4df27ec20a14c264cf0f0ebcf02be6e"
+  },
+  "verification": {
+    "date": "2026-10-21",
+    "fresh_environment_tests_passed": 59,
+    "elapsed_seconds": 4.60,
+    "exact_table_files_matched": 2,
+    "comparisons": 8,
+    "network_control": "Python socket audit hook; not an OS sandbox",
+    "model_calls": 0,
+    "github_ci": "https://github.com/queelius/expert-iteration/actions/runs/39555674417",
+    "github_ci_conclusion": "success"
+  },
+  "scope": "Metric reconstruction from saved individual outcomes and a classical teaching example; not independent mathematical rescoring or fresh inference.",
+  "license": {"original_code": "MIT", "new_notes": "CC-BY-4.0", "third_party": "See NOTICE and LICENSES"},
+  "ai_assistance": "Substantial assistance in code, experiments, analysis, review, writing, and publication; no human peer-review claim.",
+  "central_record": "https://github.com/queelius/research-records/tree/main/records/expert-iteration-lessons"
+}

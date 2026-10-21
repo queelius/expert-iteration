@@ -1,0 +1,17 @@
+{
+  "title": "Expert Iteration: Experiments and Lessons",
+  "upload_type": "software",
+  "version": "1.0.0",
+  "publication_date": "2026-10-21",
+  "creators": [{"name": "Towell, Alexander Richard", "affiliation": "Southern Illinois University Edwardsville", "orcid": "0000-0001-6443-9897"}],
+  "description": "<p>A pedagogical research archive of search-assisted policy learning and frozen-language-model orchestration. It preserves bounded negative findings, a local teaching example, saved experimental outcomes, and offline reconstruction of eight descriptive comparisons.</p><p>E20 compared direct Qwen2.5-1.5B prompting (8/20) with the tested transferred imitation controller (0/20). E41/E42 reused 60 problems and saved worker outputs: fixed independent revision supplied 55/60 correct candidates while improved GPT-4.1-mini routing solved 51/60. This was not an equal-cost or fresh inference comparison. E47 found a local-context effect within 12 source states but no fixed-child advantage over direct prompting and no reliable target-selection improvement.</p><p>The ZIP contains 133 source/evidence files plus an integrity manifest. All 59 included tests passed in a fresh environment without provider credentials, Torch, SymPy, models, or sibling checkouts; Python socket operations were denied. Saved-outcome metric reconstruction does not independently validate all historical mathematical labels or replay all model transports. The wider historical suite has separately documented symbolic-replay timeouts. The proposed full off-policy RL/search efficiency study was not completed. No general controller impossibility, algorithmic novelty, peer review, or priority claim is made.</p><p>MIT covers the original software. New research notes are CC BY 4.0; dataset, model, and benchmark notices remain separate in NOTICE and LICENSES. No worker model weights are distributed in the evidence packet. Substantial AI assistance is disclosed. The GitHub repository preserves the wider research history; the release note and JSON metadata describe the exact supported reproduction scope.</p>",
+  "access_right": "open",
+  "license": "mit-license",
+  "keywords": ["expert iteration", "reinforcement learning", "Monte Carlo tree search", "language model orchestration", "negative results", "research artifact", "reproducibility"],
+  "related_identifiers": [
+    {"identifier": "https://github.com/queelius/expert-iteration/tree/a535c2b34f18894d3228090dce048b30ade3badd", "relation": "isSupplementTo", "scheme": "url"},
+    {"identifier": "https://github.com/queelius/expert-iteration/releases/tag/v1.0.0", "relation": "isIdenticalTo", "scheme": "url"},
+    {"identifier": "https://github.com/queelius/research-records/tree/main/records/expert-iteration-lessons", "relation": "isReferencedBy", "scheme": "url"}
+  ],
+  "notes": "The record-level MIT label identifies the original software license; notes are CC BY 4.0 and third-party notices are preserved separately. Historical private experiment dates are not public disclosure dates. This is an archival research artifact, not a peer-reviewed paper."
+}
