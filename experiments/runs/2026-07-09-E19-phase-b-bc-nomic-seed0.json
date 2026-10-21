@@ -1,0 +1,151 @@
+{
+  "baseline": {
+    "menu_frequency_joint_accuracy": 0.035555555555555556,
+    "uniform_legal_pair_expected_accuracy": 0.12724635112702187
+  },
+  "checkpoint": "experiments/runs/2026-07-09-E19-phase-b-bc-nomic-seed0.pt",
+  "dataset": "/tmp/phase-b-v1.jsonl",
+  "encoder": {
+    "dimension": 768,
+    "model": "nomic-embed-text:latest",
+    "model_digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+    "type": "frozen_embedding_cache"
+  },
+  "experiment": "E19",
+  "history": [
+    {
+      "bc": 1.3322236354534442,
+      "epoch": 1,
+      "pointer": 0.31245572614268613,
+      "q": 0.47398150196442235,
+      "total": 1.4507190172488873,
+      "verb": 1.0197679125345671
+    },
+    {
+      "bc": 0.6416717937323623,
+      "epoch": 10,
+      "pointer": 0.20538594416127756,
+      "q": 0.3013526178323306,
+      "total": 0.7170099449845461,
+      "verb": 0.4362858497143651
+    },
+    {
+      "bc": 0.4716491515819843,
+      "epoch": 20,
+      "pointer": 0.10811892467049453,
+      "q": 0.2557357664291675,
+      "total": 0.535583094908641,
+      "verb": 0.3635302283442937
+    },
+    {
+      "bc": 0.3972090230538295,
+      "epoch": 30,
+      "pointer": 0.09606150677875401,
+      "q": 0.2358942421583029,
+      "total": 0.45618258531276995,
+      "verb": 0.30114751481092894
+    },
+    {
+      "bc": 0.29522874836738294,
+      "epoch": 40,
+      "pointer": 0.08094255588142775,
+      "q": 0.24828292773320124,
+      "total": 0.3572994757157106,
+      "verb": 0.2142861932516098
+    },
+    {
+      "bc": 0.2828469843818591,
+      "epoch": 50,
+      "pointer": 0.11837285917639608,
+      "q": 0.19636924679462725,
+      "total": 0.3319392977998807,
+      "verb": 0.16447412874549627
+    },
+    {
+      "bc": 0.21742597265312305,
+      "epoch": 60,
+      "pointer": 0.09072187392918679,
+      "q": 0.1944981412245677,
+      "total": 0.2660505095353493,
+      "verb": 0.12670409704486912
+    },
+    {
+      "bc": 0.17193950024934915,
+      "epoch": 70,
+      "pointer": 0.09137023760614774,
+      "q": 0.1812152426976424,
+      "total": 0.21724331092375976,
+      "verb": 0.08056926383421971
+    },
+    {
+      "bc": 0.1457703613783591,
+      "epoch": 80,
+      "pointer": 0.1288227183820429,
+      "q": 0.2090345838895211,
+      "total": 0.19802900718954894,
+      "verb": 0.01694764241647835
+    }
+  ],
+  "hyperparameters": {
+    "batch_size": 64,
+    "epochs": 80,
+    "hash_dim": 512,
+    "hidden_dim": 128,
+    "lr": 0.003,
+    "node_repr_dim": 64,
+    "q_weight": 0.25,
+    "repr_dim": 64,
+    "weight_decay": 0.0001
+  },
+  "parameter_count": 198016,
+  "post_train": {
+    "decisions": 225,
+    "joint_accuracy": 0.6399999856948853,
+    "pointer_accuracy_given_gold_verb": 0.804444432258606,
+    "rendered_decisions": 212,
+    "rendered_joint_accuracy": 0.6320754885673523,
+    "verb_accuracy": 0.7244444489479065,
+    "winning_decisions": 42,
+    "winning_joint_accuracy": 0.761904776096344
+  },
+  "pre_train": {
+    "decisions": 225,
+    "joint_accuracy": 0.017777778208255768,
+    "pointer_accuracy_given_gold_verb": 0.6177777647972107,
+    "rendered_decisions": 212,
+    "rendered_joint_accuracy": 0.01886792480945587,
+    "verb_accuracy": 0.0533333346247673,
+    "winning_decisions": 42,
+    "winning_joint_accuracy": 0.02380952425301075
+  },
+  "seed": 0,
+  "split": {
+    "holdout_decisions": 271,
+    "holdout_problem_indices": [
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "train_decisions": 796,
+    "train_policy_labels": 129,
+    "train_problem_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ]
+  }
+}

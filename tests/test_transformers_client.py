@@ -12,7 +12,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verifier_anchored_rl.llm_client import LLMClient, LLMResponseError
+from verifier_anchored_rl.llm_client import (
+    LLMClient,
+    LLMResponseError,
+    SCHEMA_VALIDATION_STRICT_V1,
+)
 from verifier_anchored_rl.embedding_client import EmbeddingClient
 from verifier_anchored_rl.transformers_client import (
     TransformersEmbeddingClient,
@@ -193,6 +197,27 @@ def test_numeric_answer_coerced_by_shared_validator():
     client = make_llm(['{"answer": 42}'])
     out = client.complete_json(system="s", user="u", schema=SCHEMA)
     assert out == {"answer": "42"}
+
+
+def test_strict_validation_retries_numeric_answer_without_coercion():
+    client = make_llm(
+        ['{"answer": 42}', '{"answer": "42"}'],
+        max_retries=1,
+    )
+
+    out = client.complete_json(
+        system="s",
+        user="u",
+        schema=SCHEMA,
+        schema_validation_mode=SCHEMA_VALIDATION_STRICT_V1,
+    )
+
+    assert out == {"answer": "42"}
+    assert client.generate_calls == 2
+    assert client.tokenizer.chat_template_calls[1][2] == {
+        "role": "assistant",
+        "content": '{"answer": 42}',
+    }
 
 
 # -----------------------------------------------------------------------------

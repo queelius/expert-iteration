@@ -26,35 +26,24 @@ from verifier_anchored_rl.llm_client import (
     LLMResponseError, OpenAICompatibleLLMClient,
 )
 from verifier_anchored_rl.verifier_adapter import check_answer
-
-SYSTEM = (
-    "You are a careful mathematical problem solver. Work through the "
-    "problem step by step, then state the final numeric answer."
+from verifier_anchored_rl.workspace_v1.lenses import (
+    DIRECT_SCHEMA,
+    DIRECT_SYSTEM,
+    direct_user_prompt,
 )
+
+SYSTEM = DIRECT_SYSTEM
 
 # Types deliberately unconstrained: the baseline measures MATH ability,
 # and small models return schema-spirited but type-loose JSON (reasoning
 # as a list of steps, answer as a bare number). A {"type": "string"}
 # constraint made a correct Qwen-1.5B answer fail validation three times
 # in a row. _solve_one coerces with str().
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        "reasoning": {},
-        "answer": {},
-    },
-    "required": ["answer"],
-}
+SCHEMA = DIRECT_SCHEMA
 
 
 def _solve_one(i: int, p: dict, client: OpenAICompatibleLLMClient) -> dict:
-    user = (
-        f"Problem: {p['problem']}\n\n"
-        "Produce a JSON object with these fields:\n"
-        '  - "reasoning": your step-by-step solution\n'
-        '  - "answer": the final numeric answer only (just the number)\n'
-        "Return only the JSON object."
-    )
+    user = direct_user_prompt(p["problem"])
     answer = None
     try:
         resp = client.complete_json(SYSTEM, user, SCHEMA,

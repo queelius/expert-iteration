@@ -7,7 +7,16 @@ import pytest
 pytest.importorskip("sympy")
 
 from verifier_anchored_rl.deliberation_mdp import (
-    DeliberationAction, DeliberationMDP, Verb,
+    ActionOutcome,
+    DeliberationAction,
+    DeliberationMDP,
+    DeliberationState,
+    OutcomeCode,
+    RejectionReason,
+    Verb,
+)
+from verifier_anchored_rl.controller_observation import (
+    CONTROLLER_OBSERVATION_VERSION,
 )
 from verifier_anchored_rl.llm_client import EchoLLMClient, MockLLMClient
 from verifier_anchored_rl.llm_controller import (
@@ -61,7 +70,12 @@ def test_run_episode_terminates_and_logs_jsonl():
     assert summary_rec["turns"] == summary.turns
     assert summary_rec["llm_calls"] == summary.llm_calls
     assert summary_rec["total_reward"] == summary.reward
-    assert summary_rec["meta"] == {"backend": "echo"}
+    assert summary_rec["meta"]["backend"] == "echo"
+    assert (
+        summary_rec["meta"]["observation_schema"]
+        == CONTROLLER_OBSERVATION_VERSION
+    )
+    assert summary_rec["meta"]["mdp_contract"] == mdp.contract_record()
 
 
 def test_controller_marks_fallback_on_llm_error():
@@ -118,8 +132,18 @@ def test_choose_threads_feedback_and_turn_budget_into_the_message():
                           llm_client=EchoLLMClient())
     client = _Scripted("split:0")
     controller = LLMController(client)
-    controller.choose(mdp, mdp.initial_state(), feedback="PREVIOUS REJECTED")
-    assert "PREVIOUS REJECTED" in client.users[0]
+    initial = mdp.initial_state()
+    state = DeliberationState(
+        initial.graph,
+        initial.turn,
+        ActionOutcome(
+            DeliberationAction(Verb.COMPUTE, 0),
+            OutcomeCode.REJECTED,
+            RejectionReason.DUPLICATE_COMPUTE,
+        ),
+    )
+    controller.choose(mdp, state)
+    assert "REJECTED (duplicate_compute)" in client.users[0]
     assert "[TURN 0/7]" in client.users[0]
 
 
@@ -135,8 +159,19 @@ def test_run_episode_feeds_rejection_back_and_logs_raw_response():
     run_episode(mdp, controller, np.random.default_rng(0),
                 log_fn=records.append)
     assert records[0]["masked"] is True
+    assert records[0]["transition_debug"]["mask_reason"] == "generation_error"
+    assert records[0]["outcome"] == {
+        "action": "split:0",
+        "code": "rejected",
+        "reason": "generation_error",
+    }
     assert 'was REJECTED' in client.users[1]
     assert "split:0" in client.users[1]
+    assert records[1]["controller_observation"]["previous_outcome"] == {
+        "action": "split:0",
+        "code": "rejected",
+        "reason": "generation_error",
+    }
 
 
 def test_structured_prompt_is_distinct_and_foregrounds_structural_verbs():
@@ -186,3 +221,30 @@ def test_controller_schema_has_no_wire_enum():
                           llm_client=EchoLLMClient())
     LLMController(_SchemaCapture()).choose(mdp, mdp.initial_state())
     assert "enum" not in str(captured["schema"])
+
+
+def test_malformed_teacher_reply_is_logged_verbatim():
+    class Malformed:
+        def complete_json(self, *args, **kwargs):
+            from verifier_anchored_rl.llm_client import LLMResponseError
+
+            raise LLMResponseError(
+                "schema failure", raw_response="{bad teacher json")
+
+    mdp = DeliberationMDP(
+        problem="p",
+        expected_answer="1",
+        depth_limit=1,
+        llm_client=MockLLMClient(script={}),
+    )
+    controller = LLMController(Malformed())
+    records = []
+
+    run_episode(
+        mdp,
+        controller,
+        np.random.default_rng(0),
+        log_fn=records.append,
+    )
+
+    assert records[0]["raw_response"] == "{bad teacher json"

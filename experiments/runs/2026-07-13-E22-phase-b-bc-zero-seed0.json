@@ -1,0 +1,211 @@
+{
+  "action_semantics": "goal-commit-v1",
+  "commands": {
+    "convert": "PYTHONPATH=src uv run python experiments/convert_phase_b.py --out /tmp/phase-b-v1.jsonl --gamma 1.0",
+    "train": "PYTHONPATH=src uv run python experiments/run_phase_b_bc.py --dataset /tmp/phase-b-v1.jsonl --out experiments/runs/2026-07-13-E22-phase-b-bc-zero-seed0.json --experiment E22 --encoder zero --zero-dim 768 --decision-rule sequential --observation-schema tree-render-v1 --seed 0"
+  },
+  "baseline": {
+    "legal_menu_lookup": {
+      "all": {
+        "accuracy": 0.6488888888888888,
+        "correct": 146,
+        "decisions": 225,
+        "seen_menu_accuracy": 0.8562874251497006,
+        "seen_menu_correct": 143,
+        "seen_menu_coverage": 0.7422222222222222,
+        "seen_menu_decisions": 167
+      },
+      "losing": {
+        "accuracy": 0.6120218579234973,
+        "correct": 112,
+        "decisions": 183,
+        "seen_menu_accuracy": 0.8515625,
+        "seen_menu_correct": 109,
+        "seen_menu_coverage": 0.6994535519125683,
+        "seen_menu_decisions": 128
+      },
+      "tie_break": "menu_count_then_global_count_then_lexical",
+      "training_labels": 129,
+      "training_menu_signatures": 35,
+      "winning": {
+        "accuracy": 0.8095238095238095,
+        "correct": 34,
+        "decisions": 42,
+        "seen_menu_accuracy": 0.8717948717948718,
+        "seen_menu_correct": 34,
+        "seen_menu_coverage": 0.9285714285714286,
+        "seen_menu_decisions": 39
+      }
+    },
+    "menu_frequency_joint_accuracy": 0.035555555555555556,
+    "uniform_legal_pair_expected_accuracy": 0.12724635112702187
+  },
+  "dataset": "/tmp/phase-b-v1.jsonl",
+  "dataset_sha256": "c4553695690f528f6b5516b3e9388eed513b816a095f2bdeb7d93cc6e7e96e25",
+  "dataset_sources": [
+    "2026-07-02-rung1-casework-probe20-v6-treeview.jsonl",
+    "2026-07-03-rung1-casework-probe20-v7.jsonl",
+    "2026-07-03-rung1-casework-E11-gpt41-maxtok192.jsonl",
+    "2026-07-03-rung1-casework-E13-solveclaims-on.jsonl"
+  ],
+  "encoder": {
+    "dimension": 768,
+    "type": "zero_text_ablation"
+  },
+  "experiment": "E22",
+  "history": [
+    {
+      "bc": 1.508863357397226,
+      "epoch": 1,
+      "pointer": 0.453381393964474,
+      "q": 0.4545375475516686,
+      "total": 1.6224977465776296,
+      "verb": 1.0554819542628069
+    },
+    {
+      "bc": 0.9799534741502541,
+      "epoch": 10,
+      "pointer": 0.44112927867816043,
+      "q": 0.37581427280719465,
+      "total": 1.0739070257315269,
+      "verb": 0.5388242057882823
+    },
+    {
+      "bc": 0.9839159823380984,
+      "epoch": 20,
+      "pointer": 0.46566575650985426,
+      "q": 0.3709619893477513,
+      "total": 1.0766564859793737,
+      "verb": 0.5182502143658124
+    },
+    {
+      "bc": 0.8550320405226487,
+      "epoch": 30,
+      "pointer": 0.42084635221041167,
+      "q": 0.36386415591606724,
+      "total": 0.9459980840866382,
+      "verb": 0.4341857009209119
+    },
+    {
+      "bc": 0.869352061014909,
+      "epoch": 40,
+      "pointer": 0.46054971561982083,
+      "q": 0.35303478172192204,
+      "total": 0.957610758451315,
+      "verb": 0.40880235169942564
+    },
+    {
+      "bc": 0.8101344888026898,
+      "epoch": 50,
+      "pointer": 0.46499294959581816,
+      "q": 0.34230300784111023,
+      "total": 0.8957102436285752,
+      "verb": 0.3451415349084597
+    },
+    {
+      "bc": 0.8251210061403421,
+      "epoch": 60,
+      "pointer": 0.4214683553347221,
+      "q": 0.3406965961823097,
+      "total": 0.9102951655021081,
+      "verb": 0.40365264278191787
+    },
+    {
+      "bc": 0.8092416181014135,
+      "epoch": 70,
+      "pointer": 0.45530857833532185,
+      "q": 0.3328824627857942,
+      "total": 0.8924622352306659,
+      "verb": 0.35393303919297
+    },
+    {
+      "bc": 0.7879334550637466,
+      "epoch": 80,
+      "pointer": 0.45325785875320435,
+      "q": 0.3388809332480797,
+      "total": 0.8726536952532254,
+      "verb": 0.3346755968836638
+    }
+  ],
+  "hyperparameters": {
+    "batch_size": 64,
+    "decision_rule": "sequential",
+    "epochs": 80,
+    "hash_dim": 512,
+    "hidden_dim": 128,
+    "lr": 0.003,
+    "node_repr_dim": 64,
+    "q_weight": 0.25,
+    "repr_dim": 64,
+    "weight_decay": 0.0001,
+    "zero_dim": 768
+  },
+  "training_target_contract": {
+    "acting_policy": "behavior-cloning-heads-v1",
+    "gamma": 1.0,
+    "reward_contract": "legacy-mask-penalty-v1",
+    "target_type": "monte-carlo-return-v1"
+  },
+  "observation_schema": "tree-render-v1",
+  "parameter_count": 198016,
+  "post_train": {
+    "decision_rule": "sequential",
+    "decisions": 225,
+    "joint_accuracy": 0.4933333396911621,
+    "pointer_accuracy_given_gold_verb": 0.54666668176651,
+    "rendered_decisions": 212,
+    "rendered_joint_accuracy": 0.49528300762176514,
+    "verb_accuracy": 0.7333333492279053,
+    "winning_decisions": 42,
+    "winning_joint_accuracy": 0.6904761791229248
+  },
+  "pre_train": {
+    "decision_rule": "sequential",
+    "decisions": 225,
+    "joint_accuracy": 0.0,
+    "pointer_accuracy_given_gold_verb": 0.54666668176651,
+    "rendered_decisions": 212,
+    "rendered_joint_accuracy": 0.0,
+    "verb_accuracy": 0.0533333346247673,
+    "winning_decisions": 42,
+    "winning_joint_accuracy": 0.0
+  },
+  "seed": 0,
+  "split": {
+    "holdout_decisions": 271,
+    "holdout_problem_indices": [
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "train_decisions": 796,
+    "train_policy_labels": 129,
+    "train_problem_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ]
+  },
+  "verb_order": [
+    "split",
+    "form_hypothesis",
+    "compute",
+    "verify",
+    "commit",
+    "abandon"
+  ]
+}

@@ -8,6 +8,11 @@ fontsize: 11pt
 
 # 0. What this document is
 
+Archive notice (2026-10-20): this is a historical design specification, not
+a statement that all proposed work was completed. See
+`docs/research-overview.md` for the implemented/tested/proposed distinction
+and `docs/release-readiness.md` for current archive preparation.
+
 This is the self-contained design of the system: a small external controller
 network that orchestrates a frozen large language model (LLM) by issuing typed
 operations over a highly structured, nested reasoning state, with a symbolic
@@ -21,6 +26,320 @@ decision process (MDP) whose only reward source is a symbolic verifier. Monte
 Carlo Tree Search (MCTS) is a sample-efficient policy-improvement operator and a
 test-time compute knob (Sections 7.4 and 8), not the central object. The core
 training story stands on plain RL.
+
+## 0.1 Contract status after the Phase B audit
+
+Sections 3 and 4 retain v1 examples for historical continuity. Where their
+older details conflict with this paragraph, the audited v2 contract in
+`docs/superpowers/specs/2026-07-13-state-action-contract-v2.md` governs.
+
+The corrections are structural. Controller state is a versioned graph-derived
+record shared by teacher collection, replay, and live inference. Trusted givens
+are non-committable Evidence. A generated Claim has an owner goal, a typed
+symbolic contract, explicit premises and payload, terminal verification status
+`unchecked -> verified | rejected`, and a separate symbolic owner-discharge
+status. Active and compact Claims retain both receipts, bound to one pinned
+verifier contract and bounded reason-code sets. The casework policy learns only
+DECOMPOSE, direct PROPOSE_RESULT,
+PROPOSE_SOLUTION, and PROPOSE_REFUTATION over objective-appropriate Goals.
+VERIFY, COMMIT, and ready AGGREGATE run as deterministic closure after one
+learned decision, consume no extra controller turn, and create no BC example.
+Each closure event names the exact Claim it verifies, creates, or commits. A
+solved compacted goal retains that exact committed outcome. DERIVE and root-safe
+PRUNE remain generic typed operations but are absent from the initial casework
+policy menu. Greedy deployment maximizes the factored joint probability over
+all learned legal pairs.
+
+The live v2 macro transition replays the learned graph delta and deterministic
+closure under the pinned contracts before an accepted receipt or reward is
+trusted. Casework decomposition is always exhaustive-case decomposition. Under
+`symbolic-only-v1`, verifier-backed root closure receives +1 and every other
+transition, including horizon expiry, receives 0.
+
+The bounded previous action outcome is part of immutable MDP state, not a
+runner-local prompt side channel. The implemented collection boundary binds
+the exact environment semantics, model identities, secret-free transport
+semantics, retry and seed policies, controller behavior source and fallback
+rule, policy-input and output contracts, and trusted problem source. A bound
+controller owns action selection. Explicit action stepping is a semantic test
+path and cannot produce canonical collection provenance.
+
+Canonical rows carry both environment and collection digests and the exact
+typed learned effect. Strict replay starts from a contract-bound trusted
+problem resolver, never from row-authored givens or obligations, and reproduces
+every learned effect and deterministic closure without an LLM. Hosted model
+calls are retained in a role-bound append-only diagnostic sidecar. A teacher
+label is eligible for behavior cloning only when replay links the exact
+controller request and decoded choice, generator request and decoded effect,
+retry transcript, seeds, and receipt to the canonical row.
+
+The v2 checkpoint manifest binds the full training environment and collection
+provenance, feature and encoder algorithms, target and decoding contracts,
+dataset and split digests, every shape-changing model field, and a
+value-sensitive state-dictionary digest. Loading separately validates the
+checkpoint-backed learned controller and compatible frozen generator used at
+deployment. A dimension-preserving serializer change, same-shape weight swap,
+or live transition-semantic mismatch is a load error.
+
+The operational Phase B path preserves those bindings end to end. The
+casework source discards answer-bearing fields and digests the exact ordered
+selected projection. Collection has a no-network preparation mode that
+resolves source, environment, and collection digests before preregistration.
+Hosted execution requires those expected digests, retains incomplete work only
+under explicit `.partial` paths, and exposes final artifacts only after raw-call
+diagnostics, exact symbolic replay, and full ordered source coverage agree.
+Strict replay seals the only input accepted by the v2 dataset converter. The
+converter stores current and next canonical observations, their structured
+features and legal masks, action indices, behavior provenance, symbolic reward,
+terminal flag, and full-episode Monte Carlo return. A deterministic grouped
+problem split is sealed against that dataset digest. The rung-2 trainer applies
+factored behavior cloning to every provenance-eligible teacher decision and
+selected-action Q regression to every training transition, then creates the
+exact manifest-bound checkpoint. The required content-free comparator uses only
+the exact ordered legal menu and never success-filters teacher labels.
+
+The generator request contract is independently versioned. The current lens is
+`typed-claim-lens-v2.1`; exact `typed-claim-lens-v2` request bytes remain
+available for legacy replay, including reconstruction of all 66 E23 generator
+requests. E23 passed a five-problem hosted integration gate, but its artifact is
+not training data. A separator-only diagnostic kept interval topology and
+symbolic scoring in trusted code while requiring exact JSON string boundaries.
+Under the fixed one-retry protocol, 8/33 logical cases ended typed and all 25
+schema retries exhausted. The string-valued boundary wire is therefore not
+viable for this generator. This is GenerationContract evidence, not controller
+performance, reward evidence, a trajectory, or training data; no boundary path
+is integrated.
+
+These gates establish an operational hosted boundary, but the representation
+gate remains uncleared. No usable v2 training collection or v2 checkpoint
+exists. Current canonical generator and teacher wire contracts are
+`typed-policy-generation-v2.1` and `controller-choice-wire-v2.1`. Both bind
+nonmutating strict validation, and live plus diagnostic replay paths derive the
+mode from those role-local ids. The prior `typed-policy-generation-v2` and
+`controller-choice-wire-v2` ids select legacy coercion only for exact replay.
+The low-level client default remains legacy for compatibility; canonical paths
+always pass the bound mode. Outer environment and collection record shapes and
+historical hashes remain unchanged. The next representation design is a
+separately versioned JSON-number boundary payload that preserves raw decimal
+lexemes and converts them to exact rationals in trusted code without
+binary-float conversion. It requires contract tests, proof obligations, and
+preregistration before hosted execution. Controller exploration,
+target-network Bellman updates, and gated Q-to-policy distillation remain the
+next RL implementation stage after a training collection clears that gate.
+The full repository suite has 931 passing tests and 1 skipped CUDA-only test.
+
+These corrections do not change the reward invariant or the framing: the
+symbolic verifier remains the only reward source, RL remains the spine, and
+MCTS remains strictly additive.
+
+## 0.2 Current permissive-workspace experimental path
+
+As of 2026-07-17, the immediate empirical path is the separately versioned
+contract in
+`docs/superpowers/specs/2026-07-14-permissive-workspace-v1.md`. This is a new
+mechanism test, not a retroactive explanation of the earlier controller
+results. The question is whether a focused external workspace can make a
+frozen small worker more useful than its exact direct-prompt path before a
+learned controller is trained.
+
+The state contains natural-language Goal nodes, unverified Candidate nodes,
+complete action history, and a finite turn budget. The action is still a typed
+pair `(verb, target)`, with `DECOMPOSE`, `ANSWER`, `SYNTHESIZE`, `REVISE`, and
+`SUBMIT`. A controller receives the full canonical workspace and exact legal
+menu. A frozen worker receives an action-specific hybrid lens containing the
+root problem, selected target, ancestry, relevant local work, exact prior
+attempts, and remaining budget. Generated children and candidates are admitted
+as unverified content after bounded container checks. Admission supplies no
+reward and makes no truth claim. `SUBMIT` is root-only, calls no LLM, terminates
+the episode, and receives binary reward only from the symbolic answer checker.
+
+Child `ANSWER` has an explicit run-bound context mode. `target-only-v1` keeps
+the local target view. `preceding-siblings-v1` adds only completed earlier
+sibling Goals and Candidates under the immediate parent's ancestry record.
+Incomplete and later work remains absent, and initial root `ANSWER` remains the
+exact direct request.
+
+Direct recoverability is a contract invariant: initial `ANSWER(root)` uses the
+same request as the raw direct baseline. E31 therefore tests the mechanism in
+the smallest useful comparison, exact direct prompting versus a deterministic
+decompose-answer-synthesize trace with the same 7B worker. The fixed trace uses
+more inference, so it can establish only whether focused scaffolding can buy
+performance, not compute efficiency or controller value. E35 introduced a
+strong LLM teacher with direct and fixed policies retained as controls.
+Successful teacher trajectories would provide a behavior-cloning warm start
+for the RL controller; symbolic terminal reward would continue to drive policy
+and Q learning. MCTS remains an optional later accelerator.
+
+This path supersedes E30 as the execution priority but does not erase the v2
+implementation or its sealed artifacts. E31-E33 first screened the mechanism:
+the exact direct 7B path solved 17/20, fixed target-only decomposition solved
+9/20, and fixed preceding-sibling decomposition solved 12/20 with substantially
+more inference. Provider drift made that cross-run lens comparison causally
+inconclusive. E34 therefore branched both lens modes from the exact same 18
+sealed DECOMPOSE plus first-child prefixes and alternated hosted branch order.
+Preceding-sibling context solved 12/18 versus target-only's 9/18, with eight
+both, four preceding-only, one target-only, and five neither. This confirms a
+positive causal context mechanism on the reused development screen and retains
+`preceding-siblings-v1` for the first permissive-workspace teacher experiment.
+E35 then ran contemporaneous policies on all 60 project-held-out casework-v1
+test problems. Exact direct solved 59/60, fixed decomposition solved 27/60,
+and the GPT-4.1-mini teacher solved 31/60. Teacher/direct paired cells were 31
+both, zero teacher-only, 28 direct-only, and one neither. Teacher/fixed cells
+were 24 both, seven teacher-only, three fixed-only, and 26 neither. No E35
+trajectory is eligible for behavior cloning.
+
+E35 changes the next state design. The teacher selected initial root ANSWER on
+12 problems and solved all 12, but selected root DECOMPOSE on 48 and solved
+only 19. Direct solved 47 of those same 48. Asking a controller with no
+worker-specific transition experience to choose whether to obtain the direct
+baseline before it has seen any worker output is therefore the wrong decision
+boundary. The next version should generate the exact direct Candidate as a
+shared deterministic prefix, then let the controller inspect that Candidate
+and choose SUBMIT, REVISE, or structured work. This makes the workspace an
+improvement layer over the baseline rather than merely leaving the baseline as
+one legal option.
+
+Three other E35 findings remain separate versioned manipulations. Root
+SYNTHESIZE, later root ANSWER, and root REVISE need the same verifier-ready
+answer-field contract as the direct lens; 11 rejected teacher submissions were
+the exact correct scalar wrapped only as `x = n`. Action availability should
+expose active work instead of every answered Goal and stale Candidate, because
+the legal menu grew to 27 choices. The teacher wire should return one menu
+index, which trusted code maps to the internal `(verb, target)` pair, so an
+invalid cross-pairing cannot be formed. These changes require separate tests
+and experiments. The current 7B worker is also at 59/60 on casework-v1 test, so
+that source cannot measure a positive teacher delta.
+
+The local baseline-anchored workspace v2 implements those four factors as
+independent run-bound modes. Under
+`direct-candidate-prefix-v1`, exact direct `ANSWER(root)` runs before the first
+controller decision and is logged as deterministic initialization rather than
+a behavior-cloning label. `verifier-ready-root-answer-v1` changes only later
+root-owned worker instructions. `active-frontier-v1` masks answered and stale
+work while keeping the direct prefix Candidate submittable. The active
+observation exposes that protected Candidate id explicitly. Finally,
+`legal-menu-index-v1` maps one returned menu index to an internal legal action.
+If teacher decoding fails, the bound fallback chooses exact direct ANSWER when
+legal, then protected direct SUBMIT when legal, then the first ordered action.
+
+The redesigned collector binds every mode, model identity, source digest,
+hidden-label digest, sampling setting, prompt contract, and provenance role.
+Prefix transitions cannot enter behavior cloning. Preparation is zero-network
+and hosted execution requires the prepared digests.
+
+E36 tested only the root result factor by forking 59 exact sealed E35
+pre-SYNTHESIZE states. `verifier-ready-root-answer-v1` solved 49/59 versus
+27/59 for `workspace-answer-free-v1`: 27 both, 22 verifier-ready-only, zero
+legacy-only, and 10 neither. The exact one-sided discordant-pair probability is
+`1 / 2^22`. All calls completed on their first attempt, the exact legacy branch
+reproduced E35 reward on 59/59 states, and the only within-pair request change
+was the registered instruction. This establishes a positive causal root-prompt
+mechanism on the reused sealed source, so the verifier-ready contract is
+retained. It does not show that decomposition or a teacher beats direct
+prompting. The general redesigned collector still runs one arm at a time;
+the separate paired root-result collector exists for that prompt factor.
+
+E37 added the bound shared-direct-Candidate branch collector and evaluated the
+complete redesigned teacher continuation with Qwen2.5-3B. Direct submission and
+GPT-4.1-mini continuation both solved 43/60 reused development cases: 43 both,
+zero discordances, and 17 neither. Every teacher path ultimately submitted the
+protected direct Candidate, so anchoring prevented regression but recovered no
+failure. The teacher selected additional work on seven of 17 direct failures
+and four of 43 direct successes, making the generated Candidate a useful
+post-hoc routing signal but not improving reward.
+
+E38 isolated worker-side REVISE generation on those exact 14 teacher-selected
+states. `workspace-revise-answer-container-v1` requires a top-level nonempty
+string or finite numeric `answer`, permits optional unverified `reasoning`, and
+rejects other top-level fields. This is a container contract, not a truth or
+algebra gate. It produced 14/14 answer-bearing revised Candidates versus 0/14
+for the exact legacy open-object control, with all 14 pairs treatment-only and
+one-sided exact probability `1 / 2^14`. The treatment completed every call on
+its first attempt; the control admitted five lens echoes without answers and
+exhausted nine calls after a retry.
+
+Container repair is not yet teacher efficacy. Across 10 unique root episodes
+in this selected subset, the source Candidate and treatment revision were both
+symbolically correct on three, only the revision was correct on one, only the
+source was correct on zero, and neither was correct on six. No controller chose
+or submitted these revisions. The next causal comparison must keep the E37
+state, action menu, lenses, worker, GPT-4.1-mini controller, indexed controller
+prompt, seeds, and source fixed while changing only the retained REVISE
+contract. If terminal reward remains flat, compare coordinator candidate-
+selection prompts on exact post-revision states, then compare coordinator model
+capacity separately. E37 and E38 are evaluation-only and supply no behavior-
+cloning rows.
+
+E39 performed that retained-contract end-to-end comparison. Exact shared
+direct submission and GPT-4.1-mini continuation each solved 43/60, with no
+discordant terminal rewards. Unlike E37, every selected REVISE produced an
+answer-bearing Candidate. In the 12 revised cases, the baseline and revision
+were both symbolically correct on four, revision-only on three, baseline-only
+on zero, and neither on five. Both Candidates remained legal SUBMIT targets at
+every post-revision decision, but the generic planner prompt chose protected
+Candidate 1 all 12 times. The available-Candidate oracle was therefore 46/60
+while the realized teacher remained 43/60. This is a diagnostic upper bound,
+not an alternate reward signal.
+
+The next isolated factor is coordinator prompting on the exact sealed E39
+post-revision states. One arm must replay the current global planner prompt and
+one must use a versioned candidate-comparison prompt, with the coordinator
+model, state, legal menu, Candidates, seeds, transport, and local symbolic
+SUBMIT fixed. Worker generation is absent. Coordinator capacity follows as a
+separate model-only factor. E39 is evaluation-only and supplies no behavior-
+cloning rows.
+
+E40 tested whether those 12 selected cases were broad enough for that prompt
+factor by applying one fixed retained-contract REVISE to every exact E39
+post-prefix State. All 60 revisions were usable. The baseline and revision
+were both symbolically correct on 43 cases, revision-only on six, baseline-only
+on zero, and neither on 11. Latest revision and the available-Candidate oracle
+were therefore 49/60 versus 43/60 for protected baseline. This is promising
+worker self-revision evidence on a reused development source, but E40 executed
+no SUBMIT and no coordinator and is not a terminal-reward result.
+
+The proposed candidate-comparison prompt experiment would be uninformative on
+this corpus because always-latest already equals its oracle and no case tests
+preservation. The next isolated generation factor replaces only the retained
+REVISE instruction with an independent-solution instruction while keeping the
+answer-container schema, worker, state, action, lens, seeds, source, and
+verifier fixed. Coordinator prompting resumes only if the resulting sealed
+corpus contains both baseline-only and revision-only cases. E40 is evaluation-
+only and supplies no behavior-cloning rows.
+
+E41 paired that independent instruction against the retained instruction on
+the same exact 60 States. Retained revisions were symbolically correct on
+49/60 and independent revisions on 55/60: 49 both, six independent-only, zero
+retained-only, and five neither. The one-sided exact probability is `1 / 2^6`.
+Against protected baseline, independent revision was correct on all 43 baseline
+successes plus 12 baseline failures. It therefore again supplied no baseline-
+only preservation case, but it established a positive worker-prompt factor.
+
+The next isolated coordinator factor moves one decision earlier. From each
+exact prefix State, generic planning and an explicit routing prompt choose
+between the same legal actions. SUBMIT terminates on protected baseline.
+REVISE replays the exact sealed E41 independent transition and follows a fixed
+latest-Candidate SUBMIT, with no new worker generation. This isolates prompt
+control of REVISE-versus-SUBMIT routing while retaining local symbolic terminal
+reward as the sole outcome. E41 is evaluation-only and supplies no behavior-
+cloning rows.
+
+E42 performed that paired coordinator comparison. The generic planner prompt
+realized 46/60 verifier-scored terminal successes; the explicit routing prompt
+realized 51/60, with 46 both, five routing-only, zero generic-only, and nine
+neither. The one-sided exact probability is `1 / 2^5`. Explicit routing chose
+REVISE on 19 cases versus eight for generic, preserved all 43 protected-
+baseline successes, and recovered 8/12 cases whose independent revision alone
+was correct. Four correct sealed revisions remained unused, so routing reached
+51/60 against a 55/60 fixed action-outcome oracle.
+
+This establishes a positive coordinator-prompt mechanism with symbolic
+terminal reward, but worker transitions were replayed rather than generated
+live. The next system experiment combines the already isolated independent
+worker prompt and explicit routing prompt in a live shared-prefix comparison
+against exact direct submission, preferably on a fresh harder verifier-covered
+source. Only after that live result should coordinator model capacity be
+changed. E42 is evaluation-only and supplies no behavior-cloning rows.
 
 ---
 
@@ -324,34 +643,33 @@ verb, optional: six core verbs plus one optional. Per-verb rationale:
   reward (gated and capped, and zero-coefficient in the terminal-only first
   version, Section 6), and root `COMMIT` carries the terminal verdict. `VERIFY`
   is kept strictly distinct from `CRITIQUE`.
-- **`COMMIT`** closes a goal with an outcome. Its target is always a goal:
-  `avail(s, t)` requires `t` to be an open goal with at least one hypothesis or
-  fact beneath it, and `schema(s, t)` constrains the LLM output `o` to designate
-  exactly one existing node id under `t` as the outcome, so no free-form answer
-  text enters at `COMMIT` and the committed answer's provenance is always a node
-  the forest accounts for. The outcome is a solution promoted from a hypothesis,
-  or a verified refutation ("provably no solution in this case"): a case resolved
-  by contradiction is a *solved* subgoal and is `COMMIT`ted, never `ABANDON`ed,
-  because its refutation is a result the parent needs (and it is what the lens
-  renders as the closed subtree's verdict). `COMMIT` is recursive but terminal
-  only at the root: the structural fact `target == root` is what makes a commit
-  terminal and verifier-gated, so there is no separate "final answer" verb.
-  Subgoal commits are reward-free bookkeeping. The witness is environment-selected
-  (the most recent discharging one); COMMIT, like VERIFY and ABANDON, makes no
-  LLM call.
-- **`ABANDON`** walks away from an unproductive branch: no outcome is claimed, no
-  verdict is recorded, and the retained history leaves the branch revisitable. It
-  is not negative closure; a branch resolved by contradiction is closed with
-  `COMMIT`. It is kept as an emittable verb, not just search control, because at
-  inference budget $B = 0$ (Section 8) the deployed model runs no search and must
-  be able to express "this branch is unproductive, move on." A root ABANDON
-  terminates the episode with reward zero: giving up is not a wrong answer.
+- **`COMMIT`** closes a goal with an explicit existing outcome. In v2 its
+  target is a verified claim, and `avail(s, t)` requires that claim to
+  discharge its open owner goal. No free-form answer text enters at COMMIT and
+  no witness is selected silently. The claim's owner determines which goal
+  closes. COMMIT is recursive but terminal only when that owner is the root, so
+  there is no separate final-answer verb. Subgoal commits are reward-free
+  bookkeeping. A verified refutation closes its case as solved because its
+  result is needed by the parent. COMMIT makes no LLM call.
+- **`ABANDON` (v1) / `PRUNE` (v2)** walks away from an unproductive branch:
+  no outcome is claimed and no verdict is recorded. V2 makes this operation
+  explicitly irreversible, cascades inactivity through descendants, and
+  disallows it at the root. A branch resolved by contradiction is closed with
+  COMMIT, not PRUNE. The operation remains emittable because at inference
+  budget $B = 0$ (Section 8) the deployed model runs no search and must be able
+  to express "this branch is unproductive, move on."
 - **No `SUMMARIZE` verb**: compressing a closed subtree to its statement and
   verdict is a deterministic rendering property of the lens (Section 4.3).
 - **`CRITIQUE`** is an optional, reward-free LLM self-assessment of a hypothesis
   against its goal; whether it earns its tokens is an ablation.
 
 ## 4.3 The lens (view) and the write-back (apply)
+
+In v2, the environment contract selects the exact versioned generator request
+builder. `typed-claim-lens-v2.1` is current, while
+`typed-claim-lens-v2` is retained byte-exact for legacy replay. Changing lens
+bytes therefore changes the environment contract rather than silently changing
+the transition distribution.
 
 The default `view`, when the target is a subgoal, is grounded-local: the problem
 statement, the ancestor path from root to target, and the target's own subtree
@@ -385,15 +703,15 @@ fixed-length vector.
 Invalid pairs are masked before the policy normalizes. Legality is pair-level
 and defined by `avail`: pair `(verb, target)` is legal in $s$ iff
 `avail(s, target)` admits the verb. The mask is type-aware per verb: `COMMIT`
-points only at open goals, `VERIFY` at hypotheses and derived facts, `SPLIT` at
-open goals, and so on. Verb-level legality is *derived*, never separately
-specified: a verb is legal in $s$ iff some live target admits it (the OR over
-targets), so the verb head masks exactly the verbs with no legal target and the
-pointer head never normalizes over an empty set. $A(s)$ is nonempty in every
-non-terminal state by construction: the root goal is open in every non-terminal
-state (only a root `COMMIT` is terminal) and `FORM_HYPOTHESIS` on an open goal
-is always legal, so episodes end only at a root `COMMIT` or the step-budget
-terminal of Section 6.
+points only at verified claims that discharge an open owner, `VERIFY` at
+unchecked claims, and `DECOMPOSE` at open goals. Verb-level legality is
+*derived*, never separately specified: a verb is legal in $s$ iff some live
+target admits it (the OR over targets), so the verb head masks exactly the
+verbs with no legal target and the pointer head never normalizes over an empty
+set. $A(s)$ is nonempty in every non-terminal state by construction: the root
+goal is open and at least one proposal verb is legal there. A COMMIT is
+terminal only when its target claim is owned by the root; otherwise episodes
+end at the step-budget terminal of Section 6.
 
 ---
 
@@ -500,13 +818,11 @@ AlphaGeometry, rStar-Math, R1, Tulu-3) are hard-verifier-anchored.
 - Root `COMMIT` returns the terminal verdict, $+1$ correct, $-1$ incorrect.
 - A masked action (an illegal or failed operation: a stale target from a
   search tree, a rejected duplicate `COMPUTE`, an unusable generation)
-  advances the turn and receives a fixed housekeeping constant of $-0.01$
-  (`MASKED_ACTION_REWARD` in the implementation). This constant carries no
-  task information, is not produced by the verifier or by any model, and
-  cannot be gamed upward; it exists only to make a wasted turn strictly
-  worse than a legal one. The anchor invariant, stated precisely: no
-  learned or content-dependent reward enters anywhere, and every
-  non-constant reward is verifier-decided.
+  advances the turn and receives reward 0. The spent turn and finite horizon
+  carry the opportunity cost without adding a non-verifier Bellman target.
+  Archived v1 trajectories used a $-0.01$ housekeeping penalty; exact archive
+  reproduction must request the explicit `legacy-mask-penalty-v1` contract.
+  The live `symbolic-only-v1` contract and all v2 work keep reward zero.
 
 The first version uses terminal-only reward:
 
@@ -650,6 +966,8 @@ pure base model driven by constrained decoding is the attribution-maximal
 variant, recorded as an ablation.) The exact checkpoint is delegated to the
 pre-registered experiment plan (Section 9.1); the class constraint (small,
 open-weights, instruction-tuned, non-reasoning) is a design commitment.
+Hosted 7B to 32B models are capacity and interface diagnostics only unless a
+separately pre-registered design revision expands the deployed generator class.
 
 The ladder:
 
@@ -857,6 +1175,8 @@ Pinned at design level:
 - Controller: under five million trainable parameters (Section 5.2).
 - Generator class: small open-weights, instruction-tuned, non-reasoning, roughly
   1 to 4 billion parameters (Section 7.3); exact checkpoint named in the plan.
+  Hosted 7B to 32B models remain capacity and interface diagnostics unless the
+  design and experiment plan are revised before collection.
 - Teacher default: a 70B-class open-weights model, chosen for reproducibility; a
   frontier API teacher is a sanctioned variant provided all rung-1 trajectories
   are archived, since an API model may change or disappear.

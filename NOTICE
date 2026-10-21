@@ -1,0 +1,29 @@
+Expert Iteration: Experiments and Lessons
+Alexander Richard Towell, 2026
+
+Original software is MIT licensed. The new research notes are CC BY 4.0.
+These grants cover the author's rights, not third-party model weights or
+rights in third-party material. No worker-model weights are included in the
+Zenodo evidence packet. Saved responses are machine-generated experimental
+evidence and may be wrong; they are not human-authored mathematical proofs.
+
+Qwen2.5-3B-Instruct was used as a frozen worker in the selected E41/E42/E47
+experiments. Its license is reproduced in LICENSES/Qwen2.5-3B-Instruct.txt.
+Qwen is licensed under the Qwen RESEARCH LICENSE AGREEMENT,
+Copyright (c) Alibaba Cloud. All Rights Reserved.
+That model's terms include a research/evaluation restriction and attribution
+requirements for models improved using Qwen outputs. This artifact does not
+relicense the model. Preserve its terms when conducting new model-based work.
+
+Qwen2.5-1.5B-Instruct was used in E20 and is published by Qwen under
+Apache-2.0. GPT-4.1-mini supplied the coordinator in E42. No endorsement by
+Qwen, Alibaba Cloud, OpenAI, Hugging Face, or Featherless is implied.
+
+The wider repository's historical runs include GSM8K and MATH benchmark
+problems, separate from the selected Casework comparisons. Their notices are
+retained in LICENSES/GSM8K.txt (Copyright 2021 OpenAI) and LICENSES/MATH.txt
+(Copyright 2021 Dan Hendrycks). Source benchmark terms remain applicable.
+
+Casework v1 is by Alexander Richard Towell, CC BY 4.0; retain its dataset card.
+The reasoning-state core was adapted from queelius/reductio at commit 7c306c5,
+also authored by Alexander Towell. Substantial AI assistance is disclosed.

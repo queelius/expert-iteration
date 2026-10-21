@@ -1,0 +1,103 @@
+{
+  "experiment": "E21",
+  "date": "2026-07-12",
+  "scope": "five-problem hosted Qwen2.5 capacity diagnostic",
+  "verification_outcome_method": "A VERIFY succeeds when its exact action disappears from the next state's legal menu. A terminal repeated VERIFY inherits the earlier deterministic result for the same episode-target pair.",
+  "cost_accounting_limit": "The client records usage only after JSON parsing and schema validation. Estimated costs cover logged schema-valid calls and are a lower bound if the provider billed malformed HTTP 200 responses.",
+  "arms": [
+    {
+      "size": "7B",
+      "model": "Qwen/Qwen2.5-7B-Instruct:together",
+      "price_usd_per_million_input_tokens": 0.3,
+      "price_usd_per_million_output_tokens": 0.3,
+      "direct": {
+        "wins": 5,
+        "episodes": 5,
+        "input_tokens": 647,
+        "output_tokens": 676,
+        "estimated_cost_usd": 0.0003969
+      },
+      "controller": {
+        "wins": 1,
+        "episodes": 5,
+        "decisions": 77,
+        "input_tokens": 5458,
+        "output_tokens": 349,
+        "verify_attempts": 25,
+        "verify_successes": 7,
+        "verify_failures": 18,
+        "repeated_failed_verify": 16,
+        "root_commit_legal_episodes": 1,
+        "root_commit_chosen": 1,
+        "masked_decisions": 33,
+        "mask_reasons": {"generation_error": 33},
+        "estimated_cost_usd": 0.0017421
+      },
+      "combined_estimated_cost_usd": 0.002139
+    },
+    {
+      "size": "14B",
+      "model": "Qwen/Qwen2.5-14B-Instruct:featherless-ai",
+      "price_usd_per_million_input_tokens": 0.1078,
+      "price_usd_per_million_output_tokens": 0.28,
+      "direct": {
+        "wins": 5,
+        "episodes": 5,
+        "input_tokens": 647,
+        "output_tokens": 850,
+        "estimated_cost_usd": 0.0003077466
+      },
+      "controller": {
+        "wins": 0,
+        "episodes": 5,
+        "decisions": 72,
+        "input_tokens": 8021,
+        "output_tokens": 460,
+        "verify_attempts": 28,
+        "verify_successes": 8,
+        "verify_failures": 20,
+        "repeated_failed_verify": 18,
+        "root_commit_legal_episodes": 2,
+        "root_commit_chosen": 2,
+        "masked_decisions": 22,
+        "mask_reasons": {"duplicate_compute": 4, "generation_error": 18},
+        "estimated_cost_usd": 0.0009934638
+      },
+      "combined_estimated_cost_usd": 0.0013012104
+    },
+    {
+      "size": "32B",
+      "model": "Qwen/Qwen2.5-32B-Instruct:featherless-ai",
+      "price_usd_per_million_input_tokens": 0.68,
+      "price_usd_per_million_output_tokens": 1.2,
+      "direct": {
+        "wins": 4,
+        "episodes": 5,
+        "input_tokens": 525,
+        "output_tokens": 717,
+        "estimated_cost_usd": 0.0012174
+      },
+      "controller": {
+        "wins": 0,
+        "episodes": 5,
+        "decisions": 80,
+        "input_tokens": 10437,
+        "output_tokens": 628,
+        "verify_attempts": 22,
+        "verify_successes": 10,
+        "verify_failures": 12,
+        "repeated_failed_verify": 11,
+        "root_commit_legal_episodes": 0,
+        "root_commit_chosen": 0,
+        "masked_decisions": 35,
+        "mask_reasons": {"generation_error": 27, "reductio_rejected": 8},
+        "estimated_cost_usd": 0.00785076
+      },
+      "combined_estimated_cost_usd": 0.00906816
+    }
+  ],
+  "total_input_tokens": 25735,
+  "total_output_tokens": 3680,
+  "total_estimated_cost_usd": 0.0125083704,
+  "token_source": "Schema-valid-call counters printed by the runners during E21 execution; behavioral diagnostics recomputed from the six raw JSONL arms."
+}

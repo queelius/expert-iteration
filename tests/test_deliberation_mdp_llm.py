@@ -4,7 +4,14 @@ import pytest
 pytest.importorskip("sympy")
 
 from verifier_anchored_rl.deliberation_mdp import (
-    DeliberationAction, DeliberationMDP, Verb, MASKED_ACTION_REWARD,
+    DeliberationAction,
+    DeliberationMDP,
+    LEGACY_MASKED_ACTION_REWARD,
+    LEGACY_MASK_PENALTY_REWARD,
+    MASKED_ACTION_REWARD,
+    OutcomeCode,
+    RejectionReason,
+    Verb,
 )
 from verifier_anchored_rl.llm_client import LLMResponseError, MockLLMClient
 from verifier_anchored_rl.reductio import Fact, Goal, Hypothesis, get, parse
@@ -72,6 +79,10 @@ def test_duplicate_compute_on_same_goal_is_masked_not_appended():
     assert r2 == MASKED_ACTION_REWARD             # duplicate rejected
     assert n_facts(s2) == 1                        # no second copy
     assert s2.turn == s1.turn + 1                  # but the turn still advances
+    assert mdp.last_transition_debug == {
+        "generator_payload": {"statement": "4 - 2 = 2"},
+        "mask_reason": "duplicate_compute",
+    }
 
 
 def test_same_statement_on_a_different_goal_is_allowed():
@@ -80,7 +91,7 @@ def test_same_statement_on_a_different_goal_is_allowed():
     mdp = DeliberationMDP(problem="p?", expected_answer="42", depth_limit=8,
                           llm_client=MockLLMClient(script={
                               ("SPLIT",): {"connective": "exhaustive_case",
-                                           "children": ["case A"]},
+                                           "children": ["case A", "case B"]},
                               ("COMPUTE",): {"statement": "40 + 2 = 42"}}))
     s = mdp.initial_state()
     s1, _ = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
@@ -101,6 +112,32 @@ def test_llm_failure_takes_masked_fallback():
     s2, r = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
     assert r == MASKED_ACTION_REWARD
     assert s2.graph == s.graph and s2.turn == 1
+    assert r == 0.0
+    assert s2.previous_outcome.code is OutcomeCode.REJECTED
+    assert (
+        s2.previous_outcome.reason
+        is RejectionReason.GENERATION_ERROR
+    )
+    assert mdp.last_transition_debug["mask_reason"] == "generation_error"
+    assert "generator_error" in mdp.last_transition_debug
+
+
+def test_legacy_mask_penalty_requires_explicit_reward_contract():
+    mdp = DeliberationMDP(
+        problem="p?",
+        expected_answer="42",
+        depth_limit=8,
+        llm_client=MockLLMClient(script={}),
+        reward_contract=LEGACY_MASK_PENALTY_REWARD,
+    )
+
+    _, reward = mdp.sample_transition(
+        mdp.initial_state(),
+        DeliberationAction(Verb.SPLIT, 0),
+        _rng(),
+    )
+
+    assert reward == LEGACY_MASKED_ACTION_REWARD
 
 
 def test_bad_llm_payload_takes_masked_fallback():
@@ -235,3 +272,69 @@ def test_split_with_no_usable_children_is_still_masked():
     s2, r = mdp.sample_transition(s, DeliberationAction(Verb.SPLIT, 0), _rng())
     assert r == MASKED_ACTION_REWARD  # objects with no string content
     assert s2.graph == s.graph
+
+
+def test_generation_temperature_is_explicit_and_defaults_to_zero():
+    class CaptureClient:
+        def __init__(self):
+            self.temperatures = []
+
+        def complete_json(
+            self, system, user, schema, *, temperature, max_tokens=512,
+            seed=None,
+        ):
+            self.temperatures.append(temperature)
+            return {"statement": "6*7 = 42", "premises": []}
+
+    default_client = CaptureClient()
+    default_mdp = DeliberationMDP(
+        problem="p", expected_answer="42", llm_client=default_client)
+    default_mdp.sample_transition(
+        default_mdp.initial_state(),
+        DeliberationAction(Verb.COMPUTE, 0),
+        _rng(),
+    )
+
+    warm_client = CaptureClient()
+    warm_mdp = DeliberationMDP(
+        problem="p", expected_answer="42", llm_client=warm_client,
+        generation_temperature=0.35)
+    warm_mdp.sample_transition(
+        warm_mdp.initial_state(), DeliberationAction(Verb.COMPUTE, 0), _rng())
+
+    assert default_client.temperatures == [0.0]
+    assert warm_client.temperatures == [0.35]
+
+
+def test_generation_temperature_reaches_shared_forward_encoder():
+    from tests.fakes import FakeEncoder
+
+    class CaptureEncoder(FakeEncoder):
+        def __init__(self):
+            super().__init__()
+            self.temperatures = []
+
+        def instantiate_json(self, *args, **kwargs):
+            self.temperatures.append(kwargs["temperature"])
+            return super().instantiate_json(*args, **kwargs)
+
+    default_encoder = CaptureEncoder()
+    default_mdp = DeliberationMDP(
+        problem="p", expected_answer="1", encoder=default_encoder)
+    default_mdp.sample_transition(
+        default_mdp.initial_state(),
+        DeliberationAction(Verb.FORM_HYPOTHESIS, 0),
+        _rng(),
+    )
+    warm_encoder = CaptureEncoder()
+    warm_mdp = DeliberationMDP(
+        problem="p", expected_answer="1", encoder=warm_encoder,
+        generation_temperature=0.35)
+    warm_mdp.sample_transition(
+        warm_mdp.initial_state(),
+        DeliberationAction(Verb.FORM_HYPOTHESIS, 0),
+        _rng(),
+    )
+
+    assert default_encoder.temperatures == [0.0]
+    assert warm_encoder.temperatures == [0.35]

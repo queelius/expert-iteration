@@ -27,8 +27,8 @@ The following new notes are licensed under
 [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/):
 the root README, `docs/research-overview.md`, `docs/findings.md`,
 `docs/reproduction.md`, `docs/tutorial.md`, `docs/project-map.md`,
-`docs/release-readiness.md`, and the archive implementation plan dated
-2026-10-20. Cite the author and archive, identify modifications, and retain
+`docs/release-readiness.md`, `docs/publication-review.md`, and the archive
+implementation plan dated 2026-10-20. Cite the author and archive, identify modifications, and retain
 the license link. The [legal code](https://creativecommons.org/licenses/by/4.0/legalcode)
 is authoritative.
 
@@ -41,10 +41,16 @@ new-notes declaration.
 Retain its dataset card and provenance when redistributing the dataset.
 
 Saved model responses and diagnostic records are historical evidence, not
-model weights. Their redistribution must be checked separately against
-applicable source and provider terms. No blanket license for third-party
-content is asserted here. The archive packet must not be publicly deposited
-until that review is complete.
+model weights. The release-specific review in `docs/publication-review.md`
+checked provider ownership clauses, source benchmark notices, and the actual
+Qwen model terms. Their source attribution and qualifications are retained
+in the root `NOTICE`. No blanket license for third-party content or provider
+model weights is asserted here.
+
+`Qwen2.5-3B-Instruct.txt` preserves that model's Qwen Research License at the
+requested E41 revision; do not describe it as Apache-2.0. `GSM8K.txt` and
+`MATH.txt` preserve the benchmark notices for historical material in the wider
+repository. These license copies remain under their respective source terms.
 
 ## Assistance and Review
 

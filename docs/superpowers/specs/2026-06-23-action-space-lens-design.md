@@ -36,7 +36,7 @@ The target is promoted into the chosen action rather than left to LLM sampling. 
 
 ### 2.2 Global value, local generation
 
-The frozen LLM generates content from the **local** view `view_v(s, t)`. The learned heads value on the **global** state: `Q_psi(emb(s), verb, target)` and `pi(emb(s))` embed the whole tree, because whether an action helps depends on the whole problem. The full state `s` remains the Markov state; the view is a projection for generation, never the state itself. (This is also mostly compatible with the existing one-forward prefix cache: anchor every view on the immutable problem prefix so only the local tail varies.)
+The frozen LLM generates content from the **local** view `view_v(s, t)`. The learned heads value on the **global** state: `Q_psi(emb(s), verb, target)` and `pi(emb(s))` embed the whole tree, because whether an action helps depends on the whole problem. The full state `s` remains the Markov state; the view is a projection for generation, never the state itself. The embedding `emb(s)` comes from a **decoupled embedder** (a text-embedding endpoint), not the generator's hidden state, so generation can be served by vLLM and the encoder is pluggable: the legacy LLM `[STATE_END]` hidden state is a selectable baseline, and a graph neural network over the reasoning tree (Section 11) is the natural structural encoder. The split is a clean fit for global value and local generation: the embedder sees the whole tree, the generator sees the local view.
 
 ### 2.3 Recursion is derived, not asserted
 
@@ -164,3 +164,8 @@ All paper-touching subagent briefs must restate the RL-first directive verbatim 
 - No macro solve-it-all verb that bypasses search and verification.
 - No regression of the Phase-1 gridworld, expectimax, and MCTS correctness anchors.
 - No MCTS-first reframing in any artifact.
+
+## 11. Pinned extensions (recorded, not in scope now)
+
+- **`RETRIEVE` (RAG exemplar retrieval).** A candidate introduce-from-corpus verb: fetch a solved example similar to a goal or subgoal and write it into that node's subtree as grounding. It fits the lens framing cleanly (an introduce verb whose content comes from a corpus rather than the LLM) and is reward-free. Pinned, not adopted, for three reasons: it adds an external corpus and retriever dependency beyond the verifier-anchored core; a retrieved example can leak the answer, which is exactly the compute and data-leak confound the evaluation plan already guards against; and it does not change the thesis. Revisit after the core is validated.
+- **`GraphEmbedder` (GNN state encoder).** The heads currently embed the serialized state through a decoupled text-embedding endpoint. Because the state is a goal tree (a graph), a graph neural network over that structure is the natural encoder: it would respect the true structure (parent/child links, fact-vs-hypothesis edges, the `SPLIT` connectives) rather than a linearized serialization. The `Encoder` protocol already admits it as a drop-in (the code anticipates a `GraphEmbedder`). Pinned as a future encoder upgrade; orthogonal to the action-space design.

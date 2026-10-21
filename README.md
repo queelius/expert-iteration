@@ -5,9 +5,10 @@ language model. It contains runnable teaching examples, experimental code,
 saved model outputs, and lessons from comparisons that did not establish the
 hoped-for controller advantage.
 
-**Status:** being prepared for archival release. This is not a finished
-methodology paper or a claim of a new successful algorithm. The GitHub
-repository has not yet been marked read-only.
+**Status:** archival release 1.0.0. Read or cite the exact evidence packet at
+[Zenodo, DOI 10.5281/zenodo.23526852](https://doi.org/10.5281/zenodo.23526852).
+The repository preserves the wider research history. It contains unfinished
+manuscript drafts and does not claim a new successful control algorithm.
 
 ## Start Here
 
@@ -72,7 +73,11 @@ Automated tests and AI review are not human peer review.
 
 Original code is [MIT licensed](LICENSE). The new research notes are
 [CC BY 4.0](LICENSES/README.md); dataset and third-party terms remain separate.
-See [CITATION.cff](CITATION.cff). No DOI is claimed for this release preparation.
+See [CITATION.cff](CITATION.cff) for the exact release citation. Model outputs
+are identified as machine-generated evidence; model and benchmark notices are
+retained in [NOTICE](NOTICE).
 
-See [release readiness](docs/release-readiness.md) for current verification,
-exclusions, and publication blockers.
+See [release readiness](docs/release-readiness.md) for verification and
+exclusions, and the repository's
+[publication metadata](https://github.com/queelius/expert-iteration/blob/main/docs/publication.json)
+for the final publication receipt.

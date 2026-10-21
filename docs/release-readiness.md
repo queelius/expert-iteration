@@ -1,6 +1,7 @@
 # Research Archive Release Readiness
 
-Updated: 2026-10-20. Status: local release candidate verified; not published.
+Updated: 2026-10-21. Status: publication checks completed; final publication
+receipt is maintained in the source repository at `docs/publication.json`.
 
 ## Scope and Progress
 
@@ -12,7 +13,9 @@ This record tracks work, decisions, and checks. It is not a scientific result.
 - Teaching example: short-budget CLI added and tested.
 - Reader guide: overview, findings, reproduction, tutorial, and project map written.
 - Standalone packet: 59 tests passed in a fresh environment; publication checks remain.
-- Publication, GitHub read-only archival, and local move: not performed.
+- Privacy and rights review: completed for this research release.
+- Publication and GitHub archival: follow the final publication receipt.
+- Local move: left to the owner after publication.
 
 Recommended GitHub name: retain `expert-iteration`. Reader-facing title:
 **Expert Iteration: Experiments and Lessons**. Preserve existing links.
@@ -172,17 +175,20 @@ whitespace check.
 - Historical manuscripts, third-party content, and model-response
   redistribution are not covered by a blanket new licensing assertion.
 
-## Release Blockers
+## Publication Review Completed
 
-- Saved model-response redistribution and any third-party rights still need
-  a release-specific review; original-code and new-notes licenses are settled.
-- Sensitive content and reachable Git history need a publication audit before
-  changing visibility or uploading the entire repository.
-- Unselected historical working material remains uncommitted. Preserve it and
-  review it separately before publishing the whole repository.
-- No public version DOI or publication receipt exists for this archive
-  preparation. Local source pin and packet verification are recorded below
-  when complete.
+The [publication review](publication-review.md) records the completed history
+and working-source secret scans, provider and model terms, benchmark notices,
+authorship, and fully paginated duplicate search. Historical research scripts,
+tests, specifications, ledger updates, and raw runs are preserved in the source
+release. Unrelated slide edits, a local checkpoint, presentation sidecar, and
+generated manuscript PDF remain local; moving the checkout later must preserve
+those files if desired.
+
+Version DOI `10.5281/zenodo.23526852` was reserved for this release. Final
+publication, downloaded-file hashes, source pin, and GitHub archival state are
+recorded in the source repository's `docs/publication.json`; reservation alone
+does not establish publication.
 
 ## Publication Sequence
 
@@ -192,5 +198,7 @@ family; publish only authorized contents; download and hash-check the deposit;
 link from the central research index; then archive GitHub read-only.
 Record public disclosure dates separately from the archive publication date.
 
-No paid experiments were run during archive preparation. No remote push,
-visibility change, GitHub archival, Zenodo deposit, or local move was performed.
+No paid experiments were run during archive preparation or publication. The
+local checkout stays in place. The 2026-10-20 verification receipt describes
+the earlier local candidate; the final publication receipt supersedes its
+publication-status field without changing the historical verification record.

@@ -1,0 +1,144 @@
+{
+  "baseline": {
+    "menu_frequency_joint_accuracy": 0.035555555555555556,
+    "uniform_legal_pair_expected_accuracy": 0.12724635112702187
+  },
+  "dataset": "/tmp/phase-b-v1.jsonl",
+  "experiment": "E18",
+  "history": [
+    {
+      "bc": 1.357014394723452,
+      "epoch": 1,
+      "pointer": 0.3292834581549799,
+      "q": 0.41856918655909026,
+      "total": 1.4616566850588872,
+      "verb": 1.0277309371874883
+    },
+    {
+      "bc": 0.3100776744898982,
+      "epoch": 10,
+      "pointer": 0.10400502637583905,
+      "q": 0.20826570460429558,
+      "total": 0.36214410026486105,
+      "verb": 0.2060726442051908
+    },
+    {
+      "bc": 0.2318620802118228,
+      "epoch": 20,
+      "pointer": 0.09396990299081573,
+      "q": 0.1787033069592256,
+      "total": 0.27653790723819,
+      "verb": 0.1378921766478855
+    },
+    {
+      "bc": 0.0774848899589135,
+      "epoch": 30,
+      "pointer": 0.057504969142215694,
+      "q": 0.16167460210048235,
+      "total": 0.1179035403407537,
+      "verb": 0.019979920865108188
+    },
+    {
+      "bc": 0.2927889990118834,
+      "epoch": 40,
+      "pointer": 0.06485090345589348,
+      "q": 0.15320790215180471,
+      "total": 0.3310909712543854,
+      "verb": 0.2279380947136535
+    },
+    {
+      "bc": 0.1369749354198575,
+      "epoch": 50,
+      "pointer": 0.0634706152380274,
+      "q": 0.1403021990106656,
+      "total": 0.17205048409792092,
+      "verb": 0.07350432215921152
+    },
+    {
+      "bc": 0.03626263735797973,
+      "epoch": 60,
+      "pointer": 0.034182130941189826,
+      "q": 0.13468098296568945,
+      "total": 0.06993288417848256,
+      "verb": 0.0020805070279703406
+    },
+    {
+      "bc": 0.042596476045078956,
+      "epoch": 70,
+      "pointer": 0.04166949563554786,
+      "q": 0.1198796068246548,
+      "total": 0.07256637742886177,
+      "verb": 0.0009269797301385552
+    },
+    {
+      "bc": 0.04658861962917189,
+      "epoch": 80,
+      "pointer": 0.045502336973658415,
+      "q": 0.1261385750885193,
+      "total": 0.0781232643012817,
+      "verb": 0.0010862820886709064
+    }
+  ],
+  "hyperparameters": {
+    "batch_size": 64,
+    "epochs": 80,
+    "hash_dim": 512,
+    "hidden_dim": 128,
+    "lr": 0.003,
+    "node_repr_dim": 64,
+    "q_weight": 0.25,
+    "repr_dim": 64,
+    "weight_decay": 0.0001
+  },
+  "parameter_count": 147840,
+  "post_train": {
+    "decisions": 225,
+    "joint_accuracy": 0.6177777647972107,
+    "pointer_accuracy_given_gold_verb": 0.7866666913032532,
+    "rendered_decisions": 212,
+    "rendered_joint_accuracy": 0.6179245114326477,
+    "verb_accuracy": 0.7111111283302307,
+    "winning_decisions": 42,
+    "winning_joint_accuracy": 0.8809523582458496
+  },
+  "pre_train": {
+    "decisions": 225,
+    "joint_accuracy": 0.11999999731779099,
+    "pointer_accuracy_given_gold_verb": 0.6044444441795349,
+    "rendered_decisions": 212,
+    "rendered_joint_accuracy": 0.08962263911962509,
+    "verb_accuracy": 0.15111111104488373,
+    "winning_decisions": 42,
+    "winning_joint_accuracy": 0.2380952388048172
+  },
+  "seed": 0,
+  "split": {
+    "holdout_decisions": 271,
+    "holdout_problem_indices": [
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "train_decisions": 796,
+    "train_policy_labels": 129,
+    "train_problem_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ]
+  }
+}

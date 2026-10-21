@@ -62,7 +62,9 @@ def test_witnesses_ascending_most_recent_last():
     g = form_hypothesis(g, 0, "h").graph                  # hyp id 2
     g = verify(g, 2, "check", "h", MockVerifier((("h", True),))).graph
     root = get(g, 0)
-    assert _witnesses(g, root) == (1, 2)
+    assert _witnesses(g, root) == (2,)
+    assert _witnesses(
+        g, root, trusted_givens_committable=True) == (1, 2)
 
 
 def test_split_goal_is_not_resplittable_but_children_are():
@@ -101,3 +103,58 @@ def test_abandoned_witness_cannot_discharge():
     root = get(g, 0)
     assert _witnesses(g, root) == ()
     assert (Verb.COMMIT, 0) not in _acts(DeliberationState(g, 0))
+
+
+def test_failed_deterministic_verify_is_terminal_for_the_claim():
+    g = new_graph("p")
+    g = compute(g, 0, "2*x=8", premise_ids=()).graph
+    g = verify(g, 1, "check", None, MockVerifier()).graph
+    state = DeliberationState(g, 0)
+
+    assert (Verb.VERIFY, 1) not in _acts(state)
+    legacy = _acts(state, reject_repeated_verify=False)
+    assert (Verb.VERIFY, 1) in legacy
+
+
+def test_actions_under_abandoned_goal_are_inactive():
+    g = new_graph("p")
+    g = split(g, 0, "conjunctive", ("child",)).graph
+    g = compute(g, 1, "2*x=8", premise_ids=()).graph
+    g = abandon(g, 1).graph
+    state = DeliberationState(g, 0)
+
+    assert not any(target in {1, 2} for _, target in _acts(state))
+    legacy = _acts(state, active_subtrees_only=False)
+    assert (Verb.VERIFY, 2) in legacy
+
+
+def test_actions_under_solved_goal_are_inactive():
+    g = new_graph("p")
+    g = split(g, 0, "conjunctive", ("child",)).graph
+    g = compute(g, 1, "2+2=4", premise_ids=()).graph
+    g = compute(g, 1, "3*x=9", premise_ids=()).graph
+    g = verify(
+        g,
+        2,
+        "check",
+        None,
+        MockVerifier((("2+2=4", True),)),
+    ).graph
+    g = commit(g, 1, 2).graph
+    state = DeliberationState(g, 0)
+
+    assert not any(target in {1, 2, 3} for _, target in _acts(state))
+    legacy = _acts(state, active_subtrees_only=False)
+    assert (Verb.VERIFY, 3) in legacy
+
+
+def test_rejected_verify_is_scoped_to_the_symbolic_context():
+    graph = new_graph("x = 5")
+    graph = compute(graph, 0, "x = 5", premise_ids=()).graph
+    graph = verify(
+        graph, 1, "check", None, MockVerifier()).graph
+    state = DeliberationState(graph, 0)
+
+    assert (Verb.VERIFY, 1) not in _acts(state)
+    assert (Verb.VERIFY, 1) in _acts(
+        state, solve_claims=True)

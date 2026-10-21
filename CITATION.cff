@@ -1,7 +1,11 @@
 cff-version: 1.2.0
-message: "Cite the exact archived version when available. This working archive has no release DOI yet."
+message: "Please cite this exact archived research artifact."
 title: "Expert Iteration: Experiments and Lessons"
 type: software
+version: 1.0.0
+date-released: 2026-10-21
+doi: 10.5281/zenodo.23526852
+url: "https://doi.org/10.5281/zenodo.23526852"
 authors:
   - family-names: Towell
     given-names: Alexander Richard

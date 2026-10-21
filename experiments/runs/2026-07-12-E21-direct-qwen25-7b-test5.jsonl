@@ -1,0 +1,5 @@
+{"index": 0, "problem": "Solve for all real values of x: |2x - 18| = 4. Report the largest value of x that satisfies the equation.", "expected": "11", "answer": "11", "correct": true}
+{"index": 1, "problem": "Solve for x given that x < 6: |x - 6| = 8. Report the value of x.", "expected": "-2", "answer": "-2", "correct": true}
+{"index": 2, "problem": "A function is defined by f(x) = 4x + 6 when x < -2, and f(x) = -4x - 34 when x >= -2. Find the value of x for which f(x) = -14.", "expected": "-5", "answer": "-5", "correct": true}
+{"index": 3, "problem": "A function is defined by f(x) = 4x - 32 when x < 4, and f(x) = x - 30 when x >= 4. Report the sum of all values of x for which f(x) = -20.", "expected": "13", "answer": "13", "correct": true}
+{"index": 4, "problem": "Solve the equation x^2 - 7x - 18 = 0. Report the largest value of x.", "expected": "9", "answer": "9", "correct": true}

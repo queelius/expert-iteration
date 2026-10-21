@@ -4,6 +4,10 @@
     "README.md",
     "LICENSE",
     "LICENSES/README.md",
+    "LICENSES/Qwen2.5-3B-Instruct.txt",
+    "LICENSES/GSM8K.txt",
+    "LICENSES/MATH.txt",
+    "NOTICE",
     "CITATION.cff",
     "pyproject.toml",
     "uv.lock",
@@ -13,6 +17,7 @@
     "docs/tutorial.md",
     "docs/project-map.md",
     "docs/release-readiness.md",
+    "docs/publication-review.md",
     "docs/superpowers/plans/2026-10-20-public-research-archive.md",
     "analysis/claims.json",
     "analysis/reproduce.py",
@@ -34,5 +39,5 @@
     {"path": "src/verifier_anchored_rl", "suffix": ".py"}
   ],
   "evidence_manifest": "analysis/claims.json",
-  "scope": "Selected saved-outcome metric reconstruction and classical teaching example. Not all historical hosted replay dependencies are included. Local release candidate; publication requires the rights and privacy checks in docs/release-readiness.md."
+  "scope": "Version 1.0.0: selected saved-outcome metric reconstruction and classical teaching example. The wider source history and hosted replay dependencies remain in the GitHub repository. Original code MIT; notes CC BY 4.0; third-party notices and model-output qualifications in LICENSES and NOTICE."
 }

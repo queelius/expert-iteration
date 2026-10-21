@@ -176,3 +176,24 @@ def test_compute_suffix_lists_existing_facts_as_rejected_duplicates():
     # a goal with no facts carries no duplicate block
     g2 = new_graph("q")
     assert "must be different" not in suffix(Verb.COMPUTE, 0, DeliberationState(g2, 0))
+
+
+def test_compacted_solved_goal_preserves_exact_committed_outcome():
+    g = new_graph("p")
+    g = split(g, 0, "conjunctive", ("case A", "case B")).graph
+    g = compute(g, 1, "30/5 = 6", premise_ids=()).graph
+    g = verify(
+        g,
+        3,
+        "check",
+        None,
+        MockVerifier((("30/5 = 6", True),)),
+    ).graph
+    g = commit(g, 1, 3).graph
+
+    view = render_view(g, 0)
+    assert "(outcome: node 3 30/5 = 6)" in view
+    assert "id=3" not in view
+    legacy = render_view(g, 0, include_committed_outcomes=False)
+    assert "(solved)" in legacy
+    assert "(outcome:" not in legacy
